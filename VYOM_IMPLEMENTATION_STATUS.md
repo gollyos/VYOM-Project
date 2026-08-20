@@ -2,7 +2,7 @@
 
 > Persistent implementation ledger. Update this file after every completed work slice.
 >
-> Last updated: 2026-08-21 (Asia/Calcutta, 01:38) — repaired the reproduced false-real-experience path. Natural Hindi/Hinglish song requests now execute a visible Chrome search/result/play workflow and complete only after Chrome exposes real audio playback; self-capability/memory questions read the live registry instead of a model's self-claims; retrospective failure questions read the matching task evidence. Final exact-source Brain suite: 691 passed / 2 intentional opt-in skips / 3 known warnings. Live task `task_731bc62396c142e9a76b193eac79653c` completed with `playing=true`, `browser-tab-audio-state`, and `VERIFIED_COMPLETE`. Brain PID 11960 is healthy on localhost:7788. See the newest Verification record.
+> Last updated: 2026-08-21 (Asia/Calcutta, 01:52) — repaired the reproduced false-real-experience path, including the live multi-Chrome-window context failure. Natural Hindi/Hinglish song requests now bind to the browser window that actually changed, execute a visible YouTube search/result/play workflow, and complete only after Chrome exposes real audio playback; self-capability/memory questions read live registries instead of model self-claims; retrospective failure questions read matching task evidence. Final exact-source Brain suite: 693 passed / 2 intentional opt-in skips / 3 known warnings. Exact long-Hindi live task `task_d22a642905e849f18067e5068ddd9843` completed with `playing=true`, `browser-tab-audio-state`, and `VERIFIED_COMPLETE`. Brain PID 3696 is healthy on localhost:7788. See the newest Verification record.
 
 ## Authority and purpose
 
@@ -381,17 +381,23 @@ Developer focus remains a deliberate local composition and `Close everything` do
   `type_keys()` interpreted `+`, `^` and `%` in URLs as keyboard modifiers;
   YouTube traversal selected `YouTube Home` before results. Literal UIA Edit
   values and `automation_id=video-title` selection now own those paths.
+- Fixed the remaining exact-transcript failure caused by multiple Chrome
+  windows. A URL launch now observes new handles, title transitions and
+  foreground transitions, then pins subsequent address-bar/result/playback
+  actions to that exact window instead of UI Automation's first Chrome window.
+  Long voice transcripts also search their final media-bearing clause rather
+  than including the preceding complaint/question as search text.
 
 **Verification actually performed:**
 
 - Focused control/classification contracts: **168 passed**; final exact
-  transcript/media contract after live refinements: **154 passed**.
+  transcript/media contract after live refinements: **156 passed**.
   Desktop/browser regression
   matrix: **200 passed, 2 skipped**. The skips are the existing opt-in real-app
   gates; warnings are the known aiosqlite event-loop teardown warning.
 - Final exact-source full Brain regression after every live-discovered fix and
-  the original long Hindi microphone variants: **691 passed, 2 skipped, 3
-  warnings, 0 failures in 199.31 s**. Warnings are the
+  the original long Hindi microphone variants: **693 passed, 2 skipped, 3
+  warnings, 0 failures in 177.55 s**. Warnings are the
   existing Starlette/httpx deprecation plus two known aiosqlite voice-test
   teardown warnings.
 - Direct visible-browser probe selected `Mind relaxing lofi song Arijit Singh...`
@@ -403,11 +409,18 @@ Developer focus remains a deliberate local composition and `Close everything` do
   `local-tool-planner-v1`, returned `playing=true`, source
   `browser-tab-audio-state`, and goal status `VERIFIED_COMPLETE` with the
   playing title as evidence.
+- Full Task Runtime E2E on the exact long Hindi microphone transcript
+  `मेरे को नहीं जानना कि तुम क्या कर रहे हो... बॉलीवुड अच्छा सा सॉन्ग...`:
+  live task `task_d22a642905e849f18067e5068ddd9843` used deterministic
+  `play_media`, bound the intended YouTube Chrome window, selected `Sab Tera`,
+  returned `playing=true` from `browser-tab-audio-state`, and passed the
+  `media_playing` goal postcondition. This is the request that had failed
+  before the browser-window continuity repair.
 - Live `You have the personal memory?` task
   `task_12b00c54a00342138a9daad6af94d04e` used deterministic
   `capability_query`/`local-tool-planner-v1`, not Gemini, and reported the
   registered persistent-memory capability with evidence.
-- Final persistent Brain PID **11960** is listening on `127.0.0.1:7788`; Brain,
+- Final persistent Brain PID **3696** is listening on `127.0.0.1:7788`; Brain,
   database and task-runtime health components are healthy.
 
 ### 2026-08-21 - Taught workflows, event triggers, Living Core graph, and authenticated phone delivery
@@ -1072,8 +1085,12 @@ Recommended next phase when approved: **Phase 17 - Production Integration Activa
   failure questions task-evidence-backed.
 - Fixed literal URL entry and semantic YouTube `video-title` selection found by
   repeated live Windows verification.
-- Added fourteen regression cases. Final suite: 691 passed / 2 normal opt-in
-  skips / 3 known warnings; exact reproduced live command verified real audio.
+- Bound URL launches to the exact new/changed Chrome window and reduced long
+  voice transcripts to their media-bearing clause, fixing the final exact
+  Hindi multi-window replay.
+- Added sixteen regression cases. Final suite: 693 passed / 2 normal opt-in
+  skips / 3 known warnings; both reproduced live command forms verified real
+  audio rather than navigation alone.
 
 ### 2026-08-21 - Remaining operator runtime slice
 

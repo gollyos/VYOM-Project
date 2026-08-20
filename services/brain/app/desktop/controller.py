@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from typing import Any
+from urllib.parse import urlparse
 
 from app.execution.process_manager import ProcessManager
 
@@ -64,6 +66,18 @@ class DesktopController:
         # while the user sees nothing, so an existing instance is brought
         # forward instead.
         existing = self.app_status(app_id)
+        browser_state_before: dict[int, tuple[str, bool]] = {}
+        target = str((args or [""])[0] or "").strip()
+        if (app_id in {"chrome", "edge"} and self.accessibility is not None
+                and self.accessibility.available):
+            for browser_window in self.accessibility.browser_windows():
+                try:
+                    browser_state_before[browser_window.handle] = (
+                        browser_window.window_text() or "",
+                        bool(browser_window.is_active()),
+                    )
+                except Exception:
+                    continue
         status = self.launcher.open(app_id, args=args)
 
         # A launch call returning is not the same as an application being
@@ -75,7 +89,11 @@ class DesktopController:
         if self.accessibility is not None and self.accessibility.available:
             window = self.accessibility.wait_for_window(title, timeout=12.0)
             if window is not None:
-                self.bring_to_front(title)
+                if app_id in {"chrome", "edge"} and target:
+                    window = self._bind_launched_browser_window(
+                        target, browser_state_before, fallback=window)
+                else:
+                    self.bring_to_front(title)
                 try:
                     return AppStatus(app_id=app_id, running=True,
                                      pid=window.process_id(), window_title=window.window_text())
@@ -84,6 +102,105 @@ class DesktopController:
         if existing.running:
             self.bring_to_front(title)
         return self.app_status(app_id) if status.pid is None else status
+
+    def _bind_launched_browser_window(
+        self,
+        target: str,
+        before: dict[int, tuple[str, bool]],
+        *,
+        fallback,
+        timeout: float = 12.0,
+    ):
+        """Bind follow-up page actions to the browser window a launch changed.
+
+        Chromium may reuse one of several existing windows or create a new
+        one. Merely waiting for a window titled ``Chrome`` returns whichever
+        window UI Automation enumerates first, which can be an unrelated
+        ChatGPT tab. We instead observe the launch transition and retain the
+        exact window handle that appeared, changed title, or became active.
+        """
+        accessibility = self.accessibility
+        if accessibility is None:
+            return fallback
+
+        try:
+            parsed = urlparse(target)
+            host = (parsed.hostname or "").lower()
+            parts = [part for part in host.split(".") if part and part != "www"]
+            site_token = parts[0] if parts else ""
+        except Exception:
+            site_token = ""
+
+        active_before = next(
+            (handle for handle, (_title, active) in before.items() if active), None)
+        deadline = time.monotonic() + timeout
+        latest: list[Any] = []
+        chosen = None
+        while time.monotonic() < deadline:
+            try:
+                latest = accessibility.browser_windows()
+            except Exception:
+                latest = []
+
+            new_windows = []
+            changed_windows = []
+            newly_active = []
+            active_matching = []
+            for candidate in latest:
+                try:
+                    handle = candidate.handle
+                    candidate_title = candidate.window_text() or ""
+                    active = bool(candidate.is_active())
+                except Exception:
+                    continue
+                previous = before.get(handle)
+                if previous is None:
+                    new_windows.append(candidate)
+                elif candidate_title != previous[0]:
+                    changed_windows.append(candidate)
+                if active and handle != active_before:
+                    newly_active.append(candidate)
+                if active and site_token and site_token in candidate_title.lower():
+                    active_matching.append(candidate)
+
+            # A new handle is strongest. A title transition is next: it is
+            # direct evidence that the requested navigation affected that
+            # window. Only then use foreground state as supporting evidence.
+            pool = new_windows or changed_windows or newly_active or active_matching
+            if pool:
+                chosen = next(
+                    (candidate for candidate in pool
+                     if site_token and site_token in (candidate.window_text() or "").lower()),
+                    None,
+                ) or next(
+                    (candidate for candidate in pool
+                     if bool(candidate.is_active())),
+                    pool[0],
+                )
+                break
+            time.sleep(0.35)
+
+        if chosen is None:
+            # Timeout fallback is intentionally conservative. Prefer the
+            # foreground window, then a target-matching one, before the
+            # arbitrary wrapper returned by wait_for_window().
+            chosen = next(
+                (candidate for candidate in latest if bool(candidate.is_active())), None)
+            if chosen is None and site_token:
+                chosen = next(
+                    (candidate for candidate in latest
+                     if site_token in (candidate.window_text() or "").lower()), None)
+            chosen = chosen or fallback
+
+        try:
+            chosen.set_focus()
+        except Exception:
+            pass
+        try:
+            accessibility.intended_window_handle = chosen.handle
+        except Exception:
+            pass
+        return chosen
 
     def bring_to_front(self, title_contains: str) -> bool:
         """Restore and focus a window so the USER can actually see it.

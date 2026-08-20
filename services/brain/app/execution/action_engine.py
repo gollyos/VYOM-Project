@@ -1077,15 +1077,33 @@ class ActionEngine:
     @staticmethod
     def _extract_media_query(request: str) -> str:
         """Keep the user's media description while removing command filler."""
-        query = (request or "").strip(" .,!?:;।")
+        raw = (request or "").strip(" .,!?:;।")
+        clauses = [
+            clause.strip() for clause in re.split(r"[।.!?]+", raw)
+            if clause.strip()
+        ]
+        media_marker = re.compile(
+            r"(?:song|music|gaana|gana|सॉन्ग|सॉंग|गाना|म्यूजिक|बॉलीवुड|bollywood)",
+            re.I,
+        )
+        media_clauses = [clause for clause in clauses if media_marker.search(clause)]
+        # Long voice transcripts often start with a complaint/question and
+        # put the actual imperative in the final clause. Searching the whole
+        # transcript produces irrelevant results, so retain the last clause
+        # that actually names media.
+        query = (media_clauses[-1] if media_clauses else raw).strip(" .,!?:;।")
         patterns = (
             r"^(?:ek\s+kaam\s+karo|एक\s+काम\s+करो)\s*",
-            r"\b(?:mere\s+liye|for\s+me|मेरे\s+लिए)\b",
+            r"(?:\b(?:mere\s+liye|for\s+me)\b|मेरे\s+(?:लिए|को))",
+            r"(?:डायरेक्ट|direct)",
+            r"(?:सॉन्ग|सॉंग|गाना)\s*(?:बजाना|चलाना)(?:\s+है)?(?:\s+तो\s+मैं)?",
+            r"(?:तो\s+मैं)",
             r"\b(?:please|plz|zara|jara)\b",
             r"\b(?:play|start|chalao|chala\s*do|bajao|baja\s*do|laga\s*do)"
             r"(?:\s+kar\s*do|\s+karo)?\b",
-            r"(?:चलाओ|चला\s*दो|बजाओ|बजा\s*दो|लगा\s*दो)",
+            r"(?:चलाओ|चला\s*द(?:ो|ूं)|बजाओ|बजा\s*दो|बजाना(?:\s+है)?|लगा\s*दो)",
             r"\b(?:kar\s*do|karo)\b\s*$",
+            r"(?:तो\s+मैं)?\s*$",
         )
         for pattern in patterns:
             query = re.sub(pattern, " ", query, flags=re.I)

@@ -250,6 +250,66 @@ def test_youtube_first_result_prefers_video_title_over_home_logo(monkeypatch):
     assert video.clicked is True and logo.clicked is False
 
 
+def test_browser_launch_binds_followup_actions_to_the_changed_chrome_window():
+    """A URL launch may reuse one of several Chrome windows. The old bug
+    returned the first wrapper (ChatGPT) even though YouTube opened in a
+    different window, so the click and verification ran in the wrong place.
+    """
+    from types import SimpleNamespace
+
+    from app.desktop.controller import DesktopController
+
+    class Window:
+        def __init__(self, handle, title, active):
+            self.handle = handle
+            self.title = title
+            self.active = active
+            self.focused = False
+
+        def window_text(self):
+            return self.title
+
+        def is_active(self):
+            return self.active
+
+        def set_focus(self):
+            self.focused = True
+
+    unrelated = Window(10, "ChatGPT - Google Chrome", False)
+    youtube = Window(20, "Bollywood song - YouTube - Google Chrome", True)
+    accessibility = SimpleNamespace(
+        browser_windows=lambda: [unrelated, youtube],
+        intended_window_handle=None,
+    )
+    controller = DesktopController.__new__(DesktopController)
+    controller.accessibility = accessibility
+
+    selected = controller._bind_launched_browser_window(
+        "https://www.youtube.com/results?search_query=Bollywood+song",
+        {
+            10: ("ChatGPT - Google Chrome", True),
+            20: ("Deep relax song - YouTube - Google Chrome", False),
+        },
+        fallback=unrelated,
+        timeout=0.1,
+    )
+    assert selected is youtube
+    assert accessibility.intended_window_handle == 20
+    assert youtube.focused is True
+
+
+def test_long_hindi_media_transcript_extracts_the_song_not_the_complaint():
+    from app.execution.action_engine import ActionEngine
+
+    request = ("मेरे को नहीं जानना कि तुम क्या कर रहे हो। मेरे को डायरेक्ट मेरे को "
+               "सॉन्ग बजाना है तो मैं एक बॉलीवुड अच्छा सा सॉन्ग चला दूं।")
+    query = ActionEngine._extract_media_query(request)
+    assert "बॉलीवुड" in query and "सॉन्ग" in query
+    assert "क्या कर" not in query
+    assert "मेरे को" not in query
+    assert "बजाना" not in query and "चला" not in query
+
+
 @pytest.mark.asyncio
 async def test_media_workflow_searches_clicks_and_verifies_before_success(monkeypatch):
     from types import SimpleNamespace
