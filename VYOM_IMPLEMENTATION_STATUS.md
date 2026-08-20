@@ -2,7 +2,7 @@
 
 > Persistent implementation ledger. Update this file after every completed work slice.
 >
-> Last updated: 2026-08-21 (Asia/Calcutta, 00:20) — completed the approved remaining operator slice: user-taught skills with typed runtime slots and verified tool execution, durable EventBus-triggered automations, a Living Core Brain-graph composition, and secure phone pairing plus authenticated durable result delivery. Final Brain suite 677 passed / 2 intentional opt-in skips; those two real Notepad tests also passed 2/2 with the live-app gate enabled. Desktop build and mobile TypeScript compile pass; latest Brain PID 3528 is ready. See the newest Verification record.
+> Last updated: 2026-08-21 (Asia/Calcutta, 01:38) — repaired the reproduced false-real-experience path. Natural Hindi/Hinglish song requests now execute a visible Chrome search/result/play workflow and complete only after Chrome exposes real audio playback; self-capability/memory questions read the live registry instead of a model's self-claims; retrospective failure questions read the matching task evidence. Final exact-source Brain suite: 691 passed / 2 intentional opt-in skips / 3 known warnings. Live task `task_731bc62396c142e9a76b193eac79653c` completed with `playing=true`, `browser-tab-audio-state`, and `VERIFIED_COMPLETE`. Brain PID 11960 is healthy on localhost:7788. See the newest Verification record.
 
 ## Authority and purpose
 
@@ -106,7 +106,7 @@ Overall VYOM is not complete. The native experience now connects to an async loc
 | System tray / native notifications / emergency shortcut | Complete | Rust tray with the 7 specified actions, minimize-to-tray close behavior, native toast notifications for meaningful Brain events, global `Ctrl+Shift+Escape` emergency-pause shortcut — all compiled and verified via a stable native launch. |
 | Screen capture and understanding | Complete | On-request full/monitor/window/region capture, sensitive-window refusal, secret-text redaction, structured `ScreenObservation` that never invents unobserved content. |
 | Native app adapters | Complete for 2 real adapters | VS Code (CLI) and Windows Terminal (CLI) adapters plus a generic visual-fallback adapter and capability-registry publication; architecture supports more without registry changes. |
-| Accessibility-first / bounded input fallback | Complete | Real `pyautogui`-backed mouse/keyboard fallback gated by `InputSafetyPolicy` (known target required, sensitive-field blocking, bounded sequence, full action log, emergency-pause check); native accessibility automation (`pywinauto`) is architecturally present but the optional dependency is not installed, so it honestly reports unavailable in this environment. |
+| Accessibility-first / bounded input fallback | Complete | Real `pyautogui`-backed mouse/keyboard fallback gated by `InputSafetyPolicy` (known target required, sensitive-field blocking, bounded sequence, full action log, emergency-pause check); native `pywinauto` accessibility is installed in the active Brain environment and live-proven against visible Chrome controls, semantic YouTube `video-title` selection, and Chrome's accessible `Audio playing` state. |
 | Device Node protocol | Local foundation complete | Pairing/hashed-token authentication/capability allow-listing/heartbeat-based online-offline-degraded status/command routing, proven end-to-end with an in-process mock secondary node; no real remote transport is configured. |
 | Phase 9 runtime wiring | Complete | `Phase9Engine` mirrors Business/Intelligence/Phase8Engine; new deterministic classifier intents, L0–L3 desktop permission table, 21 new events, 10 new built-in capability registrations, 3 new API routers, `desktop`/`screen_observe`/`input_control` tools. |
 | Phase 9 Composer objects | Complete | `native-app-status`, `screenshot-preview`, `device-node`, reusing existing surface styling. |
@@ -344,6 +344,71 @@ Developer focus remains a deliberate local composition and `Close everything` do
 | `docs/` | Product memory, architecture, model-routing, autonomy, and event protocol documentation. |
 
 ## Verification record
+
+### 2026-08-21 - Real media action, capability truth, and false-verification repair
+
+**Reproduced from live task evidence:**
+
+- Song commands `task_a7cefa...`, `task_2b744...` and `task_81c07...`
+  were routed to the general/status planner. They only read browser/windows,
+  returned unrelated state, and were structurally marked verified despite no
+  playback evidence. The follow-up `task_22c9...` reported an unrelated active
+  task. A personal-memory capability question was also sent to Gemini, which
+  made an unsupported first-person capability claim.
+
+**Implemented:**
+
+- Added deterministic `play_media` routing for natural English, Hindi and
+  Hinglish media commands, including the reproduced elliptical "mere liye ...
+  song" forms. The local action workflow opens visible Chrome, writes the
+  literal YouTube search URL through the semantic address-bar value pattern,
+  selects the first actual `video-title`, and reads the post-click playback
+  state.
+- Added read-only `browser_media_state`. Playback is true only when Chrome's
+  accessible tab says `Audio playing` or the page exposes a `Pause` control.
+  Opening YouTube, changing a title or clicking a result is not completion.
+  Autoplay-blocked pages receive one bounded semantic `Play` recovery click;
+  absent evidence fails honestly.
+- Added `play_media -> media_playing` goal verification and whole-goal result
+  evidence support. Pre-existing unrelated audio cannot satisfy a new request.
+- Added deterministic `capability_query`, answered from the live Capability
+  Registry. Personal-memory availability now reports `memory.search` truth and
+  explicitly refuses to claim a specific memory without retrieval evidence.
+- Retrospective "why didn't you play/open..." questions now select the matching
+  recent task and report its stored status/error/goal evidence instead of an
+  unrelated task merely active at that moment.
+- Fixed two live-only browser defects found during verification: raw
+  `type_keys()` interpreted `+`, `^` and `%` in URLs as keyboard modifiers;
+  YouTube traversal selected `YouTube Home` before results. Literal UIA Edit
+  values and `automation_id=video-title` selection now own those paths.
+
+**Verification actually performed:**
+
+- Focused control/classification contracts: **168 passed**; final exact
+  transcript/media contract after live refinements: **154 passed**.
+  Desktop/browser regression
+  matrix: **200 passed, 2 skipped**. The skips are the existing opt-in real-app
+  gates; warnings are the known aiosqlite event-loop teardown warning.
+- Final exact-source full Brain regression after every live-discovered fix and
+  the original long Hindi microphone variants: **691 passed, 2 skipped, 3
+  warnings, 0 failures in 199.31 s**. Warnings are the
+  existing Starlette/httpx deprecation plus two known aiosqlite voice-test
+  teardown warnings.
+- Direct visible-browser probe selected `Mind relaxing lofi song Arijit Singh...`
+  by semantic `video-title`; five seconds later Chrome exposed the same tab as
+  `Audio playing`.
+- Full Task Runtime E2E on the exact reproduced request
+  `mere liye ek achcha sa silent song start kar do.`: live task
+  `task_731bc62396c142e9a76b193eac79653c` used `play_media` and
+  `local-tool-planner-v1`, returned `playing=true`, source
+  `browser-tab-audio-state`, and goal status `VERIFIED_COMPLETE` with the
+  playing title as evidence.
+- Live `You have the personal memory?` task
+  `task_12b00c54a00342138a9daad6af94d04e` used deterministic
+  `capability_query`/`local-tool-planner-v1`, not Gemini, and reported the
+  registered persistent-memory capability with evidence.
+- Final persistent Brain PID **11960** is listening on `127.0.0.1:7788`; Brain,
+  database and task-runtime health components are healthy.
 
 ### 2026-08-21 - Taught workflows, event triggers, Living Core graph, and authenticated phone delivery
 
@@ -987,7 +1052,7 @@ Follow-up to the Phase 17 verification pass below, same day: fixes both bugs tha
 - Live web search, live booking providers, and live client-delivery transports (Phase 8 ships the architecture and a disconnected-by-default/local-fixture-only default, per `docs/BOOKING_POLICY.md` and `docs/CLIENT_DELIVERY.md`)
 - CAPTCHA/MFA/security-control bypass, and self-modification of VYOM's core/security code by the Discovery/Browser/Artifact agents
 - Stealth/background screen recording, credential/password capture, keylogging, or any persistence mechanism designed to resist user removal (Phase 9 desktop control is on-request and user-visible only)
-- Physical cross-network proof, native accessibility automation without the optional dependency installed, and elevated/admin software installation (the authenticated device transport exists; live remote hardware/elevated execution is not claimed)
+- Physical cross-network proof and elevated/admin software installation (the authenticated device transport exists and native Chrome accessibility is live-proven; real remote hardware/elevated execution is not claimed)
 
 ## Next-work rule
 
@@ -996,6 +1061,19 @@ Do not start a new capability merely because it appears in the future vision. Im
 Recommended next phase when approved: **Phase 17 - Production Integration Activation** (carried): Brain-as-Tauri-sidecar lifecycle, one real Google OAuth E2E, one real web-search/booking/delivery/market-data provider E2E, `pywinauto` accessibility, proactive engine on real triggers, a real second device hardware-verifying the distributed runtime, home-server Docker deployment, code-signing keys + signed updates, and the Expo app on hardware. Phase 16 follow-ups to fold in: register a real planner contract for mission planning (model-assisted planning for genuinely novel multi-step goals, still bounded), route Defuddle/Playwright selection through LearnedRouter.preferred_tool at the research fetch site, and stream mission-loop events into the desktop Core states live.
 
 ## Change log
+
+### 2026-08-21 - Real media action and grounded self-capability answers
+
+- Replaced the song-request general-planner/window-list path with a deterministic
+  visible Chrome search -> semantic result -> playback-state workflow.
+- Added Chrome tab/player playback observation and `media_playing` goal
+  postconditions; false playback and unrelated pre-existing audio fail.
+- Made live capability/memory questions registry-backed and retrospective
+  failure questions task-evidence-backed.
+- Fixed literal URL entry and semantic YouTube `video-title` selection found by
+  repeated live Windows verification.
+- Added fourteen regression cases. Final suite: 691 passed / 2 normal opt-in
+  skips / 3 known warnings; exact reproduced live command verified real audio.
 
 ### 2026-08-21 - Remaining operator runtime slice
 

@@ -328,6 +328,15 @@ TOOL_CONTRACTS: dict[str, dict] = {
         "fixed": {"action": "browser_tabs"},
         "parameters": {"type": "object", "properties": {}},
     },
+    "browser_media_state": {
+        "tool": "desktop",
+        "description": (
+            "Read whether audio/video is ACTUALLY playing in the user's visible browser. "
+            "Returns the browser tab or player-control evidence. Use this after any request "
+            "to play a song or video; opening a page is not playback."),
+        "fixed": {"action": "browser_media_state"},
+        "parameters": {"type": "object", "properties": {}},
+    },
     "browser_open_profile": {
         "tool": "desktop",
         "description": (

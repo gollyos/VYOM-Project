@@ -159,6 +159,162 @@ def test_opening_a_media_page_is_not_playback():
     assert "playback" in evidence.lower()
 
 
+@pytest.mark.parametrize("utterance", [
+    "Ek kaam karo mere liye ek achcha sa Bollywood song",
+    "mere liye ek achcha sa silent song start kar do.",
+    "मेरे लिए कोई अच्छा गाना चला दो",
+    "Ek achcha sa Bollywood song play kar do.",
+    ("मेरे को नहीं जानना कि तुम क्या कर रहे हो। मेरे को डायरेक्ट मेरे को "
+     "सॉन्ग बजाना है तो मैं एक बॉलीवुड अच्छा सा सॉन्ग चला दूं।"),
+])
+def test_song_requests_route_to_the_verified_media_workflow(utterance):
+    """The reproduced commands must never become a window-list mission."""
+    from app.runtime.task_classifier import TaskClassifier
+
+    profile = TaskClassifier().classify(utterance)
+    assert profile.intent == "play_media", utterance
+    assert profile.deterministic and profile.needs == {"tools"}
+
+
+def test_media_intent_requires_real_playback_evidence():
+    verifier = GoalVerifier()
+    failed, _ = verifier.verify(
+        intent="play_media", result=_Result(playing=False, title="YouTube"))
+    passed, evidence = verifier.verify(
+        intent="play_media", result=_Result(playing=True, title="A real song"))
+    assert failed == "FAILED"
+    assert passed == "VERIFIED_COMPLETE"
+    assert "A real song" in evidence
+
+
+@pytest.mark.parametrize("utterance", [
+    "what tasks can you perform?",
+    "what can you do?",
+    "You have the personal memory?",
+    "और अब तुम मेरे लिए कौन से कौन से टास्क परफॉर्म कर सकती हो?",
+])
+def test_self_capability_questions_never_go_to_a_model(utterance):
+    from app.runtime.task_classifier import TaskClassifier
+
+    profile = TaskClassifier().classify(utterance)
+    assert profile.intent == "capability_query"
+    assert profile.deterministic and profile.needs == {"tools"}
+
+
+def test_normalised_browser_tab_list_reaches_the_real_tab_reader():
+    from app.runtime.task_classifier import TaskClassifier
+
+    assert TaskClassifier().classify("browser tabs dikhao").intent == "browser_tab_list"
+
+
+def test_browser_audio_marker_is_playback_evidence(monkeypatch):
+    from app.input_control.accessibility import NativeAccessibilityController
+
+    controller = NativeAccessibilityController()
+    monkeypatch.setattr(controller, "list_browser_tabs", lambda: [{
+        "title": "A real song - YouTube - Audio playing - Memory usage - 200 MB"
+    }])
+    state = controller.browser_media_state()
+    assert state["playing"] is True
+    assert state["source"] == "browser-tab-audio-state"
+    assert state["title"] == "A real song - YouTube"
+
+
+def test_youtube_first_result_prefers_video_title_over_home_logo(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.input_control.accessibility import NativeAccessibilityController
+
+    class Element:
+        def __init__(self, automation_id):
+            self.element_info = SimpleNamespace(automation_id=automation_id)
+            self.clicked = False
+
+        def click_input(self):
+            self.clicked = True
+
+    class Window:
+        def set_focus(self):
+            return None
+
+    logo = Element("logo")
+    video = Element("video-title")
+    controller = NativeAccessibilityController()
+    monkeypatch.setattr(controller, "browser_window", lambda: Window())
+    monkeypatch.setattr(controller, "_page_elements", lambda _window: [
+        ("YouTube Home", "Hyperlink", logo),
+        ("A real song with a sufficiently long title", "Hyperlink", video),
+    ])
+    result = controller.browser_first_result()
+    assert result.success is True
+    assert video.clicked is True and logo.clicked is False
+
+
+@pytest.mark.asyncio
+async def test_media_workflow_searches_clicks_and_verifies_before_success(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.execution.action_engine import ActionEngine
+    from app.schemas.tasks import Task
+
+    calls = []
+
+    class FakeExecutor:
+        async def invoke(self, tool, inputs, context):
+            calls.append((tool, dict(inputs)))
+            action = inputs["action"]
+            if action == "app_open":
+                return SimpleNamespace(
+                    success=True, error=None,
+                    structured_output={"url": inputs["url"], "tabs_before": 1,
+                                       "tabs_after": 2, "windows_before": 1,
+                                       "windows_after": 1},
+                )
+            if action == "browser_page_type":
+                return SimpleNamespace(
+                    success=True, error=None,
+                    structured_output={"success": True, "summary": "Navigated to search",
+                                       "value": inputs["value"],
+                                       "title_after": "silent song - YouTube"},
+                )
+            if action == "browser_first_result":
+                return SimpleNamespace(
+                    success=True, error=None,
+                    structured_output={"success": True, "summary": "Opened first result",
+                                       "title_after": "A real song - YouTube"},
+                )
+            phase = "after" if any(item[1]["action"] == "browser_first_result"
+                                   for item in calls) else "before"
+            return SimpleNamespace(
+                success=True, error=None,
+                structured_output=(
+                    {"playing": True, "title": "A real song - YouTube",
+                     "source": "browser-tab-audio-state",
+                     "playing_tabs": ["A real song - YouTube - Audio playing"]}
+                    if phase == "after" else
+                    {"playing": False, "title": "", "source": "unobservable",
+                     "playing_tabs": []}
+                ),
+            )
+
+    async def no_sleep(_delay):
+        return None
+
+    monkeypatch.setattr("app.execution.action_engine.asyncio.sleep", no_sleep)
+    engine = ActionEngine.__new__(ActionEngine)
+    engine.executor = FakeExecutor()
+    result = await engine._play_media(
+        Task(goal="play a song", user_request="mere liye Bollywood song start kar do"),
+        context=object(),
+    )
+    assert result.structured_data["playing"] is True
+    assert [inputs["action"] for _, inputs in calls] == [
+        "browser_media_state", "app_open", "browser_page_type", "browser_first_result",
+        "browser_media_state",
+    ]
+    assert "youtube.com/results?search_query=" in calls[1][1]["url"]
+
+
 def test_a_conversational_utterance_declares_no_world_effect():
     """Conversation must be untouched by goal verification."""
     assert not derive_goal_frame("you can hear me?")

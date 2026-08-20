@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Iterable
@@ -473,7 +474,7 @@ class NativeAccessibilityController:
     #: Short names that are browser CHROME (navigation, menus), never
     #: page content - skipped when looking for "the first result".
     _BROWSER_CHROME_NAMES = frozenset({
-        "home", "shorts", "subscriptions", "you", "history", "playlists",
+        "home", "youtube home", "shorts", "subscriptions", "you", "history", "playlists",
         "your playlists", "search", "explore", "trending", "music",
         "films", "live", "gaming", "news", "sport", "courses",
         "back", "forward", "reload", "menu", "more options", "extensions",
@@ -546,6 +547,72 @@ class NativeAccessibilityController:
         fields = [name for name, role, _ in elements if role == "Edit"][:5]
         return {"title": title, "links": links, "fields": fields}
 
+    def browser_media_state(self) -> dict[str, Any]:
+        """Read whether the visible browser is actually playing media.
+
+        Chrome exposes ``Audio playing`` on the accessible name of a tab
+        that is producing sound.  YouTube also exposes the player toggle as
+        ``Pause (k)`` while playback is running.  Both signals come from the
+        user's real visible browser; neither is inferred from a successful
+        navigation or from a model response.
+        """
+        tabs = self.list_browser_tabs()
+        playing_tabs = [
+            tab for tab in tabs
+            if "audio playing" in str(tab.get("title") or "").lower()
+        ]
+        if playing_tabs:
+            raw_title = str(playing_tabs[0].get("title") or "")
+            clean_title = re.split(
+                r"\s+-\s+audio playing(?:\s+-\s+.*)?$", raw_title,
+                maxsplit=1, flags=re.IGNORECASE,
+            )[0].strip()
+            return {
+                "playing": True,
+                "title": clean_title or raw_title,
+                "source": "browser-tab-audio-state",
+                "playing_tabs": [str(tab.get("title") or "") for tab in playing_tabs],
+            }
+
+        window = self.browser_window()
+        if window is None:
+            raise AccessibilityUnavailableError("No visible browser window is open.")
+        title = window.window_text() or ""
+        buttons = [
+            name for name, role, _ in self._page_elements(window)
+            if role == "Button"
+        ]
+        pause_buttons = [
+            name for name in buttons
+            if re.search(r"(?:^|\b)pause(?:\s*\([^)]+\))?(?:$|\b)", name, re.IGNORECASE)
+        ]
+        if pause_buttons:
+            return {
+                "playing": True,
+                "title": title,
+                "source": "page-pause-control",
+                "control": pause_buttons[0],
+                "playing_tabs": [],
+            }
+        play_buttons = [
+            name for name in buttons
+            if re.search(r"(?:^|\b)play(?:\s*\([^)]+\))?(?:$|\b)", name, re.IGNORECASE)
+        ]
+        if play_buttons:
+            return {
+                "playing": False,
+                "title": title,
+                "source": "page-play-control",
+                "control": play_buttons[0],
+                "playing_tabs": [],
+            }
+        return {
+            "playing": None,
+            "title": title,
+            "source": "unobservable",
+            "playing_tabs": [],
+        }
+
     def browser_page_click(self, target: str) -> AccessibilityResult:
         """Click a named link/button on the visible page."""
         window = self.browser_window()
@@ -588,6 +655,7 @@ class NativeAccessibilityController:
         window.set_focus()
 
         def qualifying(elements):
+            fallback = None
             for name, role, element in elements:
                 if role not in ("Hyperlink", "ListItem"):
                     continue
@@ -598,8 +666,23 @@ class NativeAccessibilityController:
                     continue
                 if lowered.startswith(("search", "filter", "show more", "related searches")):
                     continue
-                return name, element
-            return None
+                try:
+                    automation_id = str(element.element_info.automation_id or "").lower()
+                except Exception:
+                    automation_id = ""
+                # Chromium exposes actual YouTube result titles with the
+                # semantic id ``video-title``. Prefer that over traversal
+                # order, where the first long hyperlink is often the
+                # YouTube logo or a subscribed-channel item in the sidebar.
+                if automation_id == "video-title":
+                    return name, element
+                if automation_id in {"logo", "channel-thumbnail"}:
+                    continue
+                if lowered.startswith("go to channel"):
+                    continue
+                if fallback is None:
+                    fallback = (name, element)
+            return fallback
 
         found = qualifying(self._page_elements(window))
         deadline = time.monotonic() + 8.0
@@ -640,7 +723,21 @@ class NativeAccessibilityController:
         try:
             target_element.set_focus()
             time.sleep(0.1)
-            target_element.type_keys(value, with_spaces=True)
+            # UIA's value pattern writes literal text. ``type_keys`` treats
+            # characters such as ``+``, ``^`` and ``%`` as keyboard
+            # modifiers, which corrupted search URLs (``?q=...+...``) and
+            # left Chrome on the previous ChatGPT tab. Prefer the semantic
+            # Edit control's value API; keep a literal-key fallback only for
+            # controls that do not implement it.
+            try:
+                target_element.set_edit_text(value)
+            except Exception:
+                escaped = {
+                    "{": "{{}", "}": "{}}", "+": "{+}", "^": "{^}",
+                    "%": "{%}", "~": "{~}", "(": "{(}", ")": "{)}",
+                }
+                literal = "".join(escaped.get(char, char) for char in value)
+                target_element.type_keys(literal, with_spaces=True)
             readback = self._value_of(target_element) or value
             if enter:
                 time.sleep(0.1)

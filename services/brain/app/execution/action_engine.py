@@ -34,7 +34,8 @@ TOOL_INTENTS = {
     # Browser targets are distinct objects: app vs window vs profile vs tab.
     "browser_tab_close", "browser_tab_list", "browser_profile_open",
     "browser_tab_open", "browser_page_read", "browser_page_click",
-    "browser_first_result", "browser_page_type", "browser_page_scroll",
+    "browser_first_result", "browser_page_type", "browser_page_scroll", "play_media",
+    "capability_query",
     # Recovering from "it didn't open" is an action, not an explanation.
     "recover_visibility",
     # Machine state read natively (psutil/platform), never through a shell.
@@ -67,7 +68,7 @@ INTENT_CAPABILITY = {
     "browser_tab_open": "desktop.execute",
     "browser_page_read": "desktop.execute", "browser_page_click": "desktop.execute",
     "browser_first_result": "desktop.execute", "browser_page_type": "desktop.execute",
-    "browser_page_scroll": "desktop.execute",
+    "browser_page_scroll": "desktop.execute", "play_media": "desktop.execute",
     "browser_profile_open": "desktop.execute", "recover_visibility": "desktop.execute",
     "shop_compare": "browser.execute",
     "run_command": "terminal.execute", "run_tests": "terminal.execute",
@@ -141,7 +142,7 @@ class ActionEngine:
         "app_launch", "app_close", "settings_open", "recover_visibility",
         "browser_tab_close", "browser_profile_open", "browser_tab_open",
         "browser_page_click", "browser_first_result", "browser_page_type",
-        "browser_page_scroll", "ui_interact", "web_browse", "run_command",
+        "browser_page_scroll", "play_media", "ui_interact", "web_browse", "run_command",
         "open_local_app",
     })
 
@@ -247,6 +248,10 @@ class ActionEngine:
                 return await self._browser_page_type(task, context)
             if profile.intent == "browser_page_scroll":
                 return await self._browser_page_scroll(task, context)
+            if profile.intent == "play_media":
+                return await self._play_media(task, context)
+            if profile.intent == "capability_query":
+                return await self._capability_query(task, context)
             if profile.intent == "ui_interact":
                 return await self._ui_interact(task, context)
             if profile.intent == "web_browse":
@@ -1068,6 +1073,216 @@ class ActionEngine:
             raise RuntimeError(data.get("summary") or "No result was visible to open")
         summary = data.get("summary") or "Opened the first result."
         return self._page_result(task, summary, data)
+
+    @staticmethod
+    def _extract_media_query(request: str) -> str:
+        """Keep the user's media description while removing command filler."""
+        query = (request or "").strip(" .,!?:;।")
+        patterns = (
+            r"^(?:ek\s+kaam\s+karo|एक\s+काम\s+करो)\s*",
+            r"\b(?:mere\s+liye|for\s+me|मेरे\s+लिए)\b",
+            r"\b(?:please|plz|zara|jara)\b",
+            r"\b(?:play|start|chalao|chala\s*do|bajao|baja\s*do|laga\s*do)"
+            r"(?:\s+kar\s*do|\s+karo)?\b",
+            r"(?:चलाओ|चला\s*दो|बजाओ|बजा\s*दो|लगा\s*दो)",
+            r"\b(?:kar\s*do|karo)\b\s*$",
+        )
+        for pattern in patterns:
+            query = re.sub(pattern, " ", query, flags=re.I)
+        query = re.sub(r"\s+", " ", query).strip(" .,!?:;।")
+        return query or "Bollywood song"
+
+    async def _play_media(self, task: Task, context) -> ExecutionResult:
+        """Search, start and verify media in the real visible browser.
+
+        The successful return path requires an accessibility observation
+        that Chrome marks a tab as producing audio or that the page exposes
+        a Pause control. Navigation or a changed title alone never passes.
+        """
+        query = self._extract_media_query(task.user_request)
+        search_url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
+        observations: list[dict[str, Any]] = []
+
+        before_result = await self.executor.invoke(
+            "desktop", {"action": "browser_media_state"}, context)
+        before = before_result.structured_output or {}
+        observations.append({
+            "call": "browser_media_state", "inputs": {"phase": "before"},
+            "ok": before_result.success, "output": before,
+            "error": before_result.error,
+        })
+
+        # A media request does not require "the same tab" semantics. On
+        # machines where Chrome does not expose its tab strip, Ctrl+T can
+        # be swallowed while leaving the user on the previous page. The
+        # registered application launcher can hand Chrome a URL directly;
+        # Chrome then opens it visibly in its existing session (or starts
+        # a window when none exists).
+        opened_result = await self.executor.invoke(
+            "desktop", {"action": "app_open", "app_id": "chrome", "url": search_url},
+            context)
+        opened = opened_result.structured_output or {}
+        observations.append({
+            "call": "desktop_launch",
+            "inputs": {"app_id": "chrome", "url": search_url},
+            "ok": opened_result.success, "output": opened,
+            "error": opened_result.error,
+        })
+        if not opened_result.success:
+            raise RuntimeError(opened_result.error or "YouTube search could not be opened")
+
+        navigated_result = await self.executor.invoke(
+            "desktop", {
+                "action": "browser_page_type", "field": "address",
+                "value": search_url, "enter": True,
+            }, context)
+        navigated = navigated_result.structured_output or {}
+        observations.append({
+            "call": "browser_page_type",
+            "inputs": {"field": "address", "value": search_url, "url": search_url},
+            "ok": navigated_result.success and bool(navigated.get("success")),
+            "output": navigated, "error": navigated_result.error,
+        })
+        if not navigated_result.success or not navigated.get("success"):
+            raise RuntimeError(
+                navigated.get("summary") or navigated_result.error
+                or "The visible browser could not navigate to the YouTube search")
+
+        clicked_result = await self.executor.invoke(
+            "desktop", {"action": "browser_first_result"}, context)
+        clicked = clicked_result.structured_output or {}
+        observations.append({
+            "call": "browser_first_result", "inputs": {},
+            "ok": clicked_result.success and bool(clicked.get("success")),
+            "output": clicked, "error": clicked_result.error,
+        })
+        if not clicked_result.success or not clicked.get("success"):
+            raise RuntimeError(
+                clicked.get("summary") or clicked_result.error
+                or "No playable YouTube result was visible")
+
+        after: dict[str, Any] = {}
+        for _ in range(4):
+            await asyncio.sleep(0.8)
+            state_result = await self.executor.invoke(
+                "desktop", {"action": "browser_media_state"}, context)
+            after = state_result.structured_output or {}
+            observations.append({
+                "call": "browser_media_state", "inputs": {"phase": "after"},
+                "ok": state_result.success, "output": after,
+                "error": state_result.error,
+            })
+            if after.get("playing") is True:
+                break
+
+        # If autoplay was blocked but the real page exposes a Play button,
+        # make one bounded recovery click and observe the state again.
+        if after.get("playing") is False and after.get("source") == "page-play-control":
+            recovery = await self.executor.invoke(
+                "desktop", {"action": "browser_page_click", "target": "Play"}, context)
+            recovery_data = recovery.structured_output or {}
+            observations.append({
+                "call": "browser_page_click", "inputs": {"target": "Play"},
+                "ok": recovery.success and bool(recovery_data.get("success")),
+                "output": recovery_data, "error": recovery.error,
+            })
+            await asyncio.sleep(1.0)
+            state_result = await self.executor.invoke(
+                "desktop", {"action": "browser_media_state"}, context)
+            after = state_result.structured_output or {}
+            observations.append({
+                "call": "browser_media_state", "inputs": {"phase": "recovery"},
+                "ok": state_result.success, "output": after,
+                "error": state_result.error,
+            })
+
+        before_titles = set(before.get("playing_tabs") or [])
+        after_titles = set(after.get("playing_tabs") or [])
+        new_playback = bool(after_titles - before_titles)
+        clicked_title = str(clicked.get("title_after") or "").lower()
+        playback_title = str(after.get("title") or "").lower()
+        for suffix in (" - google chrome", " - audio playing"):
+            clicked_title = clicked_title.split(suffix)[0]
+            playback_title = playback_title.split(suffix)[0]
+        clicked_matches_playback = bool(
+            clicked_title and playback_title
+            and (clicked_title in playback_title or playback_title in clicked_title)
+        )
+        if after.get("playing") is not True:
+            raise RuntimeError(
+                "YouTube opened a result, but Chrome did not expose any playback evidence. "
+                "The task was not marked complete because opening a page is not playing a song.")
+        if before.get("playing") is True and not new_playback and not clicked_matches_playback:
+            raise RuntimeError(
+                "Audio was already playing in another browser tab, but the requested song "
+                "did not produce new playback evidence, so this was not marked complete.")
+
+        title = str(after.get("title") or clicked.get("title_after") or query).strip()
+        summary = f"Playing '{title[:100]}' in your visible browser."
+        data = {
+            "playing": True, "title": title, "query": query,
+            "search_url": search_url, "source": after.get("source"),
+            "playing_tabs": list(after_titles), "observations": observations,
+        }
+        return self._page_result(
+            task, summary, data,
+            evidence=[
+                str(clicked.get("summary") or "Opened a YouTube result"),
+                f"playback evidence: {after.get('source')}",
+                f"playing title: {title[:100]}",
+            ],
+        )
+
+    async def _capability_query(self, task: Task, context) -> ExecutionResult:
+        """Answer self-capability questions from the live registry only."""
+        records = self.capability_registry.list() if self.capability_registry is not None else []
+        available = [
+            record for record in records
+            if getattr(getattr(record, "status", None), "value", str(getattr(record, "status", "")))
+            == "available"
+        ]
+        ids = {str(getattr(record, "capability_id", "")) for record in available}
+        lowered = task.user_request.lower()
+        asks_memory = "memory" in lowered or "मेमोरी" in lowered or "yaad" in lowered
+        memory_available = "memory.search" in ids
+        if asks_memory:
+            if memory_available:
+                summary = (
+                    "Yes. Persistent memory search is registered and available. I can retrieve "
+                    "facts and history that were actually saved, and I will show retrieval "
+                    "evidence instead of pretending I remember something that is not stored.")
+            else:
+                summary = (
+                    "Persistent memory search is not available in the running Brain right now, "
+                    "so I will not claim that I can recall stored history.")
+        else:
+            friendly: list[str] = []
+            groups = (
+                ("desktop.execute", "operate visible Windows apps and controls"),
+                ("browser.execute", "browse and operate web pages"),
+                ("filesystem.execute", "read and manage permitted files/projects"),
+                ("system.execute", "measure this PC's live state"),
+                ("memory.search", "retrieve persistent memory and history"),
+                ("terminal.execute", "run approved development commands"),
+            )
+            for capability_id, label in groups:
+                if capability_id in ids:
+                    friendly.append(label)
+            joined = "; ".join(friendly) if friendly else "no core operating capability is available"
+            summary = (
+                f"The running Brain has {len(available)} available registered capabilities. "
+                f"Right now I can {joined}. For a specific command I check the live registry "
+                "and real postconditions before saying it worked.")
+        return ExecutionResult(
+            response=summary,
+            structured_data={
+                "available_count": len(available),
+                "capabilities": sorted(item for item in ids if item),
+                "memory_available": memory_available,
+            },
+            evidence=[f"{len(available)} available capabilities read from the live registry"],
+            usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
 
     async def _browser_page_type(self, task: Task, context) -> ExecutionResult:
         value = self._extract_typed_value(task.user_request)

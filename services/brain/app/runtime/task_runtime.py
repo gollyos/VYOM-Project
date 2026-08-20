@@ -857,7 +857,65 @@ class TaskRuntime:
         except Exception:
             pass
 
-        if not active:
+        # A retrospective question names the thing that failed (for
+        # example, "why didn't you play the song?"). Answer from that
+        # task's own status/evidence instead of reporting an unrelated
+        # task that merely happens to be active now.
+        retrospective = None
+        request_lower = task.user_request.lower()
+        topic_markers = {
+            "media": ("song", "music", "gaana", "gana", "गाना", "संगीत"),
+            "browser": ("chrome", "browser", "tab", "क्रोम", "टैब"),
+            "app": ("app", "application", "calculator", "notepad"),
+        }
+        wanted_topic = next(
+            (name for name, markers in topic_markers.items()
+             if any(marker in request_lower for marker in markers)), None)
+        asks_why_not = any(marker in request_lower for marker in (
+            "why", "kyu", "kyun", "क्यों", "nahi", "नहीं", "didn't", "did not",
+        ))
+        if wanted_topic and asks_why_not:
+            try:
+                recent_tasks = await self.task_store.list(limit=40)
+                markers = topic_markers[wanted_topic]
+                retrospective = next(
+                    (item for item in recent_tasks
+                     if item.id != task.id
+                     and any(marker in item.user_request.lower() for marker in markers)),
+                    None,
+                )
+            except Exception:
+                retrospective = None
+
+        if retrospective is not None:
+            goal_check = (retrospective.metadata or {}).get("goal_verification") or {}
+            proof = (retrospective.result.structured_data or {}) if retrospective.result else {}
+            if retrospective.status == TaskStatus.FAILED:
+                reason = retrospective.error or goal_check.get("evidence") or "the action failed"
+                summary = (
+                    f"The earlier request '{retrospective.user_request[:70]}' failed: "
+                    f"{str(reason)[:220]}. It was not completed.")
+            elif wanted_topic == "media" and proof.get("playing") is not True:
+                summary = (
+                    "The earlier song request was incorrectly marked complete without any "
+                    "playback evidence. It only observed the browser/windows; it did not prove "
+                    "audio was playing. That is a routing and verification failure, not a real "
+                    "completion.")
+            elif retrospective.status == TaskStatus.CANCELLED:
+                summary = (
+                    f"The earlier request was cancelled before its effect was verified: "
+                    f"'{retrospective.user_request[:80]}'.")
+            else:
+                summary = (
+                    f"The earlier request is {retrospective.status.value}. Its recorded goal "
+                    f"check says: {goal_check.get('evidence') or 'no real-world evidence recorded'}.")
+            rows = [[retrospective.user_request[:50], retrospective.status.value,
+                     str(goal_check.get("status") or "no proof")]]
+            active = []
+
+        if retrospective is not None:
+            pass
+        elif not active:
             if degraded:
                 summary = ("Nothing is running. " + "; ".join(degraded[:2])
                            + ". Deterministic PC commands still work normally.")

@@ -977,6 +977,61 @@ class TaskClassifier:
         Deliberately conservative: an ambiguous request stays a reasoning
         task rather than triggering an action the user did not ask for."""
 
+        # -- capability truth comes from the live registry ----------------
+        # Questions about VYOM itself must not go to a model that can invent
+        # either an inability or a capability. They are answered from the
+        # currently registered components.
+        self_question = f"{text} {getattr(self, '_original', '')}".lower()
+        if any(phrase in self_question for phrase in (
+            "what can you do", "what tasks can you", "which tasks can you",
+            "what are your capabilities", "what capability do you have",
+            "tum kya kar sakti", "tum kya kar sakte", "kya kya kar sakti",
+            "kya kya kar sakte", "तुम क्या कर सकती", "तुम क्या कर सकते",
+            "kaun se kaun se task perform", "kon se task perform",
+            "कौन से कौन से टास्क परफॉर्म", "कौन कौन से टास्क",
+            "do you have personal memory", "do you have a personal memory",
+            "you have the personal memory", "do you have memory",
+            "kya tumhare paas memory", "क्या तुम्हारे पास मेमोरी",
+        )):
+            return TaskProfile(
+                domain=TaskDomain.SYSTEM, complexity=1, latency_priority="high",
+                deterministic=True, intent="capability_query", needs={"tools"},
+            )
+
+        # -- play media in the user's visible browser ---------------------
+        #
+        # These requests previously fell into the general planner, which
+        # merely listed open windows and then declared the song request
+        # complete. A media request is one concrete, verifiable workflow:
+        # search -> open a result -> observe real browser playback.
+        media_text = f"{text} {getattr(self, '_original', '')}".lower()
+        media_named = re.search(
+            r"\b(?:song|music|gaana|gana|track|bhajan|video)\b|सॉन्ग|गाना|संगीत|भजन|वीडियो",
+            media_text, re.I,
+        )
+        play_order = re.search(
+            r"\b(?:play|start|chalao|chala\s*do|bajao|baja\s*do|laga\s*do)\b"
+            r"|चलाओ|चलाना|चला\s*(?:दो|दूं)|बजाओ|बजाना|बजा\s*दो|लगा\s*दो",
+            media_text, re.I,
+        )
+        # Natural speech often omits the final verb: "mere liye ek achcha
+        # Bollywood song" and "ek kaam karo ... song" are still direct
+        # requests, while questions such as "which song is this?" are not.
+        elliptical_order = (
+            any(phrase in media_text for phrase in (
+                "mere liye", "for me", "ek kaam karo", "एक काम करो", "मेरे लिए",
+            ))
+            and not any(marker in media_text for marker in (
+                "?", "which song", "what song", "kaunsa song", "konsa song",
+                "कौन सा गाना", "कौनसा गाना",
+            ))
+        )
+        if media_named and (play_order or elliptical_order):
+            return TaskProfile(
+                domain=TaskDomain.SYSTEM, complexity=2, criticality="normal",
+                deterministic=True, intent="play_media", needs={"tools"},
+            )
+
         # -- shopping across retailers -------------------------------------
         # Checked before generic web browsing: "find me the best black
         # running shoes on Amazon and Flipkart" is a product comparison
@@ -1313,7 +1368,8 @@ class TaskClassifier:
                 deterministic=True, intent="browser_tab_close", needs={"tools"},
             )
         if any(phrase in text for phrase in ("kaun se tab", "kitne tab", "which tabs",
-                                             "list tabs", "tabs dikhao", "open tabs")):
+                                             "list tabs", "tabs dikhao", "show tabs",
+                                             "show browser tabs", "open tabs")):
             return TaskProfile(
                 domain=TaskDomain.SYSTEM, complexity=1, latency_priority="high",
                 deterministic=True, intent="browser_tab_list", needs={"tools"},

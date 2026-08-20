@@ -18,7 +18,7 @@ L0_ACTIONS = {
     "status", "window_list", "displays", "app_status", "startup_status",
     "process_list_managed", "process_status",
     "active_window", "inspect_ui_tree", "find_control", "get_control_value",
-    "browser_tabs", "browser_profiles", "browser_page_read",
+    "browser_tabs", "browser_profiles", "browser_page_read", "browser_media_state",
 }
 # Driving a control is an ordinary operating action at the same level as
 # focusing a window: it is exactly what the user asked for, it is bounded
@@ -204,6 +204,8 @@ class DesktopTool(BaseTool):
             return {"tabs": tabs, "count": len(tabs)}
         if action == "browser_page_read":
             return self.controller.browser_page_read()
+        if action == "browser_media_state":
+            return self.controller.browser_media_state()
         if action == "browser_page_click":
             return self.controller.browser_page_click(str(inputs["target"]))
         if action == "browser_first_result":

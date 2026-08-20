@@ -468,6 +468,7 @@ GOAL_POSTCONDITIONS: dict[str, str] = {
     "browser_first_result": "page_action",
     "browser_page_scroll": "page_action",
     "browser_page_type": "control_value",
+    "play_media": "media_playing",
     "browser_page_read": "observation",
     "recover_visibility": "window_visible",
     "web_browse": "requested_target",
@@ -761,6 +762,8 @@ class GoalVerifier:
                     return {"playing": bool(output.get("playing")), "title": output.get("title")}
                 if "paused" in output:
                     return {"playing": not output.get("paused"), "title": output.get("title")}
+            if "playing" in data:
+                return {"playing": data.get("playing"), "title": data.get("title")}
             return {}
 
         return declared or None
@@ -847,4 +850,8 @@ class GoalVerifier:
                 "persisted": data.get("persisted"),
                 "next_run_at": data.get("next_run_at"),
             }
+        if kind == "media_playing":
+            if "playing" not in data:
+                return None
+            return {"playing": data.get("playing"), "title": data.get("title")}
         return None

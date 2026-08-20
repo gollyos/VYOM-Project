@@ -209,6 +209,10 @@ class DesktopController:
     def browser_page_read(self) -> dict[str, Any]:
         return self._require_accessibility().browser_page_read()
 
+    def browser_media_state(self) -> dict[str, Any]:
+        """Playback state from the visible browser's accessibility tree."""
+        return self._require_accessibility().browser_media_state()
+
     #: Well-known site names the user says conversationally, mapped to the
     #: URL a new tab should actually load.
     _SITE_URLS = {
@@ -291,7 +295,18 @@ class DesktopController:
             _time.sleep(0.2)
             window.type_keys("^t")
             _time.sleep(0.9)
-            window.type_keys(url + "{ENTER}", with_spaces=True)
+            # Target Chrome's semantic address-bar Edit control. Raw
+            # ``type_keys(url)`` interprets '+' in a query string as the
+            # Shift modifier and can silently type a different URL.
+            try:
+                accessibility.intended_window_handle = window.handle
+            except Exception:
+                pass
+            typed = accessibility.browser_page_type(url, enter=True, field="address")
+            if not typed.success:
+                raise RuntimeError(
+                    f"The new tab opened, but its address bar could not be set: "
+                    f"{typed.summary}")
             # OBSERVE, with retries: Chrome's tab strip is not exposed
             # through UIA the instant a tab is created, and the page takes
             # a moment to load. The window TITLE is the active tab's title
