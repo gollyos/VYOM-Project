@@ -1,0 +1,25 @@
+version: 1
+
+# Phase 13 production runtime policy.
+
+startup:
+  strict_config_validation: true
+  degraded_mode_allowed: true      # start degraded when core systems are healthy
+  require_migrations_current: true
+
+readiness:
+  liveness_path: /healthz
+  readiness_path: /readyz
+
+shutdown:
+  timeout_seconds: 15
+
+data:
+  mock_isolation: true             # mock/demo data must be labeled and never mix with real data
+  temp_max_age_hours: 72
+  screenshot_retention_days: 14
+  audit_retention_days: 365
+
+updates:
+  backup_before_update: true
+  health_check_after_update: true

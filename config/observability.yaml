@@ -1,0 +1,37 @@
+version: 1
+
+# Phase 13 observability policy.
+
+logging:
+  level: INFO            # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  format: json
+  max_file_bytes: 5000000
+  backups: 5
+  redact_secrets: true
+
+metrics:
+  enabled: true
+  max_histogram_samples: 500
+
+tracing:
+  enabled: true
+  max_spans: 1000
+  export: false          # local JSONL export only when enabled
+
+performance_budgets:
+  brain_health_ms: 250
+  command_latency_ms: 800
+  task_planning_ms: 1500
+  tool_latency_ms: 5000
+  model_latency_ms: 30000
+  memory_retrieval_ms: 300
+  websocket_reconnect_ms: 3000
+  desktop_startup_ms: 5000
+
+cost:
+  track: true
+  daily_alert_threshold: 4.0
+
+crash_reports:
+  local_retention: 20
+  external_upload: opt_in_only   # never enabled silently

@@ -1,0 +1,25 @@
+version: 1
+
+# Finance / portfolio defaults. See docs/FINANCE_ARCHITECTURE.md and
+# docs/FINANCIAL_DATA_MODEL.md.
+
+default_base_currency: USD
+
+portfolio_analytics:
+  # Metrics below are only computed when enough priced history/positions
+  # exist; VYOM must not fabricate a metric it cannot support (see rule 6).
+  volatility_lookback_days: 30
+  drawdown_lookback_days: 90
+
+cost_tracking:
+  # Phase 10 research/backtest/model spend is tracked the same way as
+  # Phase 8 research spend (rule 57). No hard cap is enforced here; the
+  # existing task budget (`TaskBudget`) already bounds a single task.
+  track_research_cost: true
+  track_backtest_compute: true
+
+sensitivity:
+  # Portfolio/account data defaults to `sensitive` per docs/MEMORY_ARCHITECTURE.md;
+  # only the minimum relevant fields are included in any model-routed prompt.
+  portfolio_default_sensitivity: sensitive
+  paper_trade_default_sensitivity: normal

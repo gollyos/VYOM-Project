@@ -1,0 +1,28 @@
+version: 1
+
+# Device Node foundation policy. See docs/DEVICE_NODE_PROTOCOL.md.
+local_node:
+  node_id: local-primary
+  name: This PC
+  device_type: desktop_pc
+  capabilities: [screen.capture, notifications.send, file.read, file.write, app.open]
+
+pairing:
+  code_ttl_seconds: 300
+  max_pending_requests: 5
+
+heartbeat:
+  interval_seconds: 20
+  offline_after_seconds: 60
+
+# Nodes never receive capabilities beyond this explicit allow-list, even if
+# the device itself claims to support more.
+capability_allow_list:
+  - screen.capture
+  - notifications.send
+  - file.read
+  - file.write
+  - app.open
+  - location.read
+  - camera.capture
+  - microphone

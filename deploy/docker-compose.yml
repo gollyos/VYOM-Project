@@ -1,0 +1,37 @@
+# VYOM home-server deployment (Phase 12).
+#
+# Runs the Brain (coordinator + 24/7 automation worker + scheduler) as
+# an always-on service. The Windows desktop Tauri app remains a native
+# local install and connects like any trusted node.
+#
+# Security posture: brain publishes to loopback by default; a reverse
+# proxy with TLS + device tokens is the documented path for remote
+# access (docs/DEPLOYMENT.md). Never expose these ports directly to
+# the public internet.
+
+services:
+  brain:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.brain
+    container_name: vyom-brain
+    restart: unless-stopped
+    environment:
+      # Optional model/provider keys stay node-local; the container
+      # never receives the desktop's secret vault.
+      - VYOM_ALLOWED_ROOTS=/vyom
+    ports:
+      # Loopback-only by default. Change "127.0.0.1:7788:7788" only on
+      # a trusted private network, per docs/DEPLOYMENT.md.
+      - "127.0.0.1:7788:7788"
+    volumes:
+      - vyom-data:/vyom/services/brain/data
+      - ../config:/vyom/config:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7788/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  vyom-data:

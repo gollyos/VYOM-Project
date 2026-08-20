@@ -1,0 +1,15 @@
+version: 1
+
+# Routine defaults. See docs/GOALS_AND_ROUTINES.md.
+
+execution:
+  # Every routine step still resolves a concrete permission level and
+  # executes through the existing Tool Registry/Permission Engine
+  # (rule 16) — routines never bypass it.
+  allowed_step_types: [reminder, open_application, show_briefing, start_focus_mode, run_automation, prepare_workspace, create_task]
+
+adaptation:
+  # rule 50: a consistently-failing routine is analyzed, not repeated
+  # forever unchanged.
+  failure_streak_threshold: 3
+  lookback_runs: 10

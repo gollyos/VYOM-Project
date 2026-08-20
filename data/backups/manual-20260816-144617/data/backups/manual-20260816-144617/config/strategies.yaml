@@ -1,0 +1,21 @@
+version: 1
+
+# Strategy system defaults. See docs/BACKTESTING.md. Strategy rules must be
+# structured/deterministic (rule 24) — free-form "buy when the AI feels
+# bullish" is not a valid StrategySpec and is rejected by the evaluator.
+
+backtesting:
+  default_initial_capital: 100000.0
+  default_fees_bps: 2
+  default_slippage_bps: 5
+  max_bars_per_backtest: 5000
+
+walk_forward:
+  default_development_fraction: 0.5
+  default_validation_fraction: 0.25
+  # remaining fraction is out-of-sample
+
+versioning:
+  # Modifying an active paper-testing strategy's rules always creates a new
+  # version; it is never overwritten silently (rule 61).
+  require_new_version_on_rule_change: true

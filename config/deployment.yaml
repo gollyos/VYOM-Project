@@ -1,0 +1,52 @@
+version: 1
+
+# Phase 12 deployment topology. Local-first: the default is a single
+# desktop deployment; the home-server and cloud options are opt-in and
+# never required for VYOM to function.
+
+mode: local_desktop   # local_desktop | desktop_and_home_server | cloud_worker_optional
+
+nodes:
+  - node_id: desktop
+    name: Desktop
+    device_type: desktop_pc
+    roles: [client_device, execution_node]
+  - node_id: home-server
+    name: Home Server
+    device_type: home_server
+    roles: [worker_node, execution_node]
+    optional: true
+
+transport:
+  # The Brain binds localhost only. Remote devices reach it through a
+  # user-configured secure tunnel/reverse proxy with TLS — VYOM never
+  # exposes raw internal APIs to the public internet and never silently
+  # opens ports.
+  bind: 127.0.0.1
+  port: 7788
+  require_authentication: true
+  documented_options:
+    - tailscale/wireguard-style private network
+    - local reverse proxy with TLS + device tokens
+
+secrets:
+  # Credentials stay node-local; mobile never receives provider keys.
+  replicate_to_nodes: false
+  mobile_receives: none
+
+capability_requirements:
+  local:
+    - filesystem
+    - terminal
+    - browser
+    - native apps
+    - screen
+  server:
+    - research
+    - email
+    - calendar
+    - automations
+    - artifact generation
+  cloud_optional:
+    - extra research capacity
+    - backup offloading

@@ -1,0 +1,4 @@
+checks:
+- build command discovered
+- exit code is zero
+- command evidence stored

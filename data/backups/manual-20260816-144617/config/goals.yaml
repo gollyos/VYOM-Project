@@ -1,0 +1,28 @@
+version: 1
+
+# Goal system defaults. See docs/GOALS_AND_ROUTINES.md.
+
+planning:
+  max_initial_milestones: 4
+  max_initial_next_actions: 3
+  # Goal planning creates a small number of useful milestones/next actions
+  # up front (rule 5) — never hundreds of tasks at once.
+
+progress:
+  # Progress must be evidence-based (rule 6). Sources by category are
+  # advisory hints only; the evaluator still requires real evidence
+  # (CRM/task/habit records) before reporting a percentage.
+  evidence_sources:
+    business: [crm, tasks]
+    career: [tasks, memory]
+    health: [habits]
+    learning: [habits, tasks]
+    finance: [finance]
+    personal: [habits, memory]
+    relationship: [memory]
+    project: [tasks]
+    other: [memory]
+
+neglect_detection:
+  deferred_threshold: 3          # times postponed before flagging neglect (rule 68)
+  stale_days_threshold: 21       # days without progress evidence before flagging

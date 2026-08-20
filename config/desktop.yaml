@@ -1,0 +1,43 @@
+version: 1
+
+# Desktop control runtime policy. See docs/DESKTOP_CONTROL.md.
+startup:
+  # User-controlled. Never enabled automatically by code, dev runs, or tests.
+  default_enabled: false
+
+tray:
+  # main window close behavior: minimize_to_tray | fully_exit
+  close_behavior: minimize_to_tray
+  actions:
+    - open_vyom
+    - listen
+    - pause_vyom
+    - pause_automations
+    - resume_automations
+    - current_tasks
+    - quit
+
+notifications:
+  # Meaningful events only; no periodic/status-spam notifications.
+  meaningful_events:
+    - approval_required
+    - reply_detected
+    - automation_completed
+    - task_failed
+    - meeting_soon
+    - coding_task_completed
+    - needs_intervention
+  min_seconds_between_notifications: 5
+
+clipboard:
+  # Reads are deliberate and event-emitting; no continuous monitoring.
+  continuous_monitoring: false
+  persist_to_memory: false
+
+process:
+  # Only VYOM-managed processes may be listed/stopped by default.
+  allow_unmanaged_process_control: false
+
+emergency_pause:
+  global_shortcut: "CommandOrControl+Shift+Escape"
+  voice_phrase: "vyom stop"

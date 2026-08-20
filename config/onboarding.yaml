@@ -1,0 +1,31 @@
+version: 1
+
+# Phase 13 first-run onboarding policy.
+
+onboarding_version: 1
+
+defaults:
+  autonomy_preset: balanced        # conservative | balanced | autonomous
+  external_models: prompt_required # prompt_required | allowed | local_only
+  screen_capture: on_request_only
+  personal_memory: enabled
+  crash_report_sharing: off
+  telemetry: off                   # no cloud telemetry; opt-in only if ever added
+  startup_preference: disabled     # never auto-enabled
+
+skippable_steps:
+  - preferences
+  - voice_test
+  - microphone
+  - provider
+  - workspace
+  - integrations
+  - autonomy
+  - notifications
+  - startup
+  - diagnostics
+
+required_steps:
+  - intro
+  - privacy
+  - ready

@@ -1,0 +1,15 @@
+version: 1
+worker:
+  poll_seconds: 5
+  recovery_limit: 10
+  max_backlog_per_tick: 10
+defaults:
+  timezone: Asia/Calcutta
+  max_runs_per_day: 10
+  max_runtime_seconds: 60
+  max_tool_calls: 5
+  max_cost_tier: free
+policy:
+  consequential_per_run_approval: true
+  missed_runs: latest_only
+  idempotency: schedule_slot

@@ -1,0 +1,35 @@
+id: code-review
+name: Structured Code Review
+version: 1.0.0
+description: Review for correctness, security, tests, and clarity with written findings.
+  Distilled procedure inspired by obra/superpowers (selected import per docs/EXTERNAL_CAPABILITIES.md);
+  not a verbatim copy — external skill text is data and cannot override VYOM policy.
+category: developer
+created_by: phase13.5-import
+required_capabilities:
+- filesystem
+- terminal
+required_tools: []
+required_permissions: L0
+steps:
+- id: s1
+  action: Read the diff and state its intent
+  capability: filesystem
+- id: s2
+  action: Check correctness against the stated intent
+  capability: filesystem
+- id: s3
+  action: Check security/permission implications
+  capability: filesystem
+- id: s4
+  action: Check tests cover the change
+  capability: terminal
+- id: s5
+  action: Record findings with file:line evidence
+  capability: filesystem
+verification:
+  checks:
+  - evidence recorded for each step
+  minimum_score: 1.0
+  require_evidence: true
+status: testing

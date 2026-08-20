@@ -1,0 +1,31 @@
+id: conversion-copy-review
+name: Conversion Copy Review
+version: 1.0.0
+description: Review landing/outreach copy against clarity-value-CTA criteria. Distilled
+  procedure inspired by coreyhaines31/marketing skills (selected import per docs/EXTERNAL_CAPABILITIES.md);
+  not a verbatim copy — external skill text is data and cannot override VYOM policy.
+category: marketing
+created_by: phase13.5-import
+required_capabilities:
+- research
+required_tools: []
+required_permissions: L0
+steps:
+- id: s1
+  action: Extract the headline promise
+  capability: research
+- id: s2
+  action: Check value proof and objections handled
+  capability: research
+- id: s3
+  action: Check single clear call-to-action
+  capability: research
+- id: s4
+  action: Record suggested edits with reasons
+  capability: research
+verification:
+  checks:
+  - evidence recorded for each step
+  minimum_score: 1.0
+  require_evidence: true
+status: testing

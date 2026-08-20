@@ -1,0 +1,42 @@
+[
+ {
+  "goal": "What do you remember about Rohit?",
+  "tag": "memory",
+  "status": "completed",
+  "intent": "",
+  "model": "",
+  "model_calls": 2,
+  "tools": [
+   "memory_search"
+  ],
+  "latency_s": 5.0,
+  "ok": true,
+  "powershell": false,
+  "browser": false,
+  "unknown_tool": false,
+  "unsupported_success": false,
+  "cost_regression": false,
+  "response": "Mission finished: 1 tool call(s), 1 verified",
+  "error": ""
+ },
+ {
+  "goal": "Rohit ke baare me tumhe kya yaad hai?",
+  "tag": "memory",
+  "status": "completed",
+  "intent": "general",
+  "model": "vyom-general-planner",
+  "model_calls": 2,
+  "tools": [
+   "memory_search"
+  ],
+  "latency_s": 3.34,
+  "ok": true,
+  "powershell": false,
+  "browser": false,
+  "unknown_tool": false,
+  "unsupported_success": false,
+  "cost_regression": false,
+  "response": "Mission finished: 1 tool call(s), 1 verified",
+  "error": ""
+ }
+]

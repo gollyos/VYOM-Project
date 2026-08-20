@@ -1,0 +1,26 @@
+version: 1
+
+# Habit tracking defaults. See docs/HABIT_ARCHITECTURE.md. Tracking is
+# explicit-check-in + existing task/calendar/system events +
+# user-approved integrations only — never continuous surveillance
+# (rule 10).
+
+tracking:
+  allowed_sources: [manual, calendar, task_runtime, desktop_activity, connected_service, automation]
+  # No source here implies microphone/webcam/screen/keylogging capture.
+
+pattern_analysis:
+  minimum_sample_size: 5         # below this, an insight is not presented as a fact (rule 13)
+  minimum_confidence: 0.55
+  lookback_days: 42
+
+streaks:
+  # rule 14: streak preservation is not the core psychology; a broken
+  # streak never resets a consistency trend to zero.
+  track_streaks: true
+  emphasize_consistency_trend: true
+
+interventions:
+  # rule 49/77: no shaming, no manipulative pressure, no medical/mental
+  # health diagnosis language.
+  allowed_types: [reminder, environment_preparation, schedule_adjustment, focus_block, task_delegation, reduce_notification_noise, shutdown_routine]

@@ -1,0 +1,1954 @@
+from __future__ import annotations
+
+import asyncio
+import time
+from collections import OrderedDict
+from datetime import datetime, timezone
+
+from app.persistence.model_performance_store import ModelPerformanceStore
+from app.persistence.task_store import TaskStore
+from app.providers.base import ProviderError, ProviderRegistry
+from app.routing.model_registry import ModelRegistry
+from app.routing.model_router import ModelRouter, NoModelAvailableError
+from app.routing.provider_health import ProviderHealth
+from app.routing.usage_tracker import UsageTracker
+from app.schemas.approvals import ApprovalRequest, PermissionLevel
+from app.schemas.events import BrainEvent, EventType
+from app.schemas.routing import RoutingDecision
+from app.schemas.tasks import ActionProvenance, Task, TaskCreate, TaskDomain, TaskStatus
+from app.security.permission_engine import PermissionEngine
+from app.execution.action_engine import ActionEngine
+from app.learning.intelligence_engine import IntelligenceEngine
+from app.briefing.engine import BusinessEngine
+from app.phase8.engine import Phase8Engine
+from app.phase9.engine import Phase9Engine
+from app.phase10.engine import Phase10Engine
+from app.phase11.engine import Phase11Engine
+
+from .event_bus import EventBus
+from .executor import Executor
+from .planner import Planner
+from .task_classifier import TaskClassifier
+from .verifier import Verifier
+
+
+class TaskCancelled(Exception):
+    pass
+
+
+class TaskRuntime:
+    def __init__(
+        self,
+        *,
+        task_store: TaskStore,
+        performance_store: ModelPerformanceStore,
+        event_bus: EventBus,
+        model_registry: ModelRegistry,
+        providers: ProviderRegistry,
+        model_router: ModelRouter,
+        provider_health: ProviderHealth,
+        classifier: TaskClassifier,
+        planner: Planner,
+        executor: Executor,
+        verifier: Verifier,
+        permission_engine: PermissionEngine,
+        usage_tracker: UsageTracker,
+        action_engine: ActionEngine | None = None,
+        intelligence_engine: IntelligenceEngine | None = None,
+        business_engine: BusinessEngine | None = None,
+        phase8_engine: Phase8Engine | None = None,
+        phase9_engine: Phase9Engine | None = None,
+        phase10_engine: Phase10Engine | None = None,
+        phase11_engine: Phase11Engine | None = None,
+        phase13_engine=None,
+        cognitive_runtime=None,
+        mission_loop=None,
+    ) -> None:
+        self.task_store = task_store
+        self.performance_store = performance_store
+        self.event_bus = event_bus
+        self.model_registry = model_registry
+        self.providers = providers
+        self.model_router = model_router
+        self.provider_health = provider_health
+        self.classifier = classifier
+        self.planner = planner
+        self.executor = executor
+        self.verifier = verifier
+        self.permission_engine = permission_engine
+        self.usage_tracker = usage_tracker
+        self.action_engine = action_engine
+        self.intelligence_engine = intelligence_engine
+        self.business_engine = business_engine
+        self.phase8_engine = phase8_engine
+        self.phase9_engine = phase9_engine
+        self.phase10_engine = phase10_engine
+        self.phase11_engine = phase11_engine
+        self.phase13_engine = phase13_engine
+        self.cognitive_runtime = cognitive_runtime
+        self.mission_loop = mission_loop
+        self.general_planner = None  # attached post-construction in main.py, like cognitive_runtime/mission_loop
+        self.memory_retriever = None  # attached post-construction in main.py, same pattern
+        self.memory_store = None  # attached post-construction in main.py, same pattern
+        self.memory_manager = None  # attached post-construction in main.py, same pattern
+        from .verifier import GoalVerifier, PostconditionVerifier
+        self.postconditions = PostconditionVerifier()
+        # The ONE authority that can promote a task to VERIFIED_COMPLETE.
+        # Every completion path in this runtime funnels through
+        # _finish_result, and _finish_result consults this before it is
+        # allowed to write TaskStatus.COMPLETED.
+        self.goal_verifier = GoalVerifier(self.postconditions)
+        self.cost_tracker = None  # attached post-construction in main.py, like cognitive_runtime/mission_loop
+        self.ownership_registry = None  # attached post-construction in main.py, same pattern
+        self.active: dict[str, asyncio.Task[None]] = {}
+        self.last_routing: RoutingDecision | None = None
+        # ONE TASK -> ONE TERMINAL EVENT.
+        #
+        # task_completed was being published twice for the same task_id -
+        # once by MissionLoop and again by _finish_result - so the UI
+        # rendered the result twice and TTS spoke it twice. task_id is the
+        # identity authority here; correlation_id is only tracing metadata.
+        # Bounded so a long-lived Brain cannot grow this without limit.
+        self._terminalized: OrderedDict[str, str] = OrderedDict()
+
+    async def create_task(
+        self, request: TaskCreate, *, provenance: ActionProvenance = ActionProvenance.USER_COMMAND
+    ) -> Task:
+        task = Task.from_create(request)
+        # ACTION PROVENANCE. Every external app/window/browser action this
+        # task can go on to trigger must trace back to why the task itself
+        # was allowed to exist. Default is USER_COMMAND because every
+        # normal entrypoint (voice/text via /api/tasks, /api/remote,
+        # offline-queue replay) is a person's own request; callers that are
+        # NOT a direct user command - the routine/automation step executor
+        # - pass their own provenance explicitly. ActionEngine.execute()
+        # is the one place this is actually enforced before anything runs.
+        task.metadata["provenance"] = provenance.value
+
+        # KERNEL INTERRUPT. Recognised before classification, routing,
+        # planning, memory or any capability - STOP outranks every
+        # mission, including the one that is mid-flight. It costs zero
+        # model calls and touches no tool.
+        from .task_classifier import is_interrupt_command
+
+        if is_interrupt_command(task.user_request):
+            return await self._handle_interrupt(task)
+
+        if "model you chose" in task.user_request.lower() or "explain model" in task.user_request.lower():
+            if self.last_routing:
+                task.metadata["routing_to_explain"] = self.last_routing.model_dump(mode="json")
+        await self.task_store.save(task)
+        await self._emit(task, EventType.TASK_CREATED, "Task accepted and persisted")
+        self._start(task.id)
+        return task
+
+    @staticmethod
+    def _is_open_command(request: str) -> bool:
+        """Is this an instruction to OPEN the thing being referred to?"""
+        lowered = (request or "").lower()
+        return any(
+            verb in lowered for verb in
+            ("open", "kholo", "khol do", "kholiye", "launch", "start", "dikhao",
+             "show", "chalu", "ओपन", "खोलो", "दिखाओ", "चालू")
+        )
+
+    async def _handle_interrupt(self, task: Task) -> Task:
+        """Stop everything that is running and say so. Nothing else.
+
+        No planner, no model, no filesystem, no browser. The application
+        stays alive; only the work stops."""
+        from app.schemas.results import ExecutionResult
+        from app.schemas.routing import UsageRecord
+
+        task.metadata["kernel_interrupt"] = True
+        await self.task_store.save(task)
+        await self._emit(task, EventType.TASK_CREATED, "Stop received")
+
+        # 1. Silence speech immediately - this reaches the voice runtime
+        #    ahead of any other event so a queued completion cannot talk
+        #    over the acknowledgement.
+        await self._emit(task, EventType.TASK_PROGRESS, "Stopping",
+                         {"interrupt": True, "stop_speech": True})
+
+        # 2. Cancel every in-flight mission. A superseded task must never
+        #    later speak, publish a completion, or write memory.
+        cancelled: list[str] = []
+        for other_id in list(self.active.keys()):
+            if other_id == task.id:
+                continue
+            try:
+                await self.cancel(other_id)
+                cancelled.append(other_id)
+            except Exception:
+                continue
+
+        task.status = TaskStatus.COMPLETED
+        task.progress = 1
+        task.completed_at = datetime.now(timezone.utc)
+        task.assigned_model = None
+        response = "Stopped." if cancelled else "Nothing was running, but I've stopped."
+        task.result = ExecutionResult(
+            response=response,
+            structured_data={"interrupt": True, "cancelled_tasks": cancelled},
+            evidence=[f"cancelled {len(cancelled)} running task(s)"],
+            usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
+        await self.task_store.save(task)
+        await self._emit(task, EventType.TASK_COMPLETED, response,
+                         {"response": response, "interrupt": True,
+                          "task": task.model_dump(mode="json")})
+        return task
+
+    def _start(self, task_id: str) -> None:
+        current = self.active.get(task_id)
+        if current and not current.done():
+            return
+        background = asyncio.create_task(self._run_guarded(task_id), name=f"vyom-{task_id}")
+        self.active[task_id] = background
+
+    async def _run_guarded(self, task_id: str) -> None:
+        try:
+            await self.run(task_id)
+        finally:
+            self.active.pop(task_id, None)
+
+    async def run(self, task_id: str) -> None:
+        task = await self.task_store.get(task_id)
+        if task is None or task.status in {TaskStatus.CANCELLED, TaskStatus.COMPLETED}:
+            return
+        started = time.perf_counter()
+        retries = 0
+        fallback_used = False
+
+        try:
+            task.started_at = task.started_at or datetime.now(timezone.utc)
+            await self._transition(task, TaskStatus.UNDERSTANDING, EventType.TASK_UNDERSTANDING, "Understanding the request")
+            profile = self.classifier.classify(task.user_request)
+            task.profile = profile
+            task.domain = profile.domain
+            task.complexity = profile.complexity
+            task.criticality = profile.criticality
+            task.permission_level = self.permission_engine.raise_to_intent_floor(
+                self.permission_engine.classify(task.user_request), profile.intent
+            )
+            task.requires_approval = self.permission_engine.requires_approval(task.permission_level)
+            task.requires_tools = "tools" in profile.needs
+            # ACTION PROVENANCE. Every externally observable action this
+            # task causes is attributable to THIS trigger: a current user
+            # command. There is no other authorised way for a model, a
+            # skill or a background tick to open an application - and the
+            # desktop tool now refuses effects that arrive without one.
+            task.metadata["action_provenance"] = {
+                "trigger_type": "USER_COMMAND",
+                "trigger_id": task.id,
+                "mission_id": task.id,
+                "requested_effect": task.user_request[:160],
+                "permission_level": task.permission_level.value
+                if hasattr(task.permission_level, "value") else str(task.permission_level),
+            }
+            await self.task_store.save(task)
+            await self._check_control(task)
+            await self._capture_conversational_facts(task)
+
+            # Phase 16: cognitive runtime — resolve Memory -> Experience ->
+            # Knowledge -> Skill -> Tool BEFORE planning, for every
+            # meaningful task (live behavior, not a demo helper).
+            if self.cognitive_runtime is not None:
+                try:
+                    await self.cognitive_runtime.prepare(task, profile)
+                    await self.task_store.save(task)
+                except Exception:
+                    import logging
+
+                    logging.getLogger("vyom.cognitive").exception(
+                        "cognitive resolution failed for task %s", task.id
+                    )  # logged, never blocking execution
+
+                # A PRONOUN THAT NOW HAS A REFERENT IS AN ORDINARY COMMAND.
+                #
+                # "to open kijiye usko" names no target, so the classifier
+                # could only call it "general" and hand it to the planner -
+                # which picked an unrelated URL out of durable memory and
+                # opened a Zoho workflow. Once ActiveContext has resolved
+                # what "usko" points at, this IS a launch, and it takes the
+                # deterministic path: zero model calls, real verification.
+                referent = (task.metadata.get("cognitive") or {}).get("resolved_reference")
+                if (
+                    profile.intent == "general"
+                    and isinstance(referent, str)
+                    and referent.startswith(("http://", "https://"))
+                    and self._is_open_command(task.user_request)
+                ):
+                    profile = profile.model_copy(update={
+                        "intent": "app_launch", "domain": TaskDomain.SYSTEM,
+                        "deterministic": True, "needs": set(profile.needs) | {"tools"},
+                    })
+                    task.profile = profile
+                    task.domain = profile.domain
+                    task.requires_tools = True
+                    task.metadata["referent_routed"] = referent
+                    await self.task_store.save(task)
+
+            if task.requires_approval and not task.approval_granted:
+                approval = ApprovalRequest(
+                    task_id=task.id,
+                    permission_level=task.permission_level,
+                    action=task.user_request,
+                    reason=f"{task.permission_level.value} actions require explicit approval",
+                )
+                task.approval_id = approval.id
+                task.metadata["approval"] = approval.model_dump(mode="json")
+                task.status = TaskStatus.NEEDS_APPROVAL
+                await self.task_store.save(task)
+                await self._emit(
+                    task,
+                    EventType.APPROVAL_REQUIRED,
+                    "Approval is required before this task can continue",
+                    {"approval": approval.model_dump(mode="json")},
+                )
+                return
+
+            # Duplicate-execution guard: every consequential (L2/L3) task
+            # passes through exactly this one point regardless of which
+            # engine ultimately handles it (business/phaseN engine or the
+            # generic executor below), after approval is confirmed. Reserve
+            # a durable idempotency record keyed by this task's own id
+            # before any consequential work happens. This is a second,
+            # complementary layer to the crash-recovery ordering fix
+            # (which stops a restart from blindly resuming a task that
+            # already has evidence) - it also catches a concurrent second
+            # run of the same task_id within one Brain lifetime, which
+            # self.active only guards in-process and never across a
+            # restart. Never re-executes a consequential action twice.
+            if (
+                task.permission_level in (PermissionLevel.L2, PermissionLevel.L3)
+                and self.ownership_registry is not None
+            ):
+                action_key = f"task_exec:{task.id}"
+                reserved = await self.ownership_registry.begin_consequential(task.id, "brain-local", action_key)
+                if not reserved:
+                    task.status = TaskStatus.PAUSED
+                    task.metadata["duplicate_execution_prevented"] = True
+                    await self.task_store.save(task)
+                    await self._emit(
+                        task,
+                        EventType.TASK_PROGRESS,
+                        "Duplicate consequential execution prevented; task paused for review",
+                        {"action_key": action_key},
+                    )
+                    return
+
+            # Compound goals ("inspect this project, run its tests and tell
+            # me what's wrong") are executed by the MissionLoop: plan ->
+            # execute step -> verify -> adapt on failure -> learn. Before
+            # this, MissionLoop was constructed and attached but never
+            # called from the user command path, so multi-step requests
+            # collapsed into a single classifier match or a text answer.
+            mission_steps = self._detect_mission(task.user_request)
+            if mission_steps and self.mission_loop is not None and self.action_engine is not None:
+                await self._run_mission(task, profile, mission_steps, started, retries, fallback_used)
+                return
+
+            if self.business_engine is not None and self.business_engine.supports(profile.intent):
+                task.assigned_model = "local-business-runtime-v1"
+                await self.task_store.save(task)
+                await self._emit(
+                    task, EventType.MODEL_SELECTED, "Selected deterministic local business runtime",
+                    {"routing": {"primary_model": "local-business-runtime-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured integration/CRM/automation workflow; no paid model call required", "estimated_cost_tier": "free"}},
+                )
+                await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a permission-aware operating plan")
+                task.plan = self.planner.create_plan(task, profile)
+                await self.task_store.save(task)
+                await self._emit(task, EventType.PLAN_READY, f"Operating plan ready with {len(task.plan)} step(s)", {"plan": [step.model_dump(mode="json") for step in task.plan]})
+                await self._transition(task, TaskStatus.EXECUTING, EventType.TASK_PROGRESS, "Executing connected business workflow")
+
+                async def emit_business(event_type: str, message: str, payload: dict) -> None:
+                    await self._emit(task, EventType(event_type), message, payload)
+
+                result = await self.business_engine.execute(task, profile, emit_business)
+                await self._check_control(task)
+                for index, step in enumerate(task.plan):
+                    step.status = "complete"
+                    task.current_step = index
+                task.progress = 0.8
+                await self.task_store.save(task)
+                await self._finish_result(task, result, None, started, retries, fallback_used)
+                return
+
+            if self.phase8_engine is not None and self.phase8_engine.supports(profile.intent):
+                task.assigned_model = "local-phase8-runtime-v1"
+                await self.task_store.save(task)
+                await self._emit(
+                    task, EventType.MODEL_SELECTED, "Selected deterministic Phase 8 research/artifact runtime",
+                    {"routing": {"primary_model": "local-phase8-runtime-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured research/browser/discovery/booking/artifact workflow; no paid model call required for orchestration", "estimated_cost_tier": "free"}},
+                )
+                await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a bounded research/artifact plan")
+                task.plan = self.planner.create_plan(task, profile)
+                await self.task_store.save(task)
+                await self._emit(task, EventType.PLAN_READY, f"Plan ready with {len(task.plan)} step(s)", {"plan": [step.model_dump(mode="json") for step in task.plan]})
+                await self._transition(task, TaskStatus.EXECUTING, EventType.TASK_PROGRESS, "Executing Phase 8 workflow")
+
+                async def emit_phase8(event_type: str, message: str, payload: dict) -> None:
+                    await self._emit(task, EventType(event_type), message, payload)
+
+                result = await self.phase8_engine.execute(task, profile, emit_phase8)
+                await self._check_control(task)
+                for index, step in enumerate(task.plan):
+                    step.status = "complete"
+                    task.current_step = index
+                task.progress = 0.8
+                await self.task_store.save(task)
+                await self._finish_result(task, result, None, started, retries, fallback_used)
+                return
+
+            if self.phase13_engine is not None and self.phase13_engine.supports(profile.intent):
+                task.assigned_model = "local-phase13-runtime-v1"
+                await self.task_store.save(task)
+                await self._emit(
+                    task, EventType.MODEL_SELECTED, "Selected deterministic Phase 13 production runtime",
+                    {"routing": {"primary_model": "local-phase13-runtime-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Deterministic diagnostics/observability workflow; no paid model call required", "estimated_cost_tier": "free"}},
+                )
+                await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Preparing a production diagnostics plan")
+                task.plan = self.planner.create_plan(task, profile)
+                await self.task_store.save(task)
+                await self._emit(task, EventType.PLAN_READY, f"Plan ready with {len(task.plan)} step(s)", {"plan": [step.model_dump(mode="json") for step in task.plan]})
+                await self._transition(task, TaskStatus.EXECUTING, EventType.TASK_PROGRESS, "Running production diagnostics workflow")
+
+                async def emit_phase13(event_type: str, message: str, payload: dict) -> None:
+                    await self._emit(task, EventType(event_type), message, payload)
+
+                result = await self.phase13_engine.execute(task, profile, emit_phase13)
+                await self._check_control(task)
+                for index, step in enumerate(task.plan):
+                    step.status = "complete"
+                    task.current_step = index
+                task.progress = 0.8
+                await self.task_store.save(task)
+                await self._finish_result(task, result, None, started, retries, fallback_used)
+                return
+
+            if self.phase9_engine is not None and self.phase9_engine.supports(profile.intent):
+                task.assigned_model = "local-phase9-runtime-v1"
+                await self.task_store.save(task)
+                await self._emit(
+                    task, EventType.MODEL_SELECTED, "Selected deterministic Phase 9 desktop runtime",
+                    {"routing": {"primary_model": "local-phase9-runtime-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Deterministic native desktop workflow; no paid model call required for orchestration", "estimated_cost_tier": "free"}},
+                )
+                await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a bounded desktop action plan")
+                task.plan = self.planner.create_plan(task, profile)
+                await self.task_store.save(task)
+                await self._emit(task, EventType.PLAN_READY, f"Plan ready with {len(task.plan)} step(s)", {"plan": [step.model_dump(mode="json") for step in task.plan]})
+                await self._transition(task, TaskStatus.EXECUTING, EventType.TASK_PROGRESS, "Executing native desktop workflow")
+
+                async def emit_phase9(event_type: str, message: str, payload: dict) -> None:
+                    await self._emit(task, EventType(event_type), message, payload)
+
+                result = await self.phase9_engine.execute(task, profile, emit_phase9)
+                await self._check_control(task)
+                for index, step in enumerate(task.plan):
+                    step.status = "complete"
+                    task.current_step = index
+                task.progress = 0.8
+                await self.task_store.save(task)
+                await self._finish_result(task, result, None, started, retries, fallback_used)
+                return
+
+            if self.phase10_engine is not None and self.phase10_engine.supports(profile.intent):
+                task.assigned_model = "local-phase10-runtime-v1"
+                await self.task_store.save(task)
+                await self._emit(
+                    task, EventType.MODEL_SELECTED, "Selected deterministic Phase 10 finance/trading runtime",
+                    {"routing": {"primary_model": "local-phase10-runtime-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured market data/analysis/paper-trading/backtest workflow; no paid model call required for orchestration", "estimated_cost_tier": "free"}},
+                )
+                await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a bounded market/trading plan")
+                task.plan = self.planner.create_plan(task, profile)
+                await self.task_store.save(task)
+                await self._emit(task, EventType.PLAN_READY, f"Plan ready with {len(task.plan)} step(s)", {"plan": [step.model_dump(mode="json") for step in task.plan]})
+                await self._transition(task, TaskStatus.EXECUTING, EventType.TASK_PROGRESS, "Executing Phase 10 finance/trading workflow")
+
+                async def emit_phase10(event_type: str, message: str, payload: dict) -> None:
+                    await self._emit(task, EventType(event_type), message, payload)
+
+                result = await self.phase10_engine.execute(task, profile, emit_phase10)
+                await self._check_control(task)
+                for index, step in enumerate(task.plan):
+                    step.status = "complete"
+                    task.current_step = index
+                task.progress = 0.8
+                await self.task_store.save(task)
+                await self._finish_result(task, result, None, started, retries, fallback_used)
+                return
+
+            if self.phase11_engine is not None and self.phase11_engine.supports(profile.intent):
+                task.assigned_model = "local-phase11-runtime-v1"
+                await self.task_store.save(task)
+                await self._emit(
+                    task, EventType.MODEL_SELECTED, "Selected deterministic Phase 11 personal-OS runtime",
+                    {"routing": {"primary_model": "local-phase11-runtime-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured goal/habit/routine/chief-of-staff workflow; no paid model call required for orchestration", "estimated_cost_tier": "free"}},
+                )
+                await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a bounded personal-OS plan")
+                task.plan = self.planner.create_plan(task, profile)
+                await self.task_store.save(task)
+                await self._emit(task, EventType.PLAN_READY, f"Plan ready with {len(task.plan)} step(s)", {"plan": [step.model_dump(mode="json") for step in task.plan]})
+                await self._transition(task, TaskStatus.EXECUTING, EventType.TASK_PROGRESS, "Executing Phase 11 personal-OS workflow")
+
+                async def emit_phase11(event_type: str, message: str, payload: dict) -> None:
+                    await self._emit(task, EventType(event_type), message, payload)
+
+                result = await self.phase11_engine.execute(task, profile, emit_phase11)
+                await self._check_control(task)
+                for index, step in enumerate(task.plan):
+                    step.status = "complete"
+                    task.current_step = index
+                task.progress = 0.8
+                await self.task_store.save(task)
+                await self._finish_result(task, result, None, started, retries, fallback_used)
+                return
+
+            if task.requires_approval and task.approval_granted and not task.requires_tools:
+                raise RuntimeError("No registered consequential workflow exists for this approved request")
+
+            if self.intelligence_engine is not None and self.intelligence_engine.supports(profile.intent):
+                task.assigned_model = "local-intelligence-v1"
+                await self.task_store.save(task)
+                await self._emit(
+                    task,
+                    EventType.MODEL_SELECTED,
+                    "Selected deterministic local intelligence runtime",
+                    {"routing": {"primary_model": "local-intelligence-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured memory/skill/agent workflow; no paid model call required", "estimated_cost_tier": "free"}},
+                )
+                await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a bounded intelligence plan")
+                task.plan = self.planner.create_plan(task, profile)
+                await self.task_store.save(task)
+                await self._emit(task, EventType.PLAN_READY, f"Intelligence plan ready with {len(task.plan)} step(s)", {"plan": [step.model_dump(mode="json") for step in task.plan]})
+                await self._transition(task, TaskStatus.EXECUTING, EventType.TASK_PROGRESS, "Executing persistent intelligence workflow")
+
+                async def emit_intelligence(event_type: str, message: str, payload: dict) -> None:
+                    await self._emit(task, EventType(event_type), message, payload)
+
+                result = await self.intelligence_engine.execute(task, profile, emit_intelligence)
+                await self._check_control(task)
+                for index, step in enumerate(task.plan):
+                    step.status = "complete"
+                    task.current_step = index
+                task.progress = 0.8
+                await self.task_store.save(task)
+                await self._finish_result(task, result, None, started, retries, fallback_used)
+                return
+
+            if task.requires_tools:
+                if self.action_engine is None or not self.action_engine.supports(profile.intent):
+                    raise RuntimeError("No registered action workflow can satisfy this tool request")
+                task.assigned_model = "local-tool-planner-v1"
+                await self.task_store.save(task)
+                await self._emit(
+                    task,
+                    EventType.MODEL_SELECTED,
+                    "Selected deterministic local tool planner",
+                    {"routing": {"primary_model": "local-tool-planner-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Known tool workflow; no paid model call required", "estimated_cost_tier": "free"}},
+                )
+                await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a controlled tool plan")
+                task.plan = self.planner.create_plan(task, profile)
+                await self.task_store.save(task)
+                await self._emit(
+                    task,
+                    EventType.PLAN_READY,
+                    f"Tool plan ready with {len(task.plan)} step(s)",
+                    {"plan": [step.model_dump(mode="json") for step in task.plan]},
+                )
+                await self._transition(task, TaskStatus.EXECUTING, EventType.TASK_PROGRESS, "Executing registered tools")
+
+                async def emit_tool(event_type: str, message: str, payload: dict) -> None:
+                    await self._emit(task, EventType(event_type), message, payload)
+
+                result = await self.action_engine.execute(task, profile, emit_tool)
+                await self._check_control(task)
+                for index, step in enumerate(task.plan):
+                    step.status = "complete"
+                    task.current_step = index
+                task.progress = 0.8
+                await self.task_store.save(task)
+                await self._finish_result(task, result, None, started, retries, fallback_used)
+                return
+
+            if profile.intent in {"runtime_introspection", "user_feedback"}:
+                task.plan = self.planner.create_plan(task, profile)
+                await self._answer_runtime_introspection(
+                    task, started, feedback=profile.intent == "user_feedback")
+                return
+
+            if profile.intent in {"profile_recall", "profile_statement"}:
+                task.plan = self.planner.create_plan(task, profile)
+                await self._answer_from_profile(task, profile, started)
+                return
+
+            if profile.intent == "close_everything":
+                task.plan = self.planner.create_plan(task, profile)
+                await self._execute_and_finish(task, profile, None, None, started, retries, fallback_used)
+                return
+
+            # An intent the classifier did not recognise must NOT become a
+            # text answer. It goes to the general tool-calling planner,
+            # which decides real actions from the live tool registry and
+            # observes their results. This is the difference between VYOM
+            # advising the user and VYOM doing the work.
+            if (
+                profile.intent == "general"
+                and self.general_planner is not None
+                and self.mission_loop is not None
+            ):
+                from app.runtime.planner import is_conversational
+                from app.runtime.task_classifier import looks_like_stt_noise
+
+                # A transcript with no recognisable word in it is not a
+                # request. This check comes FIRST because garbage is also
+                # 'conversational' by every other test - no verb, short -
+                # and 'guerra rua' sailed past the gate into a model call
+                # and a confident invented answer about the user's
+                # business. Say so plainly, at zero model cost.
+                if looks_like_stt_noise(task.user_request):
+                    from app.schemas.results import ExecutionResult
+                    from app.schemas.routing import UsageRecord
+
+                    task.metadata["stt_noise"] = True
+                    task.assigned_model = "local-gate-v1"
+                    await self.task_store.save(task)
+                    result = ExecutionResult(
+                        response=(
+                            "I didn't catch a complete request there - it didn't "
+                            "parse into anything I can act on. Could you say it "
+                            "again?"
+                        ),
+                        structured_data={"gate": "stt_noise"},
+                        evidence=["utterance contained no recognisable request word"],
+                        usage=UsageRecord(total_tokens=0, estimated_cost=0),
+                    )
+                    await self._finish_result(task, result, None, started, 0, False)
+                    return
+
+                # Conversation is not a mission. Routing "good, what about
+                # you?" through the planner made VYOM run a system-status
+                # call and answer with a CPU card. Pure conversation takes
+                # the plain reasoning path: one cheap call, zero tools.
+                if not is_conversational(task.user_request):
+                    await self._run_general_mission(task, profile, started, retries, fallback_used)
+                    return
+
+            # REMEMBER BROADLY, RETRIEVE NARROWLY. This block used to
+            # attach EVERY profile fact to the prompt of any task that
+            # reached the reasoning path - which is why "Sorry. This is
+            # the clear first." and "You are not a perfect." were answered
+            # with the user's name and business. Memory now enters only
+            # with a recorded reason (exact slot / user-referenced /
+            # semantically relevant / correction), and the selection is
+            # logged so a bad answer is auditable.
+            from app.runtime.task_classifier import memory_relevance_reason
+
+            selection_reason = memory_relevance_reason(task.user_request)
+            recalled: list[str] = []
+            if selection_reason:
+                recalled = await self._current_profile()
+                for extra in await self._recall_for(task):
+                    if extra not in recalled:
+                        recalled.append(extra)
+            task.metadata["memory_selection"] = {
+                "memory_requested_for": task.user_request[:120],
+                "selection_reason": selection_reason,
+                "memory_records_selected": len(recalled),
+            }
+            if recalled:
+                task.metadata["recalled_memory"] = recalled
+                await self._emit(task, EventType.MEMORY_RETRIEVED,
+                                 f"Recalled {len(recalled)} stored fact(s)", {"memory": recalled[:3]})
+                await self.task_store.save(task)
+
+            routing = await self.model_router.route(task, profile)
+            task.routing = routing
+            task.assigned_model = routing.primary_model
+            task.fallback_models = routing.fallback_models
+            self.last_routing = routing
+            await self.task_store.save(task)
+            await self._emit(
+                task,
+                EventType.MODEL_SELECTED,
+                f"Selected {routing.primary_model}",
+                {"routing": routing.model_dump(mode="json")},
+            )
+
+            await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a structured plan")
+            task.plan = self.planner.create_plan(task, profile)
+            await self.task_store.save(task)
+            await self._emit(
+                task,
+                EventType.PLAN_READY,
+                f"Plan ready with {len(task.plan)} step(s)",
+                {"plan": [step.model_dump(mode="json") for step in task.plan]},
+            )
+
+            models = [routing.primary_model, *routing.fallback_models]
+            last_error: Exception | None = None
+            for index, model_id in enumerate(models):
+                definition = self.model_registry.get(model_id)
+                if definition is None:
+                    continue
+                provider = self.providers.get(definition.provider)
+                if provider is None or not provider.configured:
+                    continue
+                # Skip a target whose circuit is open. Spending a request
+                # against a known rate-limited model cannot succeed and
+                # only extends the cooldown. The check is per MODEL: free
+                # tier quota is metered per model per day, so an exhausted
+                # primary must fall through to its sibling rather than
+                # taking the whole provider down with it.
+                if self.provider_health.rate_limited(definition.provider, model_id):
+                    continue
+                if index > 0:
+                    retries += 1
+                    fallback_used = True
+                    await self._emit(
+                        task,
+                        EventType.MODEL_FALLBACK,
+                        f"Falling back to {model_id}",
+                        {"from": models[index - 1], "to": model_id, "attempt": index + 1},
+                    )
+                attempt_routing = routing.model_copy(
+                    update={"primary_model": model_id, "primary_provider": definition.provider}
+                )
+                task.assigned_model = model_id
+                await self.task_store.save(task)
+                try:
+                    await self._execute_and_finish(
+                        task, profile, provider, attempt_routing, started, retries, fallback_used
+                    )
+                    self.provider_health.record_success(definition.provider, model_id)
+                    return
+                except (ProviderError, RuntimeError) as error:
+                    last_error = error
+                    from app.providers.base import ProviderRateLimitError
+
+                    if isinstance(error, ProviderRateLimitError):
+                        # A rate limit is a "stop calling me", not a fault.
+                        # Opening the circuit here is what lets the loop
+                        # move straight to a DIFFERENT model instead of
+                        # hammering the exhausted one.
+                        until = self.provider_health.record_rate_limit(
+                            definition.provider, model_id,
+                            daily_quota=getattr(error, "daily_quota", False),
+                        )
+                        await self._emit(
+                            task, EventType.MODEL_FALLBACK,
+                            f"{model_id} has no remaining quota; switching model rather than retrying",
+                            {"provider": definition.provider, "model": model_id,
+                             "daily_quota": getattr(error, "daily_quota", False),
+                             "cooldown_until": until.isoformat()},
+                        )
+                        # A daily per-model quota is not a fault of the
+                        # provider: its other models may be perfectly
+                        # usable, so the loop continues to the next one.
+                        continue
+                    else:
+                        self.provider_health.record_failure(definition.provider)
+                    if index == len(models) - 1:
+                        raise
+            if last_error:
+                raise last_error
+            raise NoModelAvailableError("No routed provider was available at execution time")
+
+        except TaskCancelled:
+            task = await self.task_store.get(task_id) or task
+            task.status = TaskStatus.CANCELLED
+            task.completed_at = datetime.now(timezone.utc)
+            await self.task_store.save(task)
+            await self._emit(task, EventType.TASK_CANCELLED, "Task cancelled")
+        except Exception as error:
+            task.status = TaskStatus.FAILED
+            task.error = str(error)
+            task.completed_at = datetime.now(timezone.utc)
+            await self.task_store.save(task)
+            if self.intelligence_engine is not None:
+                try:
+                    async def emit_learning(event_type: str, message: str, payload: dict) -> None:
+                        await self._emit(task, EventType(event_type), message, payload)
+                    await self.intelligence_engine.learn_failure(task, task.error, emit_learning)
+                except Exception:
+                    pass
+            from .error_messages import humanize_error
+
+            await self._emit(
+                task, EventType.TASK_FAILED, "Task failed",
+                {"error": humanize_error(task.error), "diagnostic": task.error},
+            )
+
+
+
+
+
+
+    async def _answer_runtime_introspection(
+        self, task: Task, started: float, *, feedback: bool = False
+    ) -> None:
+        """Report what VYOM is ACTUALLY doing, read from the task store.
+
+        This is a fact the runtime holds; routing it to a model produced an
+        invented answer ("I was analysing your project files").
+
+        `feedback` marks a complaint rather than a question. The user is
+        told what actually happened - the same local facts - led by an
+        acknowledgement, instead of a directory listing (which is what
+        "You have also many mistake" produced) or a model-composed apology
+        that referenced nothing real."""
+        from app.schemas.results import ExecutionResult
+        from app.schemas.routing import UsageRecord
+
+        active_states = {TaskStatus.QUEUED, TaskStatus.UNDERSTANDING, TaskStatus.PLANNING,
+                         TaskStatus.EXECUTING, TaskStatus.VERIFYING, TaskStatus.WAITING}
+        try:
+            active = [item for item in await self.task_store.list_by_status(active_states)
+                      if item.id != task.id]
+        except Exception:
+            active = []
+
+        now = datetime.now(timezone.utc)
+
+        # Provider health is part of "what is going on" - and it is the
+        # answer to "why does this keep failing?". Reading it locally is
+        # what stops VYOM from calling a rate-limited model in order to
+        # explain that the model is rate limited.
+        degraded: list[str] = []
+        try:
+            for model_key, until in dict(self.provider_health.rate_limited_until).items():
+                remaining = max(0, int((until - now).total_seconds()))
+                if remaining:
+                    degraded.append(f"{model_key} has no quota left for another {remaining}s")
+        except Exception:
+            pass
+
+        recent_failure = None
+        try:
+            recent = await self.task_store.list_by_status({TaskStatus.FAILED})
+            ordered = sorted(recent, key=lambda item: item.completed_at or item.created_at, reverse=True)
+            for item in ordered[:1]:
+                recent_failure = f"{item.user_request[:60]} — {str(item.error)[:120]}"
+        except Exception:
+            pass
+
+        if not active:
+            if degraded:
+                summary = ("Nothing is running. " + "; ".join(degraded[:2])
+                           + ". Deterministic PC commands still work normally.")
+            elif feedback and recent_failure:
+                summary = (f"Understood - I'll take that. The last thing that went "
+                           f"wrong was: {recent_failure}. Nothing is running now.")
+            elif feedback:
+                summary = ("Understood - I'll take that. Nothing is running right now, "
+                           "so tell me what to fix and I'll do that one thing.")
+            else:
+                summary = "Right now I am idle - nothing is running. Ready for the next thing."
+            rows = [[item, "rate limited", "-"] for item in degraded]
+            if recent_failure:
+                rows.append([recent_failure[:50], "last failure", "-"])
+        else:
+            lines = []
+            rows = []
+            for item in active[:5]:
+                elapsed = int((now - (item.started_at or item.created_at)).total_seconds())
+                stage = item.status.value.replace("_", " ")
+                lines.append(f"{item.user_request[:60]} - {stage}, {elapsed}s elapsed")
+                rows.append([item.user_request[:50], stage, f"{elapsed}s"])
+            summary = "I am working on: " + "; ".join(lines)
+            if degraded:
+                summary += ". " + "; ".join(degraded[:2])
+
+        objects = [{
+            "id": "runtime", "type": "comparison-table", "title": "What I am doing",
+            "eyebrow": "Live runtime state",
+            "headers": ["Goal", "Stage", "Elapsed"],
+            "rows": rows or [["nothing running", "idle", "-"]],
+            "frame": {"x": 20, "y": 20, "width": 56},
+        }]
+        composition = {
+            "schemaVersion": 1, "id": f"runtime-{task.id[:10]}", "mode": "tool-execution",
+            "label": "VYOM / Runtime", "summary": summary[:300],
+            "generatedAt": now.astimezone().strftime("%H:%M"),
+            "objects": objects,
+            "sequence": [{"id": "s0", "label": "Runtime state", "atMs": 120,
+                          "state": "Verifying", "objectIds": ["runtime"]}],
+        }
+        result = ExecutionResult(
+            response=summary,
+            structured_data={"active": [{"id": i.id, "request": i.user_request,
+                                         "status": i.status.value} for i in active[:5]]},
+            ui_composition=composition,
+            evidence=[f"{len(active)} active task(s) read from the runtime"],
+            usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
+        await self._finish_result(task, result, None, started, 0, False)
+
+    async def _answer_from_profile(self, task: Task, profile, started: float) -> None:
+        """Answer from VYOM's OWN store, with zero model calls.
+
+        "Mera naam kya hai?" is an indexed lookup, not a reasoning problem.
+        Routing it to a model cost a paid call for a fact VYOM already
+        held - and when the provider was rate limited, VYOM could not
+        answer a question whose answer was sitting in its database. An
+        empty store is a real answer ("I have not been told"), never a
+        reason to guess."""
+        from app.schemas.results import ExecutionResult
+        from app.schemas.routing import UsageRecord
+
+        task.assigned_model = "local-memory-v1"
+        await self.task_store.save(task)
+        await self._emit(
+            task, EventType.MODEL_SELECTED, "Answered from VYOM's own memory",
+            {"routing": {"primary_model": "local-memory-v1", "primary_provider": "local",
+                         "fallback_models": [], "estimated_cost_tier": "free",
+                         "reason_selected": "Exact lookup in VYOM's own store; no model call required"}},
+        )
+
+        facts = await self._current_profile()
+        if profile.intent == "profile_statement":
+            # The write already happened in _capture_conversational_facts,
+            # before any routing decision. This only reports it.
+            stored = task.metadata.get("stored_facts") or []
+            summary = (
+                "Noted: " + "; ".join(stored)
+                if stored else
+                "I heard that, but nothing in it was a durable fact I should store."
+            )
+        elif not facts:
+            summary = "I have not been told anything about you yet."
+        else:
+            lowered = task.user_request.lower()
+            wanted = None
+            # The SUBJECT is checked before the generic word for "name":
+            # "mere business ka naam kya hai?" contains "naam", and
+            # matching on that first answered a question about the
+            # business with the user's own name.
+            if "business" in lowered or "company" in lowered or "बिजनेस" in lowered:
+                wanted = "User business"
+            elif "website" in lowered or "site" in lowered:
+                wanted = "User website"
+            elif "naam" in lowered or "nam " in lowered or "name" in lowered or "नाम" in lowered:
+                wanted = "User name"
+            match = next((fact for fact in facts if wanted and fact.startswith(wanted)), None)
+            if match:
+                summary = match.split(":", 1)[1].strip()
+                summary = f"{wanted.replace('User ', 'Your ')} is {summary}."
+            elif wanted:
+                summary = f"I have not been told your {wanted.replace('User ', '').lower()}."
+            else:
+                summary = "Here is what I have on record: " + "; ".join(facts)
+
+        objects = [{
+            "id": "profile", "type": "verified-result", "title": "From memory",
+            "eyebrow": "VYOM's own store · no model call", "tone": "verified",
+            "statement": summary,
+            "evidence": facts or ["nothing stored yet"],
+            "timestamp": datetime.now().astimezone().strftime("%H:%M"),
+            "frame": {"x": 28, "y": 26, "width": 40},
+        }]
+        result = ExecutionResult(
+            response=summary,
+            structured_data={"profile": facts},
+            ui_composition={
+                "schemaVersion": 1, "id": f"profile-{task.id[:10]}", "mode": "brain-context",
+                "label": "VYOM / Memory", "summary": summary[:300],
+                "generatedAt": datetime.now().astimezone().strftime("%H:%M"),
+                "objects": objects,
+                "sequence": [{"id": "s0", "label": "Memory lookup", "atMs": 120,
+                              "state": "Verifying", "objectIds": ["profile"]}],
+            },
+            evidence=facts or ["no stored facts"],
+            usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
+        await self._finish_result(task, result, None, started, 0, False)
+
+    async def _recall_for(self, task: Task) -> list[str]:
+        """Retrieve stored facts relevant to this request.
+
+        Runs before the reasoning path so a question like "what is my
+        name?" is answered from VYOM's own memory instead of a refusal."""
+        if self.memory_retriever is None:
+            return []
+        from app.memory.schemas import MemoryQuery
+
+        from app.memory.schemas import MemoryType
+
+        recalled: list[str] = []
+        seen: set[str] = set()
+
+        async def collect(query: MemoryQuery) -> None:
+            try:
+                hits = await self.memory_retriever.search(query)
+            except Exception:
+                return
+            for hit in hits:
+                summary = (hit.memory.summary or hit.memory.content or "").strip()
+                if summary and summary not in seen:
+                    seen.add(summary)
+                    recalled.append(summary[:200])
+
+        # Recall is restricted to DURABLE FACT types - PERSON/CLIENT/
+        # PREFERENCE/SEMANTIC/DECISION - never EPISODIC or WORKING memory.
+        # An unfiltered query previously pulled in past task summaries,
+        # which include the model's OWN prior answers. A wrong answer
+        # ("your business is Alphacorp Widgets") had been consolidated
+        # into an episodic record, and the next question recalled that
+        # record as if it were a verified fact - a self-reinforcing
+        # hallucination loop where one mistake became permanent "memory".
+        # Only what extract_durable_facts / a verified task explicitly
+        # wrote as a fact-type entry counts as something VYOM "knows".
+        durable_types = [MemoryType.PERSON, MemoryType.CLIENT, MemoryType.PREFERENCE,
+                         MemoryType.SEMANTIC, MemoryType.DECISION]
+
+        # The user's core profile is ALWAYS in context, independent of the
+        # query's wording or language. Similarity search alone failed
+        # "What is my name?" because the stored fact was written in Hindi;
+        # these few facts are small enough to carry every time.
+        await collect(MemoryQuery(text="", types=durable_types, limit=12))
+        await collect(MemoryQuery(text=task.user_request, types=durable_types, limit=6))
+        return recalled[:10]
+
+    async def _current_profile(self) -> list[str]:
+        """The user's profile as ONE current value per fact.
+
+        A profile slot ("User business") holds exactly one truth at a
+        time. Recall previously returned every non-superseded entry, so a
+        business fact and a website fact - both stored as CLIENT - arrived
+        together and the model reported them as two separate businesses
+        the user owned. Newest entry per title wins; everything older is
+        history, not context."""
+        if self.memory_retriever is None:
+            return []
+        from app.memory.schemas import MemoryQuery, MemoryType
+
+        durable_types = [MemoryType.PERSON, MemoryType.CLIENT, MemoryType.PREFERENCE]
+        try:
+            hits = await self.memory_retriever.search(
+                MemoryQuery(text="", types=durable_types, limit=40))
+        except Exception:
+            return []
+        latest: dict[str, object] = {}
+        for hit in hits:
+            title = hit.memory.title
+            current = latest.get(title)
+            if current is None or hit.memory.created_at > current.created_at:  # type: ignore[union-attr]
+                latest[title] = hit.memory
+        return [
+            f"{memory.title}: {(memory.summary or memory.content).split(':', 1)[-1].strip()}"
+            for memory in sorted(latest.values(), key=lambda item: item.created_at)  # type: ignore[attr-defined]
+        ]
+
+    async def _capture_conversational_facts(self, task: Task) -> list[str]:
+        """Write durable facts the user STATED into memory.
+
+        Nothing said in conversation was ever persisted, so VYOM forgot the
+        user's name 75 seconds after being told it. Extraction is
+        deterministic - no model call - and only fires on statements, never
+        on questions or commands."""
+        if self.memory_store is None:
+            return []
+        from app.memory.consolidation import extract_durable_facts
+        from app.memory.schemas import MemoryEntry, MemoryProvenance, MemoryQuery, MemoryType
+
+        facts = extract_durable_facts(task.user_request)
+        if not facts:
+            return []
+        kind_to_type = {
+            "identity": MemoryType.PERSON,
+            "business": MemoryType.CLIENT,
+            "preference": MemoryType.PREFERENCE,
+        }
+        stored: list[str] = []
+        for fact in facts:
+            entry = MemoryEntry(
+                type=kind_to_type.get(fact["kind"], MemoryType.SEMANTIC),
+                title=fact["title"],
+                content=f"{fact['title']}: {fact['value']}",
+                summary=f"{fact['title']}: {fact['value']}",
+                entities=[fact["value"]],
+                tags=["conversation", fact["kind"]],
+                source="user_statement",
+                provenance=[MemoryProvenance(type="user_statement", reference=fact["said"][:200],
+                                             task_id=task.id)],
+                importance=0.9,
+                confidence=0.95,
+            )
+            try:
+                # A correction must SUPERSEDE the prior fact of the same
+                # title, not sit beside it. Without this, "wrong X, Y hai"
+                # added a new record while the old, contradicting one
+                # stayed equally weighted - later recall could still
+                # surface the wrong value, or the model could claim an
+                # update happened when nothing was actually replaced.
+                prior_id = None
+                # A profile slot holds ONE current value. Stating a new
+                # name, business or website replaces the previous one
+                # whether or not the user framed it as a correction -
+                # "my business is Beta" after "my business is Alpha" is a
+                # change of fact, not a second business. Without this,
+                # both stayed live and equally weighted, and recall
+                # reported them as two businesses the user owned.
+                if self.memory_manager is not None and self.memory_retriever is not None:
+                    try:
+                        existing = await self.memory_retriever.search(
+                            MemoryQuery(text="", types=[entry.type], limit=40))
+                    except Exception:
+                        existing = []
+                    same_slot = [
+                        hit.memory for hit in existing
+                        if hit.memory.title == fact["title"]
+                        and (hit.memory.summary or "") != entry.summary
+                    ]
+                    if same_slot:
+                        prior_id = max(same_slot, key=lambda item: item.created_at).id
+                if fact.get("correction") and self.memory_manager is not None and prior_id is None:
+                    # Match by KIND, not exact title: "wrong X, Y hai"
+                    # corrected a prior "User business" fact with a "User
+                    # website" fact - same real-world thing (the user's
+                    # business identity), different extractor title. An
+                    # exact-title match missed this and the wrong fact
+                    # stayed live alongside the new one, so recall later
+                    # reported BOTH as if the user had two businesses.
+                    # An EMPTY text query returns every entry of this type
+                    # unfiltered. Querying by the NEW value instead ("wrong
+                    # alphacorp, betaworks.space hai" -> query "betaworks.
+                    # space") found nothing, because the retriever drops
+                    # zero-keyword-overlap results - the OLD wrong entry
+                    # ("Alphacorp Widgets") shares no token with the new
+                    # value, so it never appeared as a supersession
+                    # candidate and both facts ended up live together.
+                    hits = await self.memory_retriever.search(
+                        MemoryQuery(text="", types=[entry.type], limit=20))
+                    exact = next((hit.memory.id for hit in hits if hit.memory.title == fact["title"]), None)
+                    same_kind_hits = sorted(
+                        (hit for hit in hits if fact["kind"] in hit.memory.tags),
+                        key=lambda hit: hit.memory.created_at, reverse=True,
+                    )
+                    same_kind = same_kind_hits[0].memory.id if same_kind_hits else None
+                    prior_id = exact or same_kind
+                if prior_id and self.memory_manager is not None:
+                    await self.memory_manager.correct(prior_id, entry)
+                else:
+                    await self.memory_store.save(entry)
+                stored.append(f"{fact['title']}: {fact['value']}")
+            except Exception:
+                import logging
+
+                logging.getLogger("vyom.memory").exception("failed to store conversational fact")
+        if stored:
+            # Recorded on the task so the deterministic acknowledgement can
+            # report what was ACTUALLY written, rather than a model
+            # composing a claim that a save happened.
+            task.metadata["stored_facts"] = stored
+            await self.task_store.save(task)
+            await self._emit(task, EventType.MEMORY_CREATED,
+                             f"Remembered: {'; '.join(stored)[:120]}", {"facts": stored})
+        return stored
+
+    @staticmethod
+    def _postcondition_for(call_name: str, inputs: dict, output) -> tuple[str | None, dict]:
+        """Map a completed capability call to the real-world check that
+        proves it actually did what was asked."""
+        if call_name == "desktop_launch":
+            return "app_launch", {"app_id": inputs.get("app_id", "")}
+        if call_name == "desktop_close":
+            return "app_close", {"app_id": inputs.get("app_id", "")}
+        if call_name == "browser_open_profile":
+            data = output if isinstance(output, dict) else {}
+            profile = data.get("profile") or {"directory": "", "name": inputs.get("profile", "")}
+            return "profile_open", {"profile": profile,
+                                    "window": data.get("window_title") or "chrome"}
+        if call_name == "browser_close_tab":
+            data = output if isinstance(output, dict) else {}
+            return "tab_closed", {
+                "page": inputs.get("target", ""),
+                "remaining": data.get("remaining"),
+                "tabs_before": data.get("tabs_before"),
+                "tabs_after": data.get("tabs_after"),
+                "browser_still_running": data.get("browser_still_running"),
+            }
+        if call_name == "terminal_execute":
+            exit_code = (output or {}).get("exit_code") if isinstance(output, dict) else None
+            return "command", {"exit_code": exit_code}
+        if call_name in {"filesystem_write", "filesystem_create"}:
+            return "file_write", {"path": inputs.get("path", ""), "expect_content": True}
+        if call_name == "browser_read":
+            text = (output or {}).get("text", "") if isinstance(output, dict) else ""
+            return "research", {"sources": [], "characters": len(text)}
+        if call_name in {"desktop_status", "system_processes"}:
+            return "system_query", {"measurement": output}
+        return None, {}
+
+    # -- general tool-calling mission --------------------------------------
+
+    async def _run_general_mission(
+        self, task: Task, profile, started: float, retries: int, fallback_used: bool
+    ) -> None:
+        """Execute an unrecognised goal by letting the planner choose real
+        tools, observe their results, and iterate until the goal is met.
+
+        Every action runs through the SAME registered tool layer and the
+        same permission engine as a deterministic intent - the planner
+        chooses what to do, it does not gain new powers."""
+        from app.runtime.planner import TOOL_CONTRACTS, needs_fresh_evidence
+        from app.schemas.results import ExecutionResult
+        from app.schemas.routing import UsageRecord
+
+        task.assigned_model = "vyom-general-planner"
+        await self.task_store.save(task)
+        await self._emit(
+            task, EventType.MODEL_SELECTED, "Selected the general tool-calling planner",
+            {"routing": {"primary_model": "vyom-general-planner", "primary_provider": "local",
+                         "fallback_models": [], "estimated_cost_tier": "low",
+                         "reason_selected": "Goal has no deterministic route; planning over live capabilities"}},
+        )
+        await self._transition(task, TaskStatus.EXECUTING, EventType.TASK_PROGRESS,
+                               "Choosing capabilities for this goal")
+
+        async def emit_tool(event_type: str, message: str, payload: dict) -> None:
+            await self._emit(task, EventType(event_type), message, payload)
+
+        context = self.action_engine.context_factory.create(task.id, task.permission_level, emit_tool)
+        collected: list[dict] = []
+
+        async def execute_call(call) -> dict:
+            contract = TOOL_CONTRACTS.get(call.name)
+            if contract is None:
+                return {"ok": False, "error": f"'{call.name}' is not a registered capability"}
+            # VYOM's own memory is not a Tool Registry tool; it is answered
+            # from the existing MemoryRetriever. An empty result is a REAL
+            # answer ("nothing is stored"), never grounds for guessing.
+            if contract["tool"] == "__memory__":
+                if self.memory_retriever is None:
+                    return {"ok": False, "error": "memory retrieval is not available in this runtime"}
+                from app.memory.schemas import MemoryQuery
+
+                query = str(call.arguments.get("query", "")).strip()
+                try:
+                    hits = await self.memory_retriever.search(MemoryQuery(text=query, limit=8))
+                except Exception as error:
+                    return {"ok": False, "error": f"memory search failed: {error}"[:300]}
+                found = [{
+                    "title": hit.memory.title,
+                    "summary": hit.memory.summary or hit.memory.content[:300],
+                    "created_at": str(hit.memory.created_at),
+                    "confidence": hit.memory.confidence,
+                } for hit in hits]
+                collected.append({"call": call.name, "inputs": {"query": query},
+                                  "ok": True, "output": found, "error": None})
+                if not found:
+                    return {"ok": True, "output":
+                            f"VYOM has no stored memory matching '{query}'. Nothing has been "
+                            "recorded about this. Say so plainly; do not guess."}
+                return {"ok": True, "output": found}
+            inputs = {**contract.get("fixed", {}), **dict(call.arguments)}
+            # Sensible, safe defaults so a partially specified call still
+            # targets the user's own project rather than failing.
+            if contract["tool"] == "filesystem" and not inputs.get("path"):
+                inputs["path"] = str(self.action_engine.project_root)
+            if contract["tool"] == "terminal":
+                inputs.setdefault("cwd", str(self.action_engine.project_root))
+                inputs.setdefault("timeout", 180)
+            if contract["tool"] == "git":
+                inputs.setdefault("cwd", str(self.action_engine.project_root))
+            try:
+                result = await self.action_engine.executor.invoke(contract["tool"], inputs, context)
+            except Exception as error:
+                return {"ok": False, "error": str(error)[:400]}
+            payload = result.structured_output if result.success else None
+            # POSTCONDITION. A tool reporting success is not proof the
+            # requested effect happened - a mission that "launched" an app
+            # which never appeared was still reported COMPLETE. The check
+            # reads real state, and its verdict is fed back to the planner
+            # so it can adapt rather than assume.
+            if result.success:
+                kind, check_context = self._postcondition_for(call.name, inputs, payload)
+                if kind:
+                    satisfied, detail = self.postconditions.check(kind=kind, context=check_context)
+                    if not satisfied:
+                        collected.append({"call": call.name, "inputs": inputs, "ok": False,
+                                          "output": payload, "error": f"postcondition failed: {detail}"})
+                        await emit_tool(
+                            "verification_failed",
+                            f"{call.name} reported success but the effect was not observed: {detail}",
+                            {"tool": call.name, "postcondition": kind},
+                        )
+                        return {"ok": False, "error":
+                                f"The tool reported success but the effect was not observed: {detail}"}
+                    await emit_tool("verification_evidence", f"{call.name} verified: {detail}",
+                                    {"tool": call.name, "postcondition": kind})
+            collected.append({"call": call.name, "inputs": inputs, "ok": result.success,
+                              "output": payload, "error": result.error})
+            if not result.success:
+                return {"ok": False, "error": result.error or "the tool reported failure"}
+            return {"ok": True, "output": payload}
+
+        try:
+            mission = await self.mission_loop.run_adaptive(
+                task.user_request,
+                planner=self.general_planner,
+                execute_call=execute_call,
+                # PROSE IS NEVER THE FINAL ANSWER. When this was left off
+                # for "simple" goals, a garbled transcript ("guerra rua")
+                # was answered with a confident, entirely invented business
+                # pitch from memory - no tool had run, nothing was real.
+                # Pure conversation never reaches this path (it is filtered
+                # before _run_general_mission), so every goal here must
+                # ground itself in at least one real observation.
+                require_tool_use=True,
+                mission_id=task.id,
+            )
+        finally:
+            self.action_engine.context_factory.release(task.id)
+
+        await self._check_control(task)
+        verified = sum(1 for step in mission.completed if step.verified)
+        final_text = getattr(mission, "final_text", "") or ""
+        # GOAL-level completion. A mission is not complete because some
+        # tools succeeded - the planner must have produced an actual
+        # answer. Counting verified tool calls is telemetry, not proof.
+        summary = final_text.strip()
+        if not summary:
+            summary = ("I carried out the steps but produced no result to report."
+                       if mission.status == "completed"
+                       else "I could not complete that request.")
+            if mission.status == "completed":
+                mission.status = "failed"  # no answer means the goal was not met
+
+        objects: list[dict] = [{
+            "id": "mission", "type": "task-mission", "title": "Autonomous mission",
+            "eyebrow": "General planner", "tone": "intelligence",
+            "mission": task.user_request[:120],
+            "status": "complete" if mission.status == "completed" else "failed",
+            "details": [step.title[:70] for step in mission.completed][:6],
+            "frame": {"x": 2, "y": 4, "width": 31},
+        }]
+        for index, item in enumerate(collected[:4]):
+            objects.append({
+                "id": f"obs-{index}", "type": "terminal-output",
+                "title": item["call"], "eyebrow": "Real tool result",
+                "command": ", ".join(f"{k}={str(v)[:50]}" for k, v in item["inputs"].items())[:160],
+                "exitCode": 0 if item["ok"] else 1,
+                "output": str(item["output"] if item["ok"] else item["error"])[:2200],
+                "frame": {"x": 36 + (index % 2) * 32, "y": 4 + (index // 2) * 34, "width": 30},
+            })
+        objects.append({
+            "id": "verified", "type": "verified-result", "title": "Mission result",
+            "eyebrow": "Evidence", "tone": "verified" if mission.status == "completed" else "attention",
+            "statement": summary[:400],
+            "evidence": [f"{step.title[:80]}: {'verified' if step.verified else 'failed'}"
+                         for step in mission.completed][:6] or ["No capability call was required"],
+            "timestamp": datetime.now().astimezone().strftime("%H:%M \u00b7 General planner"),
+            "frame": {"x": 30, "y": 74, "width": 40, "layer": 2},
+        })
+        composition = {
+            "schemaVersion": 1, "id": f"general-{task.id[:12]}", "mode": "tool-execution",
+            "label": "VYOM / Autonomous", "summary": summary[:400],
+            "generatedAt": datetime.now().astimezone().strftime("%H:%M \u00b7 General planner"),
+            "objects": objects,
+            "sequence": [
+                {"id": f"s{i}", "label": (o.get("title") or "Activity")[:40], "atMs": 150 + i * 280,
+                 "state": "Verifying" if i == len(objects) - 1 else "Executing", "objectIds": [o["id"]]}
+                for i, o in enumerate(objects)
+            ],
+        }
+
+        task.metadata["general_mission"] = {
+            "status": mission.status, "tool_calls": len(mission.completed),
+            "verified": verified, "model_calls": mission.model_calls,
+        }
+        for index, step in enumerate(task.plan):
+            step.status = "complete"
+            task.current_step = index
+        task.progress = 0.8
+        await self.task_store.save(task)
+
+        if mission.status != "completed":
+            raise RuntimeError(summary)
+
+        result = ExecutionResult(
+            response=summary,
+            structured_data={"mission": task.metadata["general_mission"], "observations": collected},
+            ui_composition=composition,
+            evidence=[f"{step.title[:90]}" for step in mission.completed] or [summary],
+            usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
+        await self._finish_result(task, result, None, started, retries, fallback_used)
+
+    # -- multi-step missions ------------------------------------------------
+
+    def _detect_mission(self, request: str) -> list[str]:
+        """Split a compound request into clauses and keep it only if at
+        least two clauses independently resolve to a real tool action.
+
+        Conservative on purpose: a single-action request keeps its
+        existing direct path, and a purely conversational sentence is
+        never turned into a mission."""
+        import re
+
+        if self.action_engine is None:
+            return []
+        parts = [
+            part.strip(" .")
+            for part in re.split(r",\s*(?:and\s+)?|\s+and\s+then\s+|\s+then\s+|\s+and\s+|;\s*", request)
+            if part.strip(" .")
+        ]
+        # A leading wake word is address, not a step.
+        parts = [part for part in parts if part.strip(" .,!").lower() not in {"vyom", "hey vyom", "ok vyom"}]
+        if len(parts) < 2:
+            return []
+        # Require two DISTINCT actionable intents. Clause count alone is not
+        # enough: "Open a browser and search the web for X" splits into two
+        # clauses that are both `web_browse` - one action described twice,
+        # not a two-step mission. Splitting it produced a first step
+        # ("Open a browser") with no resolvable target, which failed the
+        # whole request. Distinct intents ("inspect this project" +
+        # "run its tests") are a genuine mission.
+        intents: set[str] = set()
+        for part in parts:
+            try:
+                intent = self.classifier.classify(part).intent
+            except Exception:
+                continue
+            if self.action_engine.supports(intent):
+                intents.add(intent)
+        return parts if len(intents) >= 2 else []
+
+    async def _run_mission(
+        self,
+        task: Task,
+        profile,
+        steps: list[str],
+        started: float,
+        retries: int,
+        fallback_used: bool,
+    ) -> None:
+        """Execute a compound goal through the existing MissionLoop, with
+        every step performed by the existing ActionEngine (real tools),
+        and merge the per-step UI compositions into one composition so the
+        canvas assembles itself as the mission progresses."""
+        from app.schemas.results import ExecutionResult
+        from app.schemas.routing import UsageRecord
+
+        task.assigned_model = "local-mission-loop-v1"
+        await self.task_store.save(task)
+        await self._emit(
+            task, EventType.MODEL_SELECTED, "Selected the autonomous mission loop",
+            {"routing": {"primary_model": "local-mission-loop-v1", "primary_provider": "local",
+                         "fallback_models": [], "estimated_cost_tier": "free",
+                         "reason_selected": f"Compound goal with {len(steps)} actionable clauses; "
+                                            "executed step-by-step through registered tools"}},
+        )
+        await self._transition(task, TaskStatus.EXECUTING, EventType.TASK_PROGRESS,
+                               f"Running a {len(steps)}-step mission through registered tools")
+
+        async def emit_step(event_type: str, message: str, payload: dict) -> None:
+            await self._emit(task, EventType(event_type), message, payload)
+
+        collected: list[ExecutionResult] = []
+
+        async def step_executor(title: str, context: dict) -> dict:
+            step_profile = self.classifier.classify(title)
+            if not self.action_engine.supports(step_profile.intent):
+                lowered = title.lower()
+                if any(
+                    phrase in lowered
+                    for phrase in ("tell me", "report", "what's wrong", "whats wrong",
+                                   "summarise", "summarize", "let me know", "explain what")
+                ):
+                    # A reporting clause is answered from what the mission
+                    # actually observed - never from model speculation.
+                    findings = [item.response for item in collected]
+                    problems = [
+                        line for item in collected for line in (item.evidence or [])
+                        if any(word in line.lower() for word in ("fail", "error", "unavailable", "missing", "not a "))
+                    ]
+                    report = " ".join(findings)[:500] or "No step produced an observation."
+                    if problems:
+                        report += " Issues found: " + "; ".join(problems[:5])
+                    else:
+                        report += " No failures were observed in the executed steps."
+                    return {"ok": True, "output": report, "evidence": problems}
+                # Honest skip: no registered capability performs this step.
+                return {"ok": True, "skipped": True,
+                        "output": f"No registered tool performs '{title}'; step recorded as not executed."}
+            # Each step is granted exactly what its OWN intent requires,
+            # never more than the mission itself was granted.
+            step_level = self.permission_engine.raise_to_intent_floor(
+                task.permission_level, step_profile.intent
+            )
+            if self.permission_engine.requires_approval(step_level) and not task.approval_granted:
+                return {"ok": False,
+                        "error": f"'{title}' requires {step_level.value} approval, which this mission does not hold."}
+            step_task = task.model_copy(update={"user_request": title, "permission_level": step_level})
+            result = await self.action_engine.execute(step_task, step_profile, emit_step)
+            collected.append(result)
+            return {"ok": True, "output": result.response, "evidence": result.evidence}
+
+        async def step_verifier(title: str, outcome: dict) -> bool:
+            return bool(outcome.get("ok")) and not outcome.get("skipped", False)
+
+        # Consequential steps pause the mission at a checkpoint instead of
+        # executing unapproved, using the MissionLoop's existing gate.
+        step_permissions: dict[str, str] = {}
+        for title in steps:
+            try:
+                level = self.permission_engine.minimum_for_intent(self.classifier.classify(title).intent)
+            except Exception:
+                level = None
+            if level is not None and self.permission_engine.requires_approval(level):
+                step_permissions[title] = level.value
+
+        mission = await self.mission_loop.run(
+            task.user_request,
+            executor=step_executor,
+            verifier=step_verifier,
+            step_permissions=step_permissions,
+            mission_id=task.id,
+            plan=steps,
+        )
+        await self._check_control(task)
+
+        verified = sum(1 for step in mission.completed if step.verified)
+        lines = [f"{step.title}: {step.status}" for step in mission.completed]
+        # Describe what was ACHIEVED, not how many calls were made. A tool
+        # counter is telemetry; presenting it as the answer is what made
+        # VYOM sound finished when the user's goal had not been reached.
+        if collected:
+            summary = " ".join(item.response for item in collected)[:600]
+        elif verified:
+            summary = "; ".join(step.title for step in mission.completed if step.verified)[:400]
+        else:
+            summary = "No step produced a verified result."
+
+        objects: list[dict] = [{
+            "id": "mission", "type": "task-mission", "title": "Mission",
+            "eyebrow": "Autonomous mission loop", "tone": "intelligence",
+            "mission": task.user_request[:120],
+            "status": "complete" if mission.status == "completed" else "failed",
+            "details": lines[:6], "frame": {"x": 2, "y": 3, "width": 30},
+        }]
+        # Lay the per-step objects out on a deterministic grid. Reusing each
+        # sub-composition's own frame stacked several cards on the same
+        # coordinates, because every single-intent composition is authored
+        # to sit alone on the canvas.
+        slots = [
+            (36, 3), (69, 3), (2, 34), (36, 34), (69, 34),
+            (2, 64), (36, 64), (69, 64), (18, 48), (52, 48),
+        ]
+        slot_index = 0
+        for index, item in enumerate(collected):
+            for obj in (item.ui_composition or {}).get("objects", []):
+                if obj.get("type") == "task-mission":
+                    continue
+                clone = dict(obj)
+                clone["id"] = f"s{index}-{obj['id']}"
+                x, y = slots[slot_index % len(slots)]
+                slot_index += 1
+                width = min(int((clone.get("frame") or {}).get("width", 29)), 100 - x)
+                clone["frame"] = {"x": x, "y": y, "width": width,
+                                  "layer": (clone.get("frame") or {}).get("layer", 1)}
+                objects.append(clone)
+
+        composition = {
+            "schemaVersion": 1, "id": f"mission-{task.id[:12]}", "mode": "tool-execution",
+            "label": "VYOM / Mission", "summary": summary[:400],
+            "generatedAt": datetime.now().astimezone().strftime("%H:%M · Mission loop"),
+            "objects": objects,
+            "sequence": [
+                {"id": f"step-{index}", "label": (obj.get("title") or "Mission activity")[:40],
+                 "atMs": 160 + index * 300,
+                 "state": "Verifying" if index == len(objects) - 1 else "Executing",
+                 "objectIds": [obj["id"]]}
+                for index, obj in enumerate(objects)
+            ],
+        }
+
+        for index, step in enumerate(task.plan):
+            step.status = "complete"
+            task.current_step = index
+        task.progress = 0.8
+        task.metadata["mission"] = {
+            "status": mission.status, "steps": lines,
+            "verified": verified, "experience_saved": mission.experience_saved,
+        }
+        await self.task_store.save(task)
+
+        # A mission whose steps were all skipped is not a success. Requiring
+        # at least one VERIFIED step means "mission completed" can never be
+        # reported for work no tool actually performed.
+        if mission.status != "completed" or verified == 0:
+            raise RuntimeError(
+                summary
+                if mission.status != "completed"
+                else f"{summary} No step was verified by a real tool execution; "
+                     "the mission is reported as failed rather than as a completion."
+            )
+
+        result = ExecutionResult(
+            response=summary,
+            structured_data={"mission": task.metadata["mission"],
+                             "steps": [item.structured_data for item in collected]},
+            ui_composition=composition,
+            evidence=[evidence for item in collected for evidence in (item.evidence or [])] or lines,
+            usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
+        await self._finish_result(task, result, None, started, retries, fallback_used)
+
+    async def _execute_and_finish(
+        self,
+        task: Task,
+        profile,
+        provider,
+        routing,
+        started: float,
+        retries: int,
+        fallback_used: bool,
+    ) -> None:
+        await self._check_control(task)
+        await self._transition(task, TaskStatus.EXECUTING, EventType.TASK_PROGRESS, "Executing non-tool reasoning steps")
+        for index, step in enumerate(task.plan):
+            await self._check_control(task)
+            step.status = "complete"
+            task.current_step = index
+            task.progress = min(0.75, (index + 1) / max(len(task.plan), 1) * 0.75)
+            await self.task_store.save(task)
+
+        result = await self.executor.execute(task, profile, provider, routing)
+        await self._check_control(task)
+        await self._finish_result(task, result, routing, started, retries, fallback_used)
+
+    async def _finish_result(
+        self,
+        task: Task,
+        result,
+        routing,
+        started: float,
+        retries: int,
+        fallback_used: bool,
+    ) -> None:
+        # THE USER-FACING BOUNDARY. Every completion path in the runtime
+        # funnels through here, so this is where "no raw dict, no pid, no
+        # internal path in speech" becomes a structural guarantee rather
+        # than a per-engine convention. Diagnostics keep the original in
+        # structured_data, evidence and the logs.
+        from .error_messages import sanitise_user_response
+
+        if result.response:
+            result.response = sanitise_user_response(result.response)
+        task.result = result
+        if routing:
+            self.usage_tracker.record(routing.primary_model, result.usage)
+        await self._transition(task, TaskStatus.VERIFYING, EventType.VERIFICATION_STARTED, "Verifying the result")
+        verification = await self.verifier.verify(task, result)
+        task.verification = verification
+        await self.task_store.save(task)
+        if not verification.passed:
+            await self._emit(
+                task,
+                EventType.VERIFICATION_FAILED,
+                verification.summary,
+                {"verification": verification.model_dump(mode="json")},
+            )
+            raise RuntimeError(verification.summary)
+
+        # GOAL VERIFICATION. Structural verification above only proves the
+        # result is well-formed. This is the single authority that decides
+        # whether the thing the USER asked for actually happened, read from
+        # the real world - the process table, the window list, the
+        # filesystem, the application's own display.
+        #
+        # Nothing below may reach COMPLETED without passing here. A task
+        # that did not achieve its goal is reported as failed, never as a
+        # completion with a caveat.
+        intent = task.profile.intent if task.profile else "general"
+        goal_status, goal_evidence = self.goal_verifier.verify(intent=intent, result=result)
+
+        # WHOLE-GOAL VERIFICATION.
+        #
+        # The intent map above only covers goals the classifier recognised
+        # deterministically. Anything routed to the general planner arrived
+        # here with intent "general", which is absent from the map, so it
+        # returned NOT_APPLICABLE and the task completed on the STRUCTURAL
+        # verifier alone - whose passing evidence is "Non-empty response".
+        #
+        # That is how "Stop. Stop. Stop." completed at score 1.0 after
+        # listing a directory, how a Google CAPTCHA page passed as a
+        # completed search, and how "open Chrome AND search X" was reported
+        # done with nothing searched.
+        #
+        # Every task now also states its goal as a set of required effects
+        # and must satisfy ALL of them against real observations.
+        from .verifier import derive_goal_frame
+
+        goal_frame = derive_goal_frame(task.user_request)
+        if goal_frame:
+            observations = (result.structured_data or {}).get("observations") or []
+            frame_status, frame_evidence = self.goal_verifier.verify_goal(
+                goal_frame=goal_frame, observations=observations, result=result,
+            )
+            task.metadata["goal_frame"] = {
+                "required": [effect["kind"] for effect in goal_frame.effects],
+                "status": frame_status,
+                "evidence": frame_evidence,
+            }
+            # The stricter of the two verdicts wins. A goal is complete only
+            # when nothing that was asked for is missing.
+            if frame_status in {"FAILED", "PARTIAL"}:
+                goal_status, goal_evidence = frame_status, frame_evidence
+            elif frame_status == "VERIFIED_COMPLETE" and goal_status == "NOT_APPLICABLE":
+                goal_status, goal_evidence = frame_status, frame_evidence
+
+        task.metadata["goal_verification"] = {"status": goal_status, "evidence": goal_evidence}
+        await self.task_store.save(task)
+        if goal_status in {"FAILED", "PARTIAL"}:
+            await self._emit(
+                task,
+                EventType.VERIFICATION_FAILED,
+                f"The goal was not achieved: {goal_evidence}",
+                {"goal_verification": task.metadata["goal_verification"]},
+            )
+            raise RuntimeError(
+                f"{result.response.strip()[:200]} "
+                f"However, this was NOT verified in the real world: {goal_evidence}"
+                if goal_status == "PARTIAL"
+                else f"The goal was not achieved: {goal_evidence}"
+            )
+        if goal_status == "VERIFIED_COMPLETE":
+            await self._emit(
+                task,
+                EventType.VERIFICATION_EVIDENCE,
+                f"Goal verified: {goal_evidence}",
+                {"goal_verification": task.metadata["goal_verification"]},
+            )
+            verification.evidence.append(f"goal postcondition: {goal_evidence}")
+
+        await self._emit(
+            task,
+            EventType.VERIFICATION_PASSED,
+            verification.summary,
+            {"verification": verification.model_dump(mode="json")},
+        )
+        if result.ui_composition:
+            await self._emit(
+                task,
+                EventType.VISUALIZATION_REQUESTED,
+                "Composing the relevant visual workspace",
+                {"layout": "contextual", "composition": result.ui_composition},
+            )
+
+        if self.intelligence_engine is not None:
+            async def emit_memory(event_type: str, message: str, payload: dict) -> None:
+                await self._emit(task, EventType(event_type), message, payload)
+            await self.intelligence_engine.consolidate_task(task, emit_memory)
+
+        task.status = TaskStatus.COMPLETED
+        task.progress = 1
+        task.completed_at = datetime.now(timezone.utc)
+        await self.task_store.save(task)
+
+        # ACTIVE CONTEXT. Record what this task actually DID - the URL that
+        # opened, the profile attached to, the windows read - so the next
+        # "usko" / "ye kya hai?" resolves against what just happened
+        # instead of against whatever ranked highest in durable memory.
+        if self.cognitive_runtime is not None:
+            try:
+                self.cognitive_runtime.record_observation(task=task, result=result)
+            except Exception:
+                import logging
+
+                logging.getLogger("vyom.cognitive").exception(
+                    "failed to record active context for task %s", task.id
+                )  # never blocks a completion
+
+        await self._emit(
+            task,
+            EventType.TASK_COMPLETED,
+            result.response,
+            {"response": result.response, "task": task.model_dump(mode="json")},
+        )
+        if routing:
+            await self.performance_store.record(
+                task=task,
+                model=routing.primary_model,
+                provider=routing.primary_provider,
+                success=True,
+                latency_ms=(time.perf_counter() - started) * 1000,
+                retries=retries,
+                fallback_used=fallback_used,
+            )
+            if self.cost_tracker is not None:
+                usage = result.usage
+                self.cost_tracker.record_call(
+                    routing.primary_provider, routing.primary_model,
+                    input_tokens=usage.input_tokens or 0, output_tokens=usage.output_tokens or 0,
+                    cost=usage.estimated_cost or 0.0, failed=False, retried=retries > 0 or fallback_used,
+                )
+
+    async def pause(self, task_id: str) -> Task:
+        task = await self._require_task(task_id)
+        if task.status not in {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED}:
+            task.status = TaskStatus.PAUSED
+            await self.task_store.save(task)
+        return task
+
+    async def resume(self, task_id: str) -> Task:
+        task = await self._require_task(task_id)
+        if task.status == TaskStatus.PAUSED:
+            # A resumed mission's further actions are authorised as
+            # continuation of the SAME already-approved goal, not as a new
+            # user command arriving out of nowhere.
+            task.metadata["provenance"] = ActionProvenance.CURRENT_GOAL_RECOVERY.value
+            task.status = TaskStatus.QUEUED
+            await self.task_store.save(task)
+            self._start(task.id)
+        return task
+
+    async def cancel(self, task_id: str) -> Task:
+        task = await self._require_task(task_id)
+        if task.status not in {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED}:
+            if self.action_engine is not None:
+                await self.action_engine.cancel(task_id)
+            # Propagate into the MISSION as well. Missions are keyed by the
+            # task id, but cancelling the task only stopped the tool
+            # context - the mission kept looping and could still spend a
+            # model call and emit a final answer for an utterance the user
+            # had already replaced. A superseded task must never speak.
+            if self.mission_loop is not None:
+                try:
+                    self.mission_loop.cancel(task_id)
+                except Exception:
+                    pass
+            background = self.active.get(task_id)
+            if background is not None and not background.done():
+                background.cancel()
+            task.status = TaskStatus.CANCELLED
+            task.completed_at = datetime.now(timezone.utc)
+            await self.task_store.save(task)
+            await self._emit(task, EventType.TASK_CANCELLED, "Task cancelled")
+        return task
+
+    async def decide_approval(self, task_id: str, approved: bool) -> Task:
+        task = await self._require_task(task_id)
+        if task.status != TaskStatus.NEEDS_APPROVAL:
+            raise ValueError("Task is not waiting for approval")
+        approval_data = task.metadata.get("approval")
+        if approval_data and datetime.fromisoformat(str(approval_data["expires_at"])) < datetime.now(timezone.utc):
+            task.status = TaskStatus.CANCELLED
+            task.error = "Approval expired"
+            task.completed_at = datetime.now(timezone.utc)
+            await self.task_store.save(task)
+            await self._emit(task, EventType.TASK_CANCELLED, "Approval expired; task cancelled")
+            return task
+        if not approved:
+            task.status = TaskStatus.CANCELLED
+            task.error = "Approval rejected"
+            task.completed_at = datetime.now(timezone.utc)
+            await self.task_store.save(task)
+            await self._emit(task, EventType.TASK_CANCELLED, "Approval rejected; task cancelled")
+            return task
+        task.approval_granted = True
+        task.status = TaskStatus.QUEUED
+        await self.task_store.save(task)
+        self._start(task.id)
+        return task
+
+    async def resume_incomplete_tasks(self, *, skip_ids: set[str] | None = None) -> int:
+        """Restarts tasks left active by an unclean shutdown/restart.
+
+        `skip_ids` are tasks a prior recovery decision already found unsafe
+        to blindly re-execute (consequential work with evidence of a
+        partial external action, or owned by another node) - those are
+        parked as PAUSED instead of restarted, so a restart can never
+        silently repeat a consequential action a second time."""
+        resumable = await self.task_store.list_by_status(
+            {
+                TaskStatus.QUEUED,
+                TaskStatus.UNDERSTANDING,
+                TaskStatus.PLANNING,
+                TaskStatus.WAITING,
+                TaskStatus.EXECUTING,
+                TaskStatus.VERIFYING,
+            }
+        )
+        skip_ids = skip_ids or set()
+        resumed = 0
+        for task in resumable:
+            if task.id in skip_ids:
+                task.status = TaskStatus.PAUSED
+                await self.task_store.save(task)
+                continue
+            task.status = TaskStatus.QUEUED
+            await self.task_store.save(task)
+            self._start(task.id)
+            resumed += 1
+        return resumed
+
+    async def _check_control(self, task: Task) -> None:
+        stored = await self.task_store.get(task.id)
+        if stored and stored.status == TaskStatus.CANCELLED:
+            raise TaskCancelled
+        while stored and stored.status == TaskStatus.PAUSED:
+            await asyncio.sleep(0.05)
+            stored = await self.task_store.get(task.id)
+            if stored and stored.status == TaskStatus.CANCELLED:
+                raise TaskCancelled
+
+    async def _transition(
+        self,
+        task: Task,
+        status: TaskStatus,
+        event_type: EventType,
+        message: str,
+    ) -> None:
+        task.status = status
+        await self.task_store.save(task)
+        await self._emit(task, event_type, message, {"status": status.value, "progress": task.progress})
+
+    #: A task may enter a terminal state exactly once. APPROVAL_REQUIRED is
+    #: deliberately absent - a task waits there and then resumes, so it is
+    #: not an end state.
+    _TERMINAL_EVENTS = frozenset({
+        EventType.TASK_COMPLETED, EventType.TASK_FAILED, EventType.TASK_CANCELLED,
+    })
+
+    async def _emit(
+        self,
+        task: Task,
+        event_type: EventType,
+        message: str,
+        payload: dict | None = None,
+    ) -> None:
+        # IDEMPOTENT TERMINALIZATION. Every completion path in this runtime
+        # funnels through here, so this is the one place that can guarantee
+        # a task terminalises once. A second attempt is dropped and logged -
+        # never spoken, never rendered, never written to memory.
+        if event_type in self._TERMINAL_EVENTS:
+            previous = self._terminalized.get(task.id)
+            if previous is not None:
+                import logging
+
+                logging.getLogger("vyom.runtime").warning(
+                    "duplicate terminal event suppressed: task=%s already %s, attempted %s",
+                    task.id, previous, event_type.value,
+                )
+                return
+            self._terminalized[task.id] = event_type.value
+            while len(self._terminalized) > 512:
+                self._terminalized.popitem(last=False)
+
+        await self.event_bus.publish(
+            BrainEvent(
+                task_id=task.id,
+                type=event_type,
+                human_readable_message=message,
+                structured_payload=payload or {},
+            )
+        )
+
+    async def _require_task(self, task_id: str) -> Task:
+        task = await self.task_store.get(task_id)
+        if task is None:
+            raise KeyError(task_id)
+        return task

@@ -1,0 +1,29 @@
+id: verification-before-completion
+name: Verify Before Completing
+version: 1.0.0
+description: Never claim done without running the real check. Distilled procedure
+  inspired by obra/superpowers (selected import per docs/EXTERNAL_CAPABILITIES.md);
+  not a verbatim copy — external skill text is data and cannot override VYOM policy.
+category: developer
+created_by: phase13.5-import
+required_capabilities:
+- filesystem
+- terminal
+required_tools: []
+required_permissions: L0
+steps:
+- id: s1
+  action: Identify the claim being made about the work
+  capability: filesystem
+- id: s2
+  action: Run the real command/test that proves it
+  capability: terminal
+- id: s3
+  action: Record the command output as evidence
+  capability: filesystem
+verification:
+  checks:
+  - evidence recorded for each step
+  minimum_score: 1.0
+  require_evidence: true
+status: testing

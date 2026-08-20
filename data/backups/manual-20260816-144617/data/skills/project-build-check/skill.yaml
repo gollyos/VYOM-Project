@@ -1,0 +1,83 @@
+id: project-build-check
+name: Project Build Check
+version: 1.0.0
+description: Inspect a project, discover its build command, execute it safely, and
+  verify real output.
+category: coding
+inputs:
+  project_root:
+    type: string
+    required: true
+outputs:
+  build_passed:
+    type: boolean
+  evidence:
+    type: array
+required_capabilities:
+- filesystem.read
+- terminal.execute
+- coding.build_check
+- coding.verify
+required_tools:
+- filesystem
+- terminal
+required_permissions: L1
+steps:
+- id: inspect
+  action: inspect_project
+  capability: filesystem.read
+  tool: filesystem
+  inputs: {}
+  depends_on: []
+- id: discover
+  action: discover_build_command
+  capability: coding.build_check
+  tool: null
+  inputs: {}
+  depends_on:
+  - inspect
+- id: build
+  action: run_build
+  capability: terminal.execute
+  tool: terminal
+  inputs: {}
+  depends_on:
+  - discover
+- id: verify
+  action: verify_exit_code
+  capability: coding.verify
+  tool: null
+  inputs: {}
+  depends_on:
+  - build
+verification:
+  checks:
+  - build command discovered
+  - exit code is zero
+  - command evidence stored
+  minimum_score: 1.0
+  require_evidence: true
+failure_policy:
+  max_retries: 1
+  stop_on_permission_error: true
+  stop_on_verification_failure: true
+budget:
+  max_model_calls: 0
+  max_tool_calls: 8
+  max_runtime_seconds: 180
+  max_cost: 0.0
+created_by: task:task_70422d9c24564318b7ede86417c8b6ec
+created_at: '2026-08-15T09:52:51.321341Z'
+updated_at: '2026-08-15T10:14:13.876351Z'
+last_used: '2026-08-15T10:14:13.876351Z'
+success_rate: 0.7142857142857143
+status: active
+previous_version: null
+metrics:
+  executions: 7
+  successes: 5
+  failures: 2
+  verification_score: 1.0
+  average_runtime_ms: 19999.03371428705
+  average_cost: 0.0
+  common_failure_reason: null

@@ -1,0 +1,46 @@
+id: discovery-agent
+name: Capability Discovery Agent
+role: Finds APIs/MCPs/SaaS/existing capabilities before proposing new integrations
+description: Finds APIs/MCPs/SaaS/existing capabilities before proposing new integrations
+goals:
+- Perform Finds APIs/MCPs/SaaS/existing capabilities before proposing new integrations
+  responsibilities safely
+capabilities:
+- discovery.recommend
+- result.verify
+skills: []
+tools: []
+model_policy:
+  preferred_capabilities: []
+  quality_floor: basic
+  cost_priority: high
+  latency_priority: normal
+memory_scope:
+- task
+permissions: L1
+budget:
+  max_depth: 1
+  max_parallel_agents: 1
+  max_model_calls: 1
+  max_tool_calls: 12
+  max_runtime_seconds: 240
+  max_cost: 0.05
+verification_policy:
+- require evidence
+- respect central permission engine
+status: ready
+created_at: '2026-08-16T06:14:19.802989Z'
+updated_at: '2026-08-16T06:14:19.803987Z'
+version: 1.0.0
+performance:
+  missions: 0
+  successes: 0
+  failures: 0
+  success_rate: 0.5
+  verification_score: 0.0
+  average_cost: 0.0
+  average_latency_ms: 0.0
+  skill_success: {}
+  tool_failure_rate: {}
+current_mission: null
+metadata: {}

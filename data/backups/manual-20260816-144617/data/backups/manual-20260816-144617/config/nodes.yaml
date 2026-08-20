@@ -1,0 +1,35 @@
+version: 1
+
+# Phase 12 node registry defaults. Trusted nodes are created only
+# through explicit pairing (config/devices.yaml + docs/NODE_SECURITY.md);
+# this file defines versions and role defaults for registration checks.
+
+protocol:
+  supported_protocol_version: 1
+  schema_version: 1
+  # Nodes whose protocol major version differs are rejected or limited,
+  # never silently accepted.
+  reject_incompatible: true
+
+defaults:
+  desktop_pc:
+    roles: [client_device, execution_node]
+    capabilities: [screen.capture, notifications.send, file.read, file.write, app.open, task.coding, task.terminal, task.browser]
+  laptop:
+    roles: [client_device, execution_node]
+    capabilities: [notifications.send, task.coding, task.browser]
+  mobile:
+    roles: [client_device]
+    capabilities: [notifications.send, input.voice]
+  home_server:
+    roles: [worker_node, execution_node]
+    capabilities: [task.research, task.artifacts, task.automations, task.email, task.calendar]
+  cloud_worker:
+    roles: [worker_node]
+    capabilities: [task.research]
+
+presence:
+  battery_low_percent: 20
+  # VYOM tracks only what a node volunteers with its heartbeat; no
+  # continuous location/device telemetry is ever collected.
+  collect: [battery, network_type, busy, idle]

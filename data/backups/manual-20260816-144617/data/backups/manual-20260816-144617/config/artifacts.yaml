@@ -1,0 +1,29 @@
+version: 1
+
+# Artifact Engine output policy. See docs/ARTIFACT_ENGINE.md.
+output_root: data/artifacts
+enabled_types:
+  markdown: true
+  json: true
+  csv: true
+  diagram: true
+  docx: auto
+  pdf: auto
+  spreadsheet: auto
+  presentation: auto
+
+# `auto` types render only when the optional rendering dependency is
+# installed; otherwise the Artifact Engine reports the type unavailable
+# rather than faking a file.
+optional_dependencies:
+  docx: python-docx
+  spreadsheet: openpyxl
+  presentation: python-pptx
+
+versioning:
+  keep_versions: true
+  final_label: final
+
+branding:
+  default_style: neutral-professional
+  allow_invented_assets: false

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vyom.local/schemas/brain-event-v1.json",
+  "title": "VYOM Brain Event",
+  "type": "object",
+  "required": ["schema_version", "event_id", "task_id", "timestamp", "type", "human_readable_message", "structured_payload"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "event_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "task_created", "task_understanding", "task_planning", "plan_ready",
+        "model_selected", "model_fallback", "task_progress", "agent_activity",
+        "tool_selected", "tool_permission_check", "tool_started", "tool_progress",
+        "tool_completed", "tool_failed", "tool_retry", "browser_opened", "browser_action",
+        "terminal_started", "terminal_output", "file_changed", "git_changed",
+        "test_started", "test_passed", "test_failed", "verification_evidence",
+        "mcp_connected", "mcp_tool_invoked",
+        "memory_retrieved", "memory_created", "memory_updated", "memory_superseded",
+        "memory_forgotten", "memory_consolidated",
+        "skill_matched", "skill_created", "skill_testing", "skill_promoted",
+        "skill_failed", "skill_updated",
+        "agent_created", "agent_testing", "agent_ready", "agent_started",
+        "agent_delegated", "agent_completed", "agent_paused", "agent_failed",
+        "lesson_created", "learning_applied", "visualization_requested",
+        "approval_required", "verification_started", "verification_passed",
+        "verification_failed", "task_completed", "task_failed", "task_cancelled",
+        "integration_connected", "integration_disconnected", "integration_error",
+        "email_searched", "email_read", "email_drafted", "email_send_approval_required",
+        "email_sent", "email_verified", "contact_resolved", "contact_ambiguous", "crm_updated",
+        "lead_researched", "lead_qualified", "outreach_drafted", "outreach_approval_required",
+        "outreach_sent", "reply_detected", "followup_scheduled", "calendar_read",
+        "availability_checked", "meeting_approval_required", "meeting_created", "meeting_verified",
+        "briefing_generated", "automation_created", "automation_scheduled", "automation_started",
+        "automation_paused", "automation_resumed", "automation_completed", "automation_failed"
+      ]
+    },
+    "human_readable_message": { "type": "string", "minLength": 1 },
+    "structured_payload": { "type": "object" }
+  },
+  "additionalProperties": false
+}

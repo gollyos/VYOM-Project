@@ -1,0 +1,42 @@
+version: 1
+
+# Trading Risk Policy. See docs/TRADING_RISK_POLICY.md. These are the only
+# source of risk limits — do not hardcode risk constants elsewhere
+# (rules 14/63). Changing this file is itself a risk-policy modification
+# and must go through the normal Permission Engine / user action; no agent
+# or skill may edit it, and VYOM must never raise these limits on its own
+# (rule 62/63).
+
+default_paper_account:
+  starting_cash: 100000.0
+  base_currency: USD
+
+limits:
+  max_risk_per_trade_pct: 1.0          # % of account equity risked per trade
+  max_daily_loss_pct: 3.0              # % of account equity; breach triggers kill switch
+  max_open_positions: 8
+  max_total_exposure_pct: 100.0        # % of account equity deployed at once
+  max_single_symbol_exposure_pct: 20.0
+  max_sector_exposure_pct: 35.0
+  max_correlated_exposure_pct: 45.0    # aggregate exposure across instruments tagged as correlated
+  max_drawdown_pct: 15.0               # from peak equity; breach triggers kill switch
+
+execution_assumptions:
+  default_slippage_bps: 5              # basis points, applied against requested price
+  default_fee_bps: 2
+  default_fee_flat: 0.0
+
+paper_trading:
+  # Default policy mode is manual approval for every simulated order
+  # (rule 18). A named strategy may later be switched to `paper_auto`
+  # only via an explicit user action — never automatically.
+  default_approval_mode: manual
+  allowed_approval_modes: [manual, paper_auto]
+
+kill_switch:
+  # Hard rules that pause new paper entries automatically (rule 53).
+  # These check against the limits above; they never relax them.
+  pause_on_daily_loss_breach: true
+  pause_on_drawdown_breach: true
+  pause_on_stale_data: true
+  pause_on_strategy_anomaly: true

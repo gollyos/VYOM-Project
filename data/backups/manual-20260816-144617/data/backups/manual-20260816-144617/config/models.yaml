@@ -1,0 +1,100 @@
+schema_version: 1
+models:
+  - provider: local
+    model_id: local-rules-v1
+    enabled: true
+    capabilities: [general, planning, structured_output]
+    quality_tier: basic
+    speed_tier: instant
+    cost_tier: free
+    context_tier: small
+    supports_streaming: true
+    supports_tools: false
+    supports_vision: false
+    privacy_policy: local_only
+    priority: 100
+
+  - provider: google
+    model_id: ${GOOGLE_BRAIN_MODEL_ID}
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: balanced
+    speed_tier: fast
+    cost_tier: low
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_standard
+    priority: 80
+
+  - provider: openai
+    model_id: ${OPENAI_MODEL_ID}
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: high
+    speed_tier: balanced
+    cost_tier: medium
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_standard
+    priority: 70
+
+  - provider: anthropic
+    model_id: ${ANTHROPIC_MODEL_ID}
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: high
+    speed_tier: balanced
+    cost_tier: medium
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_standard
+    priority: 70
+
+  - provider: openrouter
+    model_id: ${OPENROUTER_MODEL_ID}
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: configurable
+    speed_tier: configurable
+    cost_tier: configurable
+    context_tier: configurable
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_routed
+    priority: 60
+
+  - provider: deepseek
+    model_id: ${DEEPSEEK_MODEL_ID}
+    enabled: true
+    capabilities: [reasoning, coding, structured_output, general, planning]
+    quality_tier: balanced
+    speed_tier: balanced
+    cost_tier: low
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: false
+    privacy_policy: cloud_standard
+    priority: 60
+
+  - provider: kimi
+    model_id: ${KIMI_MODEL_ID}
+    enabled: true
+    capabilities: [reasoning, coding, research, structured_output, tool_use, general, planning]
+    quality_tier: balanced
+    speed_tier: balanced
+    cost_tier: low
+    context_tier: very_large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: false
+    privacy_policy: cloud_standard
+    priority: 60
+

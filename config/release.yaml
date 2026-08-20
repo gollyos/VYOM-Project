@@ -1,0 +1,25 @@
+version: 1
+
+# Phase 13 release engineering policy.
+
+channel: alpha            # development | alpha | beta | stable
+app_version: 0.2.0
+brain_version: 0.2.0
+schema_version: 1
+protocol_version: 1
+
+# Alpha mode: richer diagnostics and reliability notices are allowed,
+# risky integrations stay disabled by default, and normal interaction
+# is never littered with developer UI.
+alpha_mode: true
+
+updates:
+  auto_install: false            # never silent
+  require_signature: true
+  backup_before_update: true
+  endpoint: ""                    # unset: no update server configured
+
+packaging:
+  primary_os: windows
+  installer: nsis
+  create_updater_artifacts: false # enable only with signing keys configured

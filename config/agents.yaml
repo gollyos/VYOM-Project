@@ -1,0 +1,69 @@
+version: 1
+limits:
+  max_depth: 2
+  max_parallel_agents: 3
+  max_runtime_seconds: 300
+  max_tool_calls: 20
+  max_model_calls: 3
+  max_cost: 0.25
+seeds:
+  - id: vyom-core
+    name: VYOM Core
+    role: Orchestrator
+    capabilities: [task.plan, task.delegate, result.verify]
+  - id: developer
+    name: Developer
+    role: Coding worker
+    capabilities: [filesystem.read, terminal.execute, git.diff, coding.build_check]
+  - id: research-agent
+    name: Research Agent
+    role: Evidence-focused research
+    capabilities: [browser.read, memory.search, result.verify]
+  - id: verifier
+    name: Verifier
+    role: Independent evidence verification
+    capabilities: [result.verify, browser.verify, coding.verify]
+  - id: client-manager
+    name: Client Manager
+    role: Client context and follow-up coordinator
+    capabilities: [crm.read, crm.update_internal, meeting.prepare, email.draft]
+  - id: lead-research-agent
+    name: Lead Research Agent
+    role: Evidence-bound company research and qualification
+    capabilities: [crm.read, crm.update_internal, lead.qualify, result.verify]
+  - id: outreach-agent
+    name: Outreach Agent
+    role: Permission-aware outreach drafting
+    capabilities: [crm.read, email.draft, contact.resolve, result.verify]
+  - id: meeting-agent
+    name: Meeting Agent
+    role: Meeting context, notes, actions, and follow-up drafting
+    capabilities: [crm.read, meeting.prepare, meeting.notes, email.draft]
+  - id: browser-agent
+    name: Browser Agent
+    role: Semantic web navigation, form filling, and consequential-action verification
+    capabilities: [browser.execute, browser.read, result.verify]
+  - id: artifact-agent
+    name: Artifact Agent
+    role: Transforms verified information into validated professional deliverables
+    capabilities: [artifacts.create_report, result.verify]
+  - id: discovery-agent
+    name: Capability Discovery Agent
+    role: Finds APIs/MCPs/SaaS/existing capabilities before proposing new integrations
+    capabilities: [discovery.recommend, result.verify]
+  - id: trading-analyst-agent
+    name: Trading Analyst Agent
+    role: Market research, technical context, catalysts, thesis, and setup proposals (research only; cannot bypass the Risk Engine)
+    capabilities: [market_data.quotes, trading.thesis, backtesting.engine, result.verify]
+  - id: risk-agent
+    name: Risk Agent
+    role: Inspects proposed setups against portfolio exposure, strategy performance, and configured risk constraints; can invalidate/reduce/reject but cannot relax a configured hard limit
+    capabilities: [risk.engine, finance.portfolio_analytics, result.verify]
+  - id: personal-operations-agent
+    name: Personal Operations Agent
+    role: Goals, habits, routines, focus sessions, personal reminders, and daily reviews
+    capabilities: [goals.manage, habits.track, routines.manage, focus.manage, reviews.generate]
+  - id: chief-of-staff-agent
+    name: Chief of Staff Agent
+    role: Cross-domain prioritization, daily planning, unresolved commitments, delegation suggestions, and risk/opportunity summaries; coordinates existing runtime/agents rather than bypassing tool permissions
+    capabilities: [chief_of_staff.brief, commitments.track, result.verify]

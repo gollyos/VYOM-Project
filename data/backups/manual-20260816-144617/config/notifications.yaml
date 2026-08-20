@@ -1,0 +1,39 @@
+version: 1
+
+# Notification and proactive-intelligence policy. See
+# docs/NOTIFICATION_POLICY.md and docs/PROACTIVE_INTELLIGENCE.md.
+
+priority_levels: [informational, low, normal, important, urgent, critical]
+
+proactive:
+  default_level: balanced        # quiet | balanced | proactive (rule 32)
+  gate:
+    # A proactive suggestion must pass every check before it is surfaced
+    # (rule 31). This is enforced in code, not just documented.
+    require_important: true
+    require_actionable: true
+    require_good_timing: true
+    require_not_already_surfaced: true
+    suppress_if_auto_handleable: true
+    require_benefit_exceeds_interruption_cost: true
+  suppression:
+    duplicate_window_hours: 24
+    max_low_priority_per_day: 3
+
+quiet_hours:
+  default_start: "23:00"
+  default_end: "07:00"
+  # `critical` notifications are the only exception during quiet hours
+  # or an explicit user-set quiet-mode window (rule 33).
+  critical_bypass_only: true
+
+batching:
+  # rule 35: minor notifications are batched rather than sent individually.
+  batch_window_minutes: 15
+  min_items_to_batch: 3
+
+learning:
+  # rule 36: dismissed/opened/acted_on/snoozed history only tunes
+  # timing/relevance — it never suppresses a genuinely critical
+  # notification.
+  track_outcomes: true

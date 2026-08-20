@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "VYOM",
+    "slug": "vyom-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "vyom",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#04070b",
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "VYOM uses the microphone only while you hold the voice button to speak a command.",
+        "NSFaceIDUsageDescription": "VYOM uses device biometrics to confirm high-risk (L3) approvals."
+      }
+    },
+    "android": {
+      "permissions": ["RECORD_AUDIO", "USE_BIOMETRIC", "USE_FULL_SCREEN_INTENT", "POST_NOTIFICATIONS"],
+      "adaptiveIcon": { "backgroundColor": "#04070b" }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+version: 1
+integrations:
+  - id: gmail
+    name: Gmail
+    provider: google
+    category: email
+    enabled: false
+    status: disconnected
+    capabilities: [email.search, email.read, email.draft, email.send, email.thread]
+    metadata:
+      oauth: required
+      secret_storage: windows-dpapi
+  - id: google-calendar
+    name: Google Calendar
+    provider: google
+    category: calendar
+    enabled: false
+    status: disconnected
+    capabilities: [calendar.read, calendar.availability, calendar.create]
+    metadata:
+      oauth: required
+      secret_storage: windows-dpapi
+  - id: google-contacts
+    name: Google Contacts
+    provider: google
+    category: contacts
+    enabled: false
+    status: disconnected
+    capabilities: [contacts.read, contacts.resolve]
+    metadata:
+      oauth: required
+      secret_storage: windows-dpapi
+  - id: lead-research
+    name: Lead Research Provider
+    provider: unconfigured
+    category: research
+    enabled: false
+    status: disconnected
+    capabilities: [agency.lead_research]
+    metadata:
+      test_fixture_allowed: true

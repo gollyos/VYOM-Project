@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vyom-brain"
+version = "0.1.0"
+description = "Local asynchronous task runtime and model router for VYOM"
+requires-python = ">=3.11"
+dependencies = [
+  "aiosqlite>=0.20,<1",
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "pydantic>=2.11,<3",
+  "python-dotenv>=1.1,<2",
+  "PyYAML>=6.0,<7",
+  "playwright>=1.55,<2",
+  "Pillow>=11,<12",
+  "uvicorn[standard]>=0.35,<1",
+  "tzdata>=2025.1; sys_platform == 'win32'",
+  "psutil>=6.0,<7",
+  "pyperclip>=1.9,<2",
+  # Windows UI Automation. This is NOT optional tooling: it is the tier
+  # VYOM uses to understand and operate visible applications semantically
+  # (control roles, accessible names, automation ids, supported actions).
+  # It was previously imported by app/input_control/accessibility.py but
+  # declared nowhere, so the import always failed, the whole
+  # accessibility tier was unreachable, and every desktop action silently
+  # degraded to pixel automation or a shell command.
+  "pywinauto>=0.6.9,<0.7; sys_platform == 'win32'",
+  "pygetwindow>=0.0.9,<1; sys_platform == 'win32'",
+  "pywin32>=306; sys_platform == 'win32'",
+  "screeninfo>=0.8,<1"
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1.1,<2"
+]
+artifacts = [
+  "python-docx>=1.1,<2",
+  "openpyxl>=3.1,<4",
+  "python-pptx>=1.0,<2"
+]
+media = [
+  "pymupdf>=1.28,<2"
+]
+# Pixel-level input is the LAST tier in the fallback order, used only when
+# accessibility genuinely cannot reach a control. The semantic tiers above
+# it are core dependencies, not extras.
+desktop = [
+  "pyautogui>=0.9.54,<1"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

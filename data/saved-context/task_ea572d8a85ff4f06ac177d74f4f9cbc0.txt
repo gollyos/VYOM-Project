@@ -1,0 +1,2083 @@
+Before making any changes, completely read all current VYOM documentation, especially:
+
+* `docs/VYOM_PROJECT_MEMORY.md`
+* `docs/ARCHITECTURE.md`
+* `docs/AUTONOMY_POLICY.md`
+* `docs/EVENT_PROTOCOL.md`
+* `docs/DEVICE_NODE_PROTOCOL.md`
+* `docs/DESKTOP_CONTROL.md`
+* `docs/DESKTOP_SECURITY.md`
+* `docs/AUTOMATION_RUNTIME.md`
+* `docs/MEMORY_ARCHITECTURE.md`
+* `docs/CHIEF_OF_STAFF.md`
+* `docs/PROACTIVE_INTELLIGENCE.md`
+* `docs/NOTIFICATION_POLICY.md`
+* `docs/CAPABILITY_REGISTRY.md`
+
+Inspect the repository first.
+
+Preserve all working Phase 1–11 systems.
+
+# PHASE 12 OBJECTIVE
+
+Build VYOM's persistent multi-device runtime.
+
+After this phase VYOM should be capable of:
+
+1. Running permitted workloads 24/7
+2. Continuing background tasks when desktop UI is closed
+3. Recovering safely after crashes/restarts
+4. Supporting a dedicated Home Server / Worker Node
+5. Supporting optional cloud-hosted Brain/worker deployment
+6. Connecting desktop and mobile securely
+7. Cross-device task/status sync
+8. Cross-device voice commands
+9. Remote task creation
+10. Remote approval/rejection
+11. Remote notifications
+12. Device presence awareness
+13. Task handoff between nodes
+14. Offline queueing
+15. Conflict-safe synchronization
+16. Health monitoring
+17. Automatic bounded recovery
+18. Backup/restore
+19. Secure device pairing
+20. Audit logs across devices
+21. Remote "What is VYOM doing?" visibility
+22. Reliable scheduled automations while the main desktop window is not open
+
+Do NOT build unrestricted remote desktop access.
+
+VYOM remains user-controlled, permission-based and auditable.
+
+---
+
+# REQUIRED STRUCTURE
+
+Create equivalent modules if they do not already exist.
+
+```text
+VYOM/
+├─ docs/
+│  ├─ VYOM_PROJECT_MEMORY.md
+│  ├─ ARCHITECTURE.md
+│  ├─ DISTRIBUTED_RUNTIME.md          # CREATE
+│  ├─ MOBILE_COMPANION.md             # CREATE
+│  ├─ SYNC_PROTOCOL.md                # CREATE
+│  ├─ RELIABILITY.md                  # CREATE
+│  ├─ DEPLOYMENT.md                   # CREATE
+│  ├─ BACKUP_RECOVERY.md              # CREATE
+│  ├─ NODE_SECURITY.md                # CREATE
+│  └─ UPDATE_POLICY.md                # CREATE
+│
+├─ config/
+│  ├─ runtime.yaml                    # CREATE
+│  ├─ nodes.yaml
+│  ├─ sync.yaml                       # CREATE
+│  ├─ reliability.yaml                # CREATE
+│  └─ deployment.yaml                 # CREATE
+│
+├─ services/
+│  └─ brain/
+│     └─ app/
+│        ├─ distributed/
+│        │  ├─ coordinator.py
+│        │  ├─ node_router.py
+│        │  ├─ task_dispatcher.py
+│        │  ├─ task_handoff.py
+│        │  ├─ leases.py
+│        │  └─ ownership.py
+│        │
+│        ├─ sync/
+│        │  ├─ schemas.py
+│        │  ├─ engine.py
+│        │  ├─ journal.py
+│        │  ├─ conflict_resolver.py
+│        │  ├─ offline_queue.py
+│        │  └─ replication.py
+│        │
+│        ├─ reliability/
+│        │  ├─ supervisor.py
+│        │  ├─ health.py
+│        │  ├─ recovery.py
+│        │  ├─ watchdog.py
+│        │  ├─ checkpoints.py
+│        │  └─ circuit_breaker.py
+│        │
+│        ├─ remote/
+│        │  ├─ command_gateway.py
+│        │  ├─ approvals.py
+│        │  ├─ notifications.py
+│        │  └─ session.py
+│        │
+│        ├─ backup/
+│        │  ├─ manager.py
+│        │  ├─ snapshot.py
+│        │  ├─ restore.py
+│        │  └─ validation.py
+│        │
+│        └─ api/
+│           ├─ nodes.py
+│           ├─ sync.py
+│           ├─ remote.py
+│           └─ health.py
+│
+├─ apps/
+│  ├─ desktop/
+│  └─ mobile/                         # CREATE
+│
+└─ tests/
+   └─ add Phase 12 tests
+```
+
+Adapt to current architecture instead of duplicating equivalent modules.
+
+---
+
+# 1. DISTRIBUTED VYOM ARCHITECTURE
+
+VYOM may run across multiple trusted nodes:
+
+```text
+Desktop
+Laptop
+Mobile
+Home Server
+Optional Cloud Worker
+```
+
+Only one component should coordinate a specific task at a time.
+
+Create explicit concepts:
+
+```text
+Brain Coordinator
+Execution Node
+Client Device
+Worker Node
+```
+
+A device may have multiple roles.
+
+---
+
+# 2. HOME SERVER / ALWAYS-ON NODE
+
+Create architecture for an always-on VYOM worker.
+
+Possible deployment:
+
+```text
+mini PC
+home server
+NAS-compatible environment
+Linux machine
+Docker host
+```
+
+Responsibilities may include:
+
+* Brain service
+* automations
+* research jobs
+* scheduled workflows
+* notifications
+* memory/database
+* lightweight agents
+* background monitoring
+
+Do NOT require the desktop gaming/work PC to remain powered on.
+
+---
+
+# 3. WORKLOAD PLACEMENT
+
+Task Router should decide where a task can run.
+
+Consider:
+
+```text
+required tools
+required files
+device availability
+privacy
+GPU requirement
+browser requirement
+local project requirement
+latency
+cost
+```
+
+Example:
+
+Email research
+→ Home Server
+
+Compile local Windows project
+→ Desktop Node
+
+Mobile notification
+→ Mobile Node
+
+GPU-heavy local model
+→ capable device only.
+
+---
+
+# 4. NODE OWNERSHIP
+
+Prevent duplicate execution.
+
+Implement task ownership/lease concept:
+
+```text
+task_id
+node_id
+lease_id
+acquired_at
+expires_at
+heartbeat
+```
+
+If node dies:
+
+lease expires
+→ coordinator decides whether safe retry/handoff is possible.
+
+Consequential tasks require extra duplicate protection.
+
+---
+
+# 5. SAFE TASK HANDOFF
+
+Support:
+
+```text
+Desktop loses connection
+↓
+persist checkpoint
+↓
+Coordinator evaluates
+↓
+eligible worker resumes
+```
+
+Only if task capabilities are portable.
+
+Example:
+
+Research task:
+portable.
+
+Local coding task requiring Desktop project:
+not portable unless repository/environment exists on target node.
+
+---
+
+# 6. CHECKPOINTS
+
+Long-running tasks should save checkpoints.
+
+Checkpoint may include:
+
+```text
+task state
+current plan step
+completed tool calls
+evidence
+pending approval
+budget consumed
+artifacts
+```
+
+Do NOT persist private hidden reasoning.
+
+---
+
+# 7. CRASH RECOVERY
+
+After Brain restart:
+
+```text
+load persisted tasks
+→ detect previously running tasks
+→ inspect evidence
+→ determine:
+   resume
+   retry
+   pause
+   mark needs review
+```
+
+Never blindly repeat consequential external actions.
+
+---
+
+# 8. CIRCUIT BREAKERS
+
+Implement circuit breakers for:
+
+```text
+provider failures
+tool failures
+MCP failures
+integration outages
+network failures
+```
+
+Example:
+
+Gmail fails 5 times
+→ temporarily stop Gmail-dependent workflows
+→ mark integration degraded
+→ notify user
+
+Avoid retry storms.
+
+---
+
+# 9. HEALTH SYSTEM
+
+Expose health for:
+
+```text
+Brain
+Database
+Task Runtime
+Model Providers
+Tool Registry
+MCP servers
+Email
+Calendar
+Browser Worker
+Desktop Nodes
+Mobile Nodes
+Automation Scheduler
+```
+
+States:
+
+```text
+healthy
+degraded
+offline
+unknown
+```
+
+---
+
+# 10. WATCHDOG
+
+Supervisor should detect:
+
+```text
+stuck task
+worker crash
+missed heartbeat
+hung subprocess
+unresponsive integration
+```
+
+Recovery must be bounded.
+
+Do not restart endlessly.
+
+---
+
+# 11. MOBILE COMPANION
+
+Create a real mobile companion application.
+
+Preferred current approach:
+
+```text
+React Native + Expo
+```
+
+unless the repository already established another mobile stack.
+
+Mobile is NOT a full clone of desktop VYOM.
+
+Primary mobile capabilities:
+
+* voice command
+* text command
+* today's briefing
+* task status
+* approvals
+* notifications
+* agent status
+* automation status
+* quick actions
+* artifact preview/link
+* device status
+
+---
+
+# 12. MOBILE VISUAL EXPERIENCE
+
+Preserve VYOM identity.
+
+Mobile startup:
+
+```text
+VYOM Core
+current state
+voice control
+critical status
+```
+
+Do NOT squeeze desktop neural canvas into a tiny screen.
+
+Use simplified visual presence.
+
+---
+
+# 13. MOBILE COMMAND
+
+User may say:
+
+"VYOM, what are you doing?"
+
+Mobile sends command to Brain.
+
+Brain responds with:
+
+```text
+4 tasks running
+Research Agent working
+Developer waiting on desktop
+1 approval required
+```
+
+plus contextual visual objects.
+
+---
+
+# 14. REMOTE TASK CREATION
+
+From mobile:
+
+"Research 10 SaaS leads."
+
+Flow:
+
+```text
+Mobile
+→ authenticated command
+→ Brain
+→ Task Runtime
+→ Agent
+→ worker node
+→ result
+→ mobile notification
+```
+
+---
+
+# 15. REMOTE APPROVALS
+
+Mobile should support:
+
+```text
+Approve
+Reject
+Modify
+Pause
+Cancel
+```
+
+Approval object must show:
+
+```text
+requested action
+reason
+impact
+agent
+evidence
+risk
+```
+
+Never offer one-tap blind approval for L3 critical actions without additional authentication.
+
+---
+
+# 16. HIGH-RISK MOBILE APPROVAL
+
+For L3 actions require stronger verification.
+
+Possible architecture:
+
+```text
+device authentication
++
+biometric/OS secure confirmation where supported
+```
+
+Do not implement insecure custom PIN storage.
+
+---
+
+# 17. CROSS-DEVICE VOICE
+
+Voice commands should work from:
+
+```text
+Desktop
+Mobile
+future laptop
+```
+
+All voice requests route to the same Brain/context system.
+
+Conversation/task context must not depend solely on one frontend's local state.
+
+---
+
+# 18. VOICE SESSION HANDOFF
+
+Example:
+
+Desktop:
+
+"VYOM, research competitors."
+
+Later mobile:
+
+"How far did you get?"
+
+VYOM should resolve the active task and answer correctly.
+
+---
+
+# 19. DEVICE PRESENCE
+
+Track trusted nodes:
+
+```text
+online
+offline
+idle
+busy
+capabilities
+battery if applicable
+network type where permitted
+```
+
+Do not continuously collect unnecessary location/device telemetry.
+
+---
+
+# 20. NODE REGISTRY
+
+Extend DeviceNode:
+
+```text
+node_id
+name
+platform
+device_type
+roles
+capabilities
+trust_level
+online
+last_seen
+version
+runtime_health
+```
+
+---
+
+# 21. SECURE PAIRING
+
+New device flow:
+
+```text
+request pairing
+→ existing trusted device/user approves
+→ secure credentials exchanged
+→ node registered
+```
+
+Never pair silently.
+
+---
+
+# 22. NODE REVOCATION
+
+User:
+
+"Remove my old laptop from VYOM."
+
+Must:
+
+```text
+revoke credentials
+remove trust
+invalidate active sessions
+stop accepting commands
+```
+
+---
+
+# 23. REMOTE COMMAND SECURITY
+
+Every remote command should include:
+
+```text
+command_id
+source_node
+user/session
+timestamp
+nonce/request identity
+permission context
+```
+
+Reject replay/expired/unauthenticated commands.
+
+---
+
+# 24. SYNC ENGINE
+
+Synchronize only required shared state:
+
+```text
+tasks
+task events
+approvals
+agents
+automations
+selected memory metadata
+goals
+notifications
+device states
+```
+
+Large private files should not automatically replicate everywhere.
+
+---
+
+# 25. EVENT JOURNAL
+
+Use an append-oriented sync journal where practical.
+
+Event examples:
+
+```text
+task_updated
+approval_resolved
+goal_updated
+automation_changed
+device_connected
+```
+
+This should help reconcile offline changes.
+
+---
+
+# 26. OFFLINE MOBILE
+
+If mobile is offline:
+
+Allow safe local actions such as:
+
+```text
+view cached status
+create queued command
+write note
+record reminder
+```
+
+When connection returns:
+
+sync/submit safely.
+
+Do NOT show cached data as live.
+
+---
+
+# 27. OFFLINE COMMAND QUEUE
+
+Queued command fields:
+
+```text
+id
+created_at
+expires_at
+command
+risk
+requires_reconfirmation
+```
+
+Consequential commands should expire quickly or require confirmation again after reconnect.
+
+Example:
+
+"Send email"
+
+should NOT execute 8 hours later merely because network returned.
+
+---
+
+# 28. CONFLICT RESOLUTION
+
+Possible conflicts:
+
+```text
+goal edited on mobile
+goal edited on desktop
+```
+
+Use explicit conflict policies.
+
+Do not blindly use last-write-wins for sensitive/important records.
+
+Prefer domain-specific resolution.
+
+---
+
+# 29. TASK STATUS SYNC
+
+Task states must stay consistent across devices.
+
+Mobile should never show:
+
+"running"
+
+when Brain knows:
+
+"failed"
+
+due to stale cache.
+
+Include timestamps/freshness.
+
+---
+
+# 30. NOTIFICATION DELIVERY
+
+Route notifications intelligently.
+
+Possible destinations:
+
+```text
+Desktop
+Mobile
+both
+none/quiet queue
+```
+
+Examples:
+
+Informational:
+desktop only or batch.
+
+Urgent approval:
+mobile + desktop.
+
+Critical:
+all trusted active devices, respecting policy.
+
+---
+
+# 31. NOTIFICATION DEDUPLICATION
+
+If notification read on mobile:
+
+desktop shouldn't keep nagging unnecessarily.
+
+Synchronize:
+
+```text
+unread
+read
+acted_on
+dismissed
+```
+
+---
+
+# 32. REMOTE STATUS VIEW
+
+User should be able to see:
+
+```text
+VYOM Online
+Brain Node
+Desktop Online/Offline
+4 tasks running
+3 agents working
+2 automations active
+1 approval waiting
+```
+
+Do not turn mobile into an infrastructure dashboard.
+
+Show technical detail only when requested.
+
+---
+
+# 33. "WHAT DID YOU DO?"
+
+Cross-device audit must support:
+
+"What did VYOM do while I was away?"
+
+Expected:
+
+```text
+tasks completed
+emails prepared
+research completed
+agents used
+automations
+failures
+approvals waiting
+verified evidence
+```
+
+---
+
+# 34. BACKGROUND AUTOMATION 24/7
+
+Move scheduled automation responsibility to a persistent runtime node.
+
+Desktop UI being closed must not stop permitted server-side/background automations.
+
+Automations requiring desktop-only capabilities should wait for Desktop Node.
+
+Example:
+
+Research:
+Home Server runs.
+
+Local VS Code operation:
+wait for Desktop online.
+
+---
+
+# 35. AUTOMATION NODE REQUIREMENTS
+
+Automation may define:
+
+```text
+required_capabilities
+preferred_node
+fallback_nodes
+```
+
+Scheduler should verify node availability before execution.
+
+---
+
+# 36. MISSED AUTOMATION RECOVERY
+
+After downtime:
+
+For each missed job decide:
+
+```text
+skip
+run once
+reschedule
+ask user
+```
+
+Do not blindly replay 50 missed runs.
+
+---
+
+# 37. REMOTE CANCELLATION
+
+Mobile:
+
+"Stop the research task."
+
+Should propagate:
+
+```text
+cancel request
+→ coordinator
+→ worker node
+→ tool cancellation
+→ persisted state
+→ synced result
+```
+
+---
+
+# 38. REMOTE DESKTOP CONTROL BOUNDARY
+
+Phase 12 does NOT create TeamViewer-style remote desktop.
+
+Mobile may request high-level commands:
+
+```text
+open project
+run task
+open app
+pause VYOM
+```
+
+Execution occurs through Phase 9 registered tools.
+
+No raw remote mouse streaming/control by default.
+
+---
+
+# 39. MOBILE ARTIFACT ACCESS
+
+Allow mobile to view metadata/preview for generated:
+
+```text
+reports
+PDFs
+presentations
+spreadsheets
+research artifacts
+```
+
+Do not automatically sync every large/private file.
+
+Use authenticated download/stream only when requested.
+
+---
+
+# 40. HOME SERVER DEPLOYMENT
+
+Create a documented deployment path.
+
+Preferred:
+
+```text
+Docker Compose
+```
+
+for server-side components where suitable.
+
+Possible services:
+
+```text
+brain
+worker
+database
+scheduler
+reverse proxy/internal gateway if required
+```
+
+Desktop Tauri app remains native/local.
+
+---
+
+# 41. OPTIONAL CLOUD DEPLOYMENT
+
+Architecture may support a cloud worker later.
+
+Cloud mode must be optional.
+
+Local-first remains preferred for sensitive data.
+
+Document which capabilities require:
+
+```text
+local
+server
+cloud-optional
+```
+
+---
+
+# 42. LOCAL-FIRST PRIVACY
+
+Default philosophy:
+
+```text
+Sensitive data stays local when practical.
+External models receive minimum necessary context.
+Cloud deployment is optional.
+```
+
+Do not make cloud mandatory for VYOM to function.
+
+---
+
+# 43. SECURE REMOTE CONNECTION
+
+Use secure authenticated transport.
+
+Do not expose Brain APIs directly to the public internet without authentication.
+
+Production architecture should support:
+
+```text
+TLS
+device authentication
+token rotation
+revocation
+rate limiting
+```
+
+---
+
+# 44. REMOTE ACCESS NETWORKING
+
+Do not hardcode unsafe port-forwarding instructions into runtime.
+
+Document safe deployment options.
+
+The runtime should not silently expose local services publicly.
+
+---
+
+# 45. SECRETS
+
+Secrets remain node-local/secure where possible.
+
+Do not replicate all provider credentials to mobile.
+
+Mobile should invoke Brain capabilities, not directly carry every provider key.
+
+---
+
+# 46. DATABASE RELIABILITY
+
+Implement safe database lifecycle:
+
+```text
+migrations
+backup
+integrity check
+recovery
+```
+
+Do not allow schema changes to silently destroy existing user data.
+
+---
+
+# 47. BACKUP SYSTEM
+
+Support backup of important VYOM data:
+
+```text
+database
+memory
+agent specs
+skills
+automations
+config
+project metadata
+```
+
+Exclude/handle secrets separately.
+
+---
+
+# 48. BACKUP SCHEDULE
+
+Allow configurable:
+
+```text
+manual
+daily
+weekly
+```
+
+Backups should be versioned.
+
+Avoid overwriting the only known-good backup.
+
+---
+
+# 49. BACKUP ENCRYPTION
+
+Sensitive backups should support encryption.
+
+Do not create plain-text exports containing secrets.
+
+---
+
+# 50. RESTORE
+
+Restore flow:
+
+```text
+select backup
+→ validate
+→ show metadata
+→ stop relevant services safely
+→ restore
+→ run migrations/check
+→ restart
+→ verify
+```
+
+Do not overwrite current state silently.
+
+---
+
+# 51. DISASTER RECOVERY
+
+Document recovery for:
+
+```text
+corrupt DB
+failed update
+lost node
+provider failure
+worker failure
+damaged config
+```
+
+---
+
+# 52. VERSION COMPATIBILITY
+
+Nodes should report:
+
+```text
+app_version
+protocol_version
+schema_version
+```
+
+Reject or limit incompatible nodes.
+
+---
+
+# 53. UPDATE FOUNDATION
+
+Create architecture for VYOM updates.
+
+Do NOT implement silent forced updates.
+
+Update states:
+
+```text
+available
+downloaded
+ready
+installed
+failed
+rolled_back
+```
+
+---
+
+# 54. UPDATE SAFETY
+
+Before important update:
+
+```text
+check compatibility
+→ checkpoint
+→ backup
+→ apply
+→ health checks
+→ rollback if critical failure
+```
+
+---
+
+# 55. HEALTH MONITORING
+
+Create periodic lightweight health checks.
+
+Do not use expensive LLM calls.
+
+Check:
+
+```text
+Brain responsiveness
+DB
+worker heartbeat
+scheduler
+provider health
+storage
+queue
+```
+
+---
+
+# 56. RELIABILITY METRICS
+
+Track:
+
+```text
+task success rate
+task recovery count
+worker uptime
+automation success
+provider failure rate
+queue depth
+average task latency
+```
+
+These metrics are for reliability, not permanent UI clutter.
+
+---
+
+# 57. STUCK TASK DETECTION
+
+A task may be considered potentially stuck based on:
+
+```text
+no progress event
+tool timeout
+lease expiration
+repeated identical failure
+```
+
+Response:
+
+```text
+inspect
+→ retry safely
+→ fallback
+→ pause
+→ notify user
+```
+
+---
+
+# 58. DUPLICATE ACTION PREVENTION
+
+Critical distributed-system requirement.
+
+Protect:
+
+```text
+email sends
+calendar creation
+booking
+client delivery
+future payments
+paper orders
+```
+
+Use existing evidence/idempotency mechanisms.
+
+A node failover must never double-send consequential actions.
+
+---
+
+# 59. DISTRIBUTED AUDIT LOG
+
+Record:
+
+```text
+task
+node
+action
+timestamp
+result
+evidence
+```
+
+User:
+
+"Which device ran this?"
+
+must be answerable.
+
+---
+
+# 60. DEVICE-SCOPED CAPABILITIES
+
+Example:
+
+Desktop Node:
+
+```text
+filesystem
+terminal
+browser
+native apps
+screen
+```
+
+Home Server:
+
+```text
+research
+email
+calendar
+automations
+artifact generation
+```
+
+Mobile:
+
+```text
+voice
+notifications
+approvals
+quick commands
+```
+
+Do not pretend capabilities exist on unsupported nodes.
+
+---
+
+# 61. NODE SELECTION
+
+Task Dispatcher should prefer:
+
+```text
+capable
+online
+trusted
+low latency
+appropriate privacy
+appropriate cost
+```
+
+No model call needed for simple deterministic node selection.
+
+---
+
+# 62. MOBILE VOICE EXPERIENCE
+
+User opens mobile VYOM.
+
+Show:
+
+```text
+VYOM Core
+"Ready"
+microphone
+small status summary
+```
+
+User:
+
+"What's happening?"
+
+VYOM speaks:
+
+"Three agents are working. Competitor research is complete and one outreach batch needs your approval."
+
+Then relevant visual objects appear.
+
+No traditional mobile dashboard.
+
+---
+
+# 63. MOBILE QUICK COMMANDS
+
+Support configurable shortcuts:
+
+```text
+What's happening?
+What needs approval?
+Pause VYOM
+Today's plan
+Start focus
+Agent status
+```
+
+Voice remains primary.
+
+---
+
+# 64. PUSH NOTIFICATIONS
+
+Implement mobile push architecture.
+
+Use a provider abstraction.
+
+Never send sensitive full content in notification payload unnecessarily.
+
+Example:
+
+Prefer:
+
+"Finora client action requires approval."
+
+over including private client content in lock-screen notification.
+
+---
+
+# 65. REMOTE APPROVAL EXPIRY
+
+Approvals may expire.
+
+Record:
+
+```text
+created_at
+expires_at
+```
+
+Expired approval cannot be executed without re-evaluation.
+
+---
+
+# 66. SESSION CONTINUITY
+
+User can begin on Desktop and continue on Mobile.
+
+Shared state:
+
+```text
+current task
+recent command
+relevant context IDs
+```
+
+Do not sync full raw model context blindly.
+
+Reconstruct context from structured task/memory state.
+
+---
+
+# 67. NEURAL BIOME + DISTRIBUTED STATE
+
+Desktop neural biome may subtly represent:
+
+```text
+active agents
+remote node activity
+task relationships
+```
+
+Do not render infrastructure topology permanently.
+
+When asked:
+
+"Show my VYOM network."
+
+Then generate a temporary device-node relationship visualization.
+
+---
+
+# 68. COMMAND — NETWORK
+
+User:
+
+"Which devices are online?"
+
+Expected:
+
+```text
+Desktop — Online
+Home Server — Online
+Mobile — Online
+Laptop — Offline
+```
+
+plus useful capabilities.
+
+---
+
+# 69. COMMAND — REMOTE TASK
+
+Mobile:
+
+"Run the VYOM project tests on my desktop."
+
+Flow:
+
+```text
+resolve Desktop Node
+→ confirm online
+→ coding/test capability
+→ create task
+→ execute remotely through trusted node
+→ stream progress
+→ verify
+→ notify mobile
+```
+
+---
+
+# 70. COMMAND — REMOTE STATUS
+
+Mobile:
+
+"How is the coding task going?"
+
+Should retrieve persisted task state.
+
+Not ask the coding model from scratch.
+
+---
+
+# 71. COMMAND — PAUSE EVERYTHING
+
+User:
+
+"VYOM pause everything."
+
+Define carefully.
+
+Should:
+
+* pause non-critical autonomous tasks
+* pause automations where safe
+* stop new background work
+
+Do not abruptly corrupt active file/database operations.
+
+Critical housekeeping may finish safely.
+
+---
+
+# 72. COMMAND — RESUME
+
+"Resume VYOM."
+
+Resume eligible paused automation/tasks according to policy.
+
+---
+
+# 73. CHIEF OF STAFF 24/7
+
+Chief of Staff can monitor structured events while user is away.
+
+It may detect:
+
+```text
+important reply
+client risk
+automation failure
+deadline
+agent blocked
+```
+
+Proactive notification rules remain Phase 11 rules.
+
+Do not constantly ping user.
+
+---
+
+# 74. MORNING BRIEFING FROM BACKGROUND WORK
+
+When user wakes VYOM:
+
+"Good morning."
+
+VYOM can summarize overnight:
+
+```text
+research completed
+agent work
+important email
+automation outcomes
+failures
+approvals
+today's schedule
+```
+
+Use real logs/evidence.
+
+---
+
+# 75. OVERNIGHT WORK POLICY
+
+User should be able to define:
+
+```text
+allowed overnight tasks
+max cost
+allowed agents
+allowed tools
+notification policy
+```
+
+Example:
+
+Research allowed.
+
+Client emails draft-only.
+
+No desktop control while PC offline.
+
+---
+
+# 76. RESOURCE BUDGETS
+
+24/7 runtime needs system-wide budgets:
+
+```text
+daily model cost
+daily research calls
+worker CPU limits
+concurrent tasks
+agent count
+browser sessions
+```
+
+Prevent runaway costs.
+
+---
+
+# 77. GLOBAL BUDGET MANAGER
+
+Integrate existing Cost Manager.
+
+When budget nearing limit:
+
+```text
+use cheaper models
+defer noncritical work
+pause expensive automations
+notify user
+```
+
+Never silently exceed configured hard limits.
+
+---
+
+# 78. POWER AWARENESS
+
+For portable devices where supported:
+
+if battery low:
+
+avoid heavy non-essential local work.
+
+Move portable tasks to Home Server where possible.
+
+---
+
+# 79. NETWORK AWARENESS
+
+If device is on poor network:
+
+defer large transfers.
+
+Do not continually retry large sync operations.
+
+---
+
+# 80. MOBILE PRIVACY
+
+Mobile app must not cache highly sensitive content longer than required.
+
+Support secure local storage for:
+
+```text
+device identity
+session token
+minimal cached state
+```
+
+---
+
+# 81. REMOTE WIPE/REVOKE FOUNDATION
+
+If mobile/laptop lost:
+
+user can revoke node from another trusted device.
+
+Revocation prevents future access.
+
+Do NOT build destructive remote wiping of the whole user device.
+
+---
+
+# 82. EVENTS
+
+Extend Event Protocol:
+
+```text
+node_registered
+node_authenticated
+node_revoked
+node_online
+node_offline
+
+task_dispatched
+task_handoff_started
+task_handoff_completed
+task_lease_expired
+
+sync_started
+sync_completed
+sync_conflict
+offline_command_queued
+offline_command_expired
+
+backup_started
+backup_completed
+backup_failed
+restore_started
+restore_completed
+
+health_degraded
+worker_recovered
+circuit_breaker_opened
+
+mobile_approval_received
+remote_command_received
+```
+
+---
+
+# 83. TESTS
+
+Add tests for at minimum:
+
+* node registration
+* secure pairing
+* unauthorized node rejection
+* node revocation
+* heartbeat
+* lease ownership
+* duplicate task prevention
+* task handoff
+* non-portable task rejection
+* checkpoint recovery
+* crash recovery
+* circuit breaker
+* provider failure
+* sync journal
+* offline queue
+* expired offline command
+* conflict detection
+* notification deduplication
+* remote approval
+* approval expiry
+* mobile task creation
+* remote cancellation
+* backup
+* corrupt backup rejection
+* restore
+* version mismatch
+* distributed audit log
+* budget enforcement
+* idempotent consequential actions
+
+Tests must not require real public infrastructure.
+
+Use local/mock nodes.
+
+---
+
+# 84. DEMO 1 — MULTI-NODE
+
+Run:
+
+```text
+Brain/Home Server node
+Desktop node
+mock/mobile client
+```
+
+Verify:
+
+* pairing
+* heartbeat
+* capabilities
+* task dispatch
+* task result sync
+
+---
+
+# 85. DEMO 2 — DESKTOP OFFLINE
+
+Start research task.
+
+Simulate Desktop offline.
+
+If task is portable:
+
+verify eligible Worker continues/resumes.
+
+If not portable:
+
+task waits honestly.
+
+---
+
+# 86. DEMO 3 — MOBILE APPROVAL
+
+Create safe L2 approval.
+
+Send to mobile companion.
+
+Approve.
+
+Verify:
+
+```text
+approval
+→ Brain
+→ task resumes
+→ evidence
+→ mobile updated
+```
+
+---
+
+# 87. DEMO 4 — OFFLINE MOBILE
+
+Queue harmless command offline.
+
+Reconnect.
+
+Verify command syncs exactly once.
+
+Then test expired consequential command.
+
+Verify it does NOT silently execute.
+
+---
+
+# 88. DEMO 5 — CRASH RECOVERY
+
+Kill Brain during safe long-running test workflow.
+
+Restart.
+
+Verify:
+
+* state recovered
+* duplicate actions prevented
+* task resumes/pauses appropriately
+
+---
+
+# 89. DEMO 6 — BACKUP/RESTORE
+
+Create test data.
+
+Backup.
+
+Change data.
+
+Restore test backup in controlled environment.
+
+Verify integrity.
+
+---
+
+# 90. DEMO 7 — 24/7 AUTOMATION
+
+Use short development schedule.
+
+Verify:
+
+* background worker runs without desktop UI
+* result persists
+* mobile/desktop later receives status
+* no duplicate runs after restart
+
+---
+
+# 91. DEPLOYMENT DOCUMENTATION
+
+Create:
+
+`docs/DEPLOYMENT.md`
+
+Document:
+
+### Local Desktop Only
+
+### Desktop + Home Server
+
+### Optional Cloud Worker
+
+Explain:
+
+* requirements
+* services
+* ports/network assumptions
+* secrets
+* persistence
+* backups
+* security
+
+Do not recommend exposing raw internal APIs publicly.
+
+---
+
+# 92. MOBILE DOCUMENTATION
+
+Create:
+
+`docs/MOBILE_COMPANION.md`
+
+Explain:
+
+* architecture
+* authentication
+* command flow
+* approvals
+* notifications
+* offline behavior
+* limitations
+
+---
+
+# 93. RELIABILITY DOCUMENTATION
+
+Create:
+
+`docs/RELIABILITY.md`
+
+Document:
+
+```text
+health
+leases
+checkpoints
+retry
+circuit breakers
+recovery
+idempotency
+```
+
+---
+
+# 94. SYNC DOCUMENTATION
+
+Create:
+
+`docs/SYNC_PROTOCOL.md`
+
+Explain:
+
+```text
+shared state
+event journal
+offline queue
+conflicts
+freshness
+```
+
+---
+
+# 95. SECURITY DOCUMENTATION
+
+Create:
+
+`docs/NODE_SECURITY.md`
+
+Document:
+
+* pairing
+* device identities
+* transport
+* credential rotation
+* revocation
+* remote approvals
+* replay prevention
+* least privilege
+
+---
+
+# 96. BACKUP DOCUMENTATION
+
+Create:
+
+`docs/BACKUP_RECOVERY.md`
+
+Explain:
+
+* what gets backed up
+* exclusions
+* encryption
+* schedules
+* retention
+* validation
+* restore
+
+---
+
+# 97. UPDATE DOCUMENTATION
+
+Create:
+
+`docs/UPDATE_POLICY.md`
+
+Document safe future update strategy.
+
+Do not silently self-update production core in Phase 12.
+
+---
+
+# 98. UPDATE PROJECT MEMORY
+
+Append confirmed Phase 12 architecture decisions to:
+
+`docs/VYOM_PROJECT_MEMORY.md`
+
+Do not erase previous project history.
+
+---
+
+# 99. IMPORTANT LIMITS
+
+Do NOT implement:
+
+* unrestricted remote desktop
+* stealth remote access
+* arbitrary device takeover
+* remote keylogging
+* background microphone recording without activation
+* remote camera monitoring
+* silent public internet exposure
+* automatic security-setting modification
+* unapproved installation on remote machines
+* autonomous real-money execution
+* self-replicating software
+* mechanisms preventing the user from disabling/removing VYOM
+
+---
+
+# 100. FINAL VERIFICATION
+
+Do not stop after generating code.
+
+Actually verify:
+
+1. Existing Phase 1–11 functionality still works.
+2. Brain can run independently of the desktop window.
+3. Persistent worker runs scheduled jobs.
+4. Desktop node connects securely.
+5. Mobile/mock node pairs securely.
+6. Unauthorized nodes fail.
+7. Node revocation works.
+8. Heartbeats work.
+9. Task dispatch selects capable nodes.
+10. Duplicate execution is prevented.
+11. Portable task handoff works.
+12. Non-portable task handoff is rejected safely.
+13. Checkpoints persist.
+14. Brain crash recovery works.
+15. Circuit breakers work.
+16. Mobile command creation works.
+17. Mobile approval works.
+18. Approval expiry works.
+19. Offline queue works.
+20. Expired consequential commands do not execute.
+21. Notification state synchronizes.
+22. Remote cancellation works.
+23. Background automation survives UI closure.
+24. Background automation recovery does not duplicate actions.
+25. Backup works.
+26. Restore validates correctly.
+27. Cross-device audit logs work.
+28. System budgets are enforced.
+29. VYOM Core/UI reflects remote work when relevant.
+30. Automated tests pass.
+
+At completion provide:
+
+* files created
+* distributed runtime architecture
+* mobile companion implementation
+* Home Server/worker implementation
+* sync architecture
+* reliability/recovery
+* backup system
+* node security
+* tests run
+* multi-node demo results
+* remaining limitations
+* exact Phase 13 recommendation
+
+Do not claim 24/7 reliability or mobile functionality is complete unless it was actually tested.

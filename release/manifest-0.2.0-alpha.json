@@ -1,0 +1,24 @@
+{
+  "version": "0.2.0",
+  "channel": "alpha",
+  "built_at": "2026-08-16T15:58:37.765320+00:00",
+  "brain_version": "0.2.0",
+  "schema_version": 1,
+  "protocol_version": 1,
+  "included_migrations": [
+    "baseline_schema_v0"
+  ],
+  "updater_artifacts": "signed-updater artifacts not produced (no signing keys configured)",
+  "artifacts": {
+    "vyom.exe": {
+      "path": "src-tauri\\target\\release\\vyom.exe",
+      "sha256": "7aaa3d8c83e5c1fa86b3585fad0b7ed40711345ae2c7f7e5950b7deefcac5000",
+      "bytes": 12251136
+    },
+    "installer": {
+      "path": "src-tauri\\target\\release\\bundle\\nsis\\VYOM_0.2.0_x64-setup.exe",
+      "sha256": "28122d9ce31c2a85a21bd1bcd03c55904bcf0505dc8cf52edc46c8c44b723b93",
+      "bytes": 3138156
+    }
+  }
+}

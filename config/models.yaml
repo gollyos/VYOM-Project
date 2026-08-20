@@ -1,0 +1,115 @@
+version: 1
+
+schema_version: 1
+# NOTE: there is deliberately no `local-rules-v1` / `local` provider entry
+# here. That model was backed by DeterministicProvider, which always
+# reports itself configured and answers every unmatched request with the
+# canned string "The request was processed by VYOM's limited local rules
+# provider." Because it also carried the highest priority (100), it won
+# routing for every natural-language request and made the real
+# application behave like a chatbot. It remains available to the test
+# suite (tests construct it directly), never to the running product.
+models:
+  - provider: google
+    # gemini-2.5-flash / gemini-2.0-flash are 404 "no longer available to
+    # new users" on this key. A tool-calling mission makes several model
+    # calls per goal, so the primary can exhaust its per-day free-tier
+    # quota; the second entry below is a real fallback the router uses
+    # automatically rather than failing the mission.
+    model_id: ${GOOGLE_BRAIN_MODEL_ID:-gemini-3.1-flash-lite}
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: balanced
+    speed_tier: fast
+    cost_tier: low
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_standard
+    priority: 80
+
+  - provider: google
+    model_id: ${GOOGLE_BRAIN_FALLBACK_MODEL_ID:-gemini-flash-lite-latest}
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: balanced
+    speed_tier: fast
+    cost_tier: low
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_standard
+    priority: 75
+
+  - provider: openai
+    model_id: ${OPENAI_MODEL_ID}
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: high
+    speed_tier: balanced
+    cost_tier: medium
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_standard
+    priority: 70
+
+  - provider: anthropic
+    model_id: ${ANTHROPIC_MODEL_ID}
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: high
+    speed_tier: balanced
+    cost_tier: medium
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_standard
+    priority: 70
+
+  - provider: openrouter
+    model_id: ${OPENROUTER_MODEL_ID}
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: configurable
+    speed_tier: configurable
+    cost_tier: configurable
+    context_tier: configurable
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_routed
+    priority: 60
+
+  - provider: deepseek
+    model_id: ${DEEPSEEK_MODEL_ID}
+    enabled: true
+    capabilities: [reasoning, coding, structured_output, general, planning]
+    quality_tier: balanced
+    speed_tier: balanced
+    cost_tier: low
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: false
+    privacy_policy: cloud_standard
+    priority: 60
+
+  - provider: kimi
+    model_id: ${KIMI_MODEL_ID}
+    enabled: true
+    capabilities: [reasoning, coding, research, structured_output, tool_use, general, planning]
+    quality_tier: balanced
+    speed_tier: balanced
+    cost_tier: low
+    context_tier: very_large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: false
+    privacy_policy: cloud_standard
+    priority: 60
+

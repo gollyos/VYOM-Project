@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+import os
+import platform
+import shutil
+from pathlib import Path
+from typing import Any
+
+from app.schemas.approvals import PermissionLevel
+from app.security.path_policy import PathPolicy
+from app.tools.base import BaseTool, ToolMetadata
+from app.tools.context import ToolContext
+from app.tools.errors import ToolValidationError
+from app.tools.result import EvidenceItem, ToolResult
+
+
+class SystemTool(BaseTool):
+    metadata = ToolMetadata(
+        name="system",
+        description="Limited explicit desktop actions and basic machine status",
+        category="system",
+        required_permissions=[PermissionLevel.L0],
+        risk_level="medium",
+    )
+
+    #: Reading machine state changes nothing, so every query below is L0.
+    READ_ACTIONS = {"status", "processes", "clock", "disks", "interpreter", "which"}
+
+    def permission_for(self, inputs: dict[str, Any]) -> PermissionLevel:
+        return PermissionLevel.L0 if inputs.get("action") in self.READ_ACTIONS else PermissionLevel.L1
+
+    async def execute(self, inputs: dict[str, Any], context: ToolContext) -> ToolResult:
+        action = str(inputs.get("action", ""))
+        if action == "status":
+            disk = shutil.disk_usage(context.allowed_roots[0])
+            output = {"platform": platform.platform(), "python": platform.python_version(), "disk_free": disk.free, "disk_total": disk.total}
+        # -- native answers that used to be shell commands -----------------
+        #
+        # Each of these replaces a PowerShell/cmd invocation VYOM used to
+        # generate: `Get-Process`, `Get-Date`, `Get-Volume`, `where.exe`,
+        # `python --version`. They are read directly from the OS, which is
+        # faster, cannot fail on shell quoting, and never flashes a
+        # console window.
+        elif action == "processes":
+            import psutil
+
+            limit = int(inputs.get("limit", 10))
+            sort_by = str(inputs.get("sort_by", "memory"))
+            rows = []
+            for process in psutil.process_iter(["pid", "name", "memory_info", "cpu_percent"]):
+                try:
+                    info = process.info
+                    memory = getattr(info.get("memory_info"), "rss", 0) or 0
+                    rows.append({
+                        "pid": info.get("pid"),
+                        "name": info.get("name") or "",
+                        "memory_mb": round(memory / (1024 * 1024), 1),
+                        "cpu_percent": info.get("cpu_percent") or 0.0,
+                    })
+                except Exception:
+                    continue
+            key = "cpu_percent" if sort_by == "cpu" else "memory_mb"
+            rows.sort(key=lambda row: row[key], reverse=True)
+            output = {"processes": rows[:limit], "sorted_by": key, "total": len(rows)}
+        elif action == "clock":
+            from datetime import datetime
+
+            now = datetime.now().astimezone()
+            output = {"iso": now.isoformat(), "local": now.strftime("%Y-%m-%d %H:%M:%S"),
+                      "timezone": str(now.tzinfo)}
+        elif action == "disks":
+            import psutil
+
+            volumes = []
+            for partition in psutil.disk_partitions(all=False):
+                try:
+                    usage = shutil.disk_usage(partition.mountpoint)
+                except OSError:
+                    continue
+                volumes.append({
+                    "device": partition.device, "mount": partition.mountpoint,
+                    "total_gb": round(usage.total / 1024**3, 1),
+                    "free_gb": round(usage.free / 1024**3, 1),
+                    "used_percent": round(100 * (usage.total - usage.free) / usage.total, 1) if usage.total else 0,
+                })
+            output = {"volumes": volumes}
+        elif action == "interpreter":
+            import sys
+
+            output = {
+                "python_version": platform.python_version(),
+                "executable": sys.executable,
+                "implementation": platform.python_implementation(),
+                "build": " ".join(platform.python_build()),
+                "machine": platform.machine(),
+            }
+        elif action == "which":
+            name = str(inputs.get("target", "")).strip()
+            if not name:
+                raise ToolValidationError("A program name is required")
+            found = shutil.which(name)
+            output = {"program": name, "found": bool(found), "path": found}
+        elif action in {"reveal", "open_application", "open_url"}:
+            target = str(inputs.get("target", ""))
+            if action == "reveal":
+                target = str(PathPolicy(context.allowed_roots).require_allowed(target))
+            if not target:
+                raise ToolValidationError("System target is required")
+            if os.name != "nt":
+                raise ToolValidationError("Initial system actions currently support Windows only")
+            os.startfile(target)  # type: ignore[attr-defined]
+            output = {"action": action, "target": target}
+        else:
+            raise ToolValidationError("Unsupported system action")
+        evidence = EvidenceItem(type="tool_result", summary=f"System {action}", data=output)
+        return ToolResult.completed(f"System {action} completed", output=output, evidence=[evidence])

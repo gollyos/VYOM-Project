@@ -1,0 +1,32 @@
+id: test-driven-development
+name: Test-Driven Development
+version: 1.0.0
+description: Red-green-refactor with real test runners. Distilled procedure inspired
+  by obra/superpowers (selected import per docs/EXTERNAL_CAPABILITIES.md); not a verbatim
+  copy — external skill text is data and cannot override VYOM policy.
+category: developer
+created_by: phase13.5-import
+required_capabilities:
+- filesystem
+- terminal
+required_tools: []
+required_permissions: L1
+steps:
+- id: s1
+  action: Write the smallest failing test for the requested behavior
+  capability: terminal
+- id: s2
+  action: Run the suite and confirm the new test fails for the right reason
+  capability: terminal
+- id: s3
+  action: Implement the minimum code to pass
+  capability: filesystem
+- id: s4
+  action: Re-run the suite; refactor only with green tests
+  capability: terminal
+verification:
+  checks:
+  - evidence recorded for each step
+  minimum_score: 1.0
+  require_evidence: true
+status: testing

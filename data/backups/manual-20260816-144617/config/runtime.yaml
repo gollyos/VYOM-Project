@@ -1,0 +1,54 @@
+version: 1
+
+# Phase 12 persistent multi-device runtime policy.
+# The Brain/automation worker runs 24/7 where deployed (desktop or home
+# server); desktop UI closure never stops permitted background work.
+
+local_node:
+  node_id: brain-local
+  name: VYOM Brain
+  roles: [brain_coordinator, execution_node]
+  # Capabilities published for node routing when the Brain runs locally.
+  capabilities:
+    - task.research
+    - task.artifacts
+    - task.automations
+    - task.email
+    - task.calendar
+
+worker:
+  # True when this process is the always-on worker (home server or
+  # desktop-as-worker). Scheduled automations execute here; jobs that
+  # need desktop-only capabilities wait honestly for a Desktop Node.
+  enabled: true
+  poll_seconds: 5
+  recovery_limit: 10
+
+roles:
+  desktop: [client_device, execution_node]
+  laptop: [client_device, execution_node]
+  mobile: [client_device]
+  home_server: [worker_node, execution_node]
+  cloud_worker: [worker_node]
+
+budgets:
+  daily_model_cost: 5.0
+  daily_research_calls: 50
+  max_concurrent_tasks: 6
+  max_active_agents: 8
+  max_browser_sessions: 3
+
+overnight:
+  # What VYOM may do while the user is away. Research allowed; client
+  # emails draft-only; no desktop control while the PC is offline.
+  allowed_tasks: [research, artifacts, automations, monitoring]
+  client_email_mode: draft_only
+  desktop_control_when_offline: false
+  notify_on: [approval_required, automation_failed, deadline_risk]
+
+power_awareness:
+  low_battery_percent: 20
+  defer_heavy_work_on_battery: true
+
+network_awareness:
+  defer_large_transfers_on: [cellular, poor]

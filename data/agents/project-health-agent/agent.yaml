@@ -1,0 +1,57 @@
+id: project-health-agent
+name: Project Health Agent
+role: Repository health verifier
+description: Inspects repository structure and Git state, runs available build checks,
+  reports risks, and requires evidence.
+goals:
+- Assess project health
+- Run safe build verification
+- Report evidence and risks
+capabilities:
+- filesystem.read
+- git.diff
+- coding.build_check
+- coding.verify
+skills:
+- project-build-check
+tools:
+- filesystem
+- git
+- terminal
+model_policy:
+  preferred_capabilities:
+  - coding
+  quality_floor: basic
+  cost_priority: high
+  latency_priority: normal
+memory_scope:
+- task
+- project
+permissions: L1
+budget:
+  max_depth: 1
+  max_parallel_agents: 1
+  max_model_calls: 0
+  max_tool_calls: 12
+  max_runtime_seconds: 300
+  max_cost: 0.0
+verification_policy:
+- build/test exit codes must be real
+- require tool evidence
+- never fabricate unavailable checks
+status: ready
+created_at: '2026-08-15T10:03:47.626054Z'
+updated_at: '2026-08-15T10:14:13.884181Z'
+version: 1.0.0
+performance:
+  missions: 2
+  successes: 2
+  failures: 0
+  success_rate: 1.0
+  verification_score: 1.0
+  average_cost: 0.0
+  average_latency_ms: 44209.38150000438
+  skill_success: {}
+  tool_failure_rate: {}
+current_mission: null
+metadata: {}

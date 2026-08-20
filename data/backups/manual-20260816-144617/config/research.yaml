@@ -1,0 +1,62 @@
+version: 1
+
+# Deep Research Runtime defaults. See docs/RESEARCH_ARCHITECTURE.md.
+depths:
+  quick:
+    max_queries: 2
+    max_sources: 4
+    max_model_calls: 1
+    max_browser_time_seconds: 30
+    max_cost: 0.02
+    max_runtime_seconds: 45
+  standard:
+    max_queries: 4
+    max_sources: 8
+    max_model_calls: 2
+    max_browser_time_seconds: 90
+    max_cost: 0.10
+    max_runtime_seconds: 120
+  deep:
+    max_queries: 7
+    max_sources: 14
+    max_model_calls: 4
+    max_browser_time_seconds: 240
+    max_cost: 0.35
+    max_runtime_seconds: 300
+  exhaustive:
+    max_queries: 12
+    max_sources: 24
+    max_model_calls: 8
+    max_browser_time_seconds: 600
+    max_cost: 1.00
+    max_runtime_seconds: 600
+
+default_depth: standard
+default_source_diversity: 2
+
+# Search providers are explicit and disconnected unless configured, matching
+# the Phase 7 integration honesty pattern. `local_fixture` is always
+# available for deterministic offline demos/tests and is clearly labeled.
+search_providers:
+  local_fixture:
+    enabled: true
+  browser_search:
+    enabled: false
+    search_url_template: "https://duckduckgo.com/html/?q={query}"
+
+# Source trust policy weights by source_type. See docs/SOURCE_TRUST_POLICY.md.
+trust_weights:
+  official: 0.95
+  government: 0.95
+  documentation: 0.9
+  research_paper: 0.85
+  database: 0.75
+  company: 0.65
+  news: 0.55
+  community: 0.4
+  social: 0.25
+  unknown: 0.2
+
+freshness:
+  default_stale_after_days: 180
+  time_sensitive_stale_after_days: 7

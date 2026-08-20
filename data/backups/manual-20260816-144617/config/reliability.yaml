@@ -1,0 +1,38 @@
+version: 1
+
+# Phase 12 reliability, supervision, and recovery policy.
+
+leases:
+  default_ttl_seconds: 120
+  heartbeat_extend_seconds: 120
+
+supervisor:
+  poll_seconds: 30
+  # Bounded recovery: after max_recovery_attempts a stuck task is
+  # paused and the user is notified — never endless restarts.
+  max_recovery_attempts: 3
+  stall_seconds: 300
+  repeated_failure_threshold: 3
+
+circuit_breakers:
+  failure_threshold: 5
+  cooldown_seconds: 60
+  half_open_successes_to_close: 2
+
+recovery:
+  # After a Brain restart, tasks with evidence of external actions go
+  # to needs_review; only checkpointed non-consequential work resumes.
+  consequential_needs_review: true
+
+approvals:
+  remote_ttl_seconds: 1800
+  l3_requires_strong_verification: true
+
+backup:
+  root: data/backups
+  schedule: manual        # manual | daily | weekly
+  retention: 10
+  encrypt_sensitive: true
+  exclude:
+    - secrets
+    - node_modules

@@ -1,0 +1,34 @@
+version: 1
+
+# Phase 13 security policy. Strict validation: unknown keys here fail
+# startup rather than silently using defaults.
+
+bind: 127.0.0.1
+debug_mode: false
+
+sessions:
+  ttl_seconds: 3600
+  max_per_device: 3
+
+api:
+  max_body_bytes: 1000000
+  max_fields: 200
+  require_authentication_non_loopback: true
+  cors_origins:
+    - http://localhost:1420
+    - http://127.0.0.1:1420
+    - tauri://localhost
+    - https://tauri.localhost
+    # Tauri v2 on Windows serves the packaged app from this origin.
+    - http://tauri.localhost
+
+redaction:
+  enabled: true
+  # Patterns are centralized in app/security/redaction.py; this section
+  # documents policy and leaves the implementation single-sourced.
+
+rate_limits:
+  remote_device: {limit: 60, window_seconds: 60}
+  provider: {limit: 120, window_seconds: 60}
+  agent: {limit: 120, window_seconds: 60}
+  automation: {limit: 60, window_seconds: 60}

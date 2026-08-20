@@ -1,0 +1,26 @@
+[package]
+name = "vyom"
+version = "0.2.0"
+description = "VYOM native personal AI environment"
+authors = ["Gunjan Shah"]
+edition = "2021"
+
+[lib]
+name = "vyom_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+dotenvy = "0.15"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-notification = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-global-shortcut = "2"
+tokio = { version = "1", features = ["sync", "macros", "net", "process", "time", "io-util", "rt"] }
+tokio-tungstenite = { version = "0.27", features = ["rustls-tls-webpki-roots"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }

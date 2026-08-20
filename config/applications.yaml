@@ -1,0 +1,144 @@
+version: 1
+
+# Known-application seeds for the Application Registry.
+#
+# Resolution order per app at launch time: protocol `uri` -> packaged
+# `aumid` -> resolved `executable`. Executables are resolved at load from
+# PATH, the Windows App Paths registry, the standard install roots, and
+# the Start Menu -- VYOM never assumes a hard-coded path exists without
+# checking, and never treats "absent from PATH" as "not installed".
+#
+# `process_names` is what the app actually runs as once started; it is how
+# liveness and close are VERIFIED against the real process table rather
+# than against a launcher pid that has already exited.
+# See docs/NATIVE_APP_AUTOMATION.md.
+applications:
+  - app_id: vscode
+    name: Visual Studio Code
+    executable_candidates: ["code", "code.cmd"]
+    launch_method: cli
+    integration_type: cli
+    supported_actions: [open, open_path, focus, close, status]
+    process_names: ["code.exe"]
+    window_title: Visual Studio Code
+    trust: trusted
+
+  - app_id: terminal
+    name: Windows Terminal
+    executable_candidates: ["wt", "wt.exe"]
+    launch_method: cli
+    integration_type: cli
+    supported_actions: [open, focus, close, status]
+    process_names: ["windowsterminal.exe"]
+    window_title: Terminal
+    trust: trusted
+
+  # Windows 11 ships Calculator as a packaged app. `calc.exe` is a stub
+  # that hands off to CalculatorApp.exe and exits immediately, which is
+  # why a pid-based check reported it "not running" while it was plainly
+  # on screen. The AUMID is the route the Start Menu itself uses.
+  - app_id: calculator
+    name: Calculator
+    executable_candidates: ["calc", "calc.exe"]
+    aumid: Microsoft.WindowsCalculator_8wekyb3d8bbwe!App
+    launch_method: native
+    integration_type: accessibility
+    supported_actions: [open, focus, close, status, ui_invoke, ui_read]
+    process_names: ["calculatorapp.exe", "calculator.exe"]
+    window_title: Calculator
+    trust: trusted
+
+  - app_id: paint
+    name: Paint
+    executable_candidates: ["mspaint", "mspaint.exe"]
+    launch_method: native
+    integration_type: accessibility
+    supported_actions: [open, focus, close, status]
+    process_names: ["mspaint.exe", "paintstudio.view.exe"]
+    window_title: Paint
+    trust: trusted
+
+  - app_id: notepad
+    name: Notepad
+    executable_candidates: ["notepad", "notepad.exe"]
+    launch_method: native
+    integration_type: accessibility
+    supported_actions: [open, focus, close, status, ui_invoke, ui_read]
+    process_names: ["notepad.exe"]
+    window_title: Notepad
+    trust: trusted
+
+  - app_id: chrome
+    name: Google Chrome
+    executable_candidates: ["chrome", "chrome.exe"]
+    launch_method: native
+    integration_type: browser
+    supported_actions: [open, focus, close, status]
+    process_names: ["chrome.exe"]
+    window_title: Chrome
+    trust: restricted
+
+  - app_id: edge
+    name: Microsoft Edge
+    executable_candidates: ["msedge", "msedge.exe"]
+    launch_method: native
+    integration_type: browser
+    supported_actions: [open, focus, close, status]
+    process_names: ["msedge.exe"]
+    window_title: Edge
+    trust: restricted
+
+  - app_id: file_explorer
+    name: File Explorer
+    executable_candidates: ["explorer", "explorer.exe"]
+    launch_method: native
+    integration_type: native_api
+    supported_actions: [open, open_path, focus, status]
+    process_names: ["explorer.exe"]
+    window_title: File Explorer
+    trust: trusted
+
+  # Settings has no executable. `ms-settings:` is its real, documented
+  # activation surface -- this is what removes any reason to drive the
+  # Settings UI through a shell command.
+  - app_id: settings
+    name: Settings
+    executable_candidates: []
+    uri: "ms-settings:"
+    launch_method: uri
+    integration_type: accessibility
+    supported_actions: [open, focus, close, status]
+    process_names: ["systemsettings.exe"]
+    window_title: Settings
+    trust: trusted
+
+  - app_id: task_manager
+    name: Task Manager
+    executable_candidates: ["taskmgr", "taskmgr.exe"]
+    launch_method: native
+    integration_type: native_api
+    supported_actions: [open, focus, status]
+    process_names: ["taskmgr.exe"]
+    window_title: Task Manager
+    trust: trusted
+
+# Named pages inside Settings, addressed by their own protocol URIs. This
+# is why "Bluetooth settings kholo" needs no shell and no UI navigation:
+# Windows opens the exact page directly.
+settings_pages:
+  bluetooth: "ms-settings:bluetooth"
+  wifi: "ms-settings:network-wifi"
+  network: "ms-settings:network"
+  display: "ms-settings:display"
+  sound: "ms-settings:sound"
+  battery: "ms-settings:batterysaver"
+  storage: "ms-settings:storagesense"
+  apps: "ms-settings:appsfeatures"
+  printers: "ms-settings:printers"
+  privacy: "ms-settings:privacy"
+  windowsupdate: "ms-settings:windowsupdate"
+  personalisation: "ms-settings:personalization"
+  personalization: "ms-settings:personalization"
+  notifications: "ms-settings:notifications"
+  power: "ms-settings:powersleep"
+  defaultapps: "ms-settings:defaultapps"

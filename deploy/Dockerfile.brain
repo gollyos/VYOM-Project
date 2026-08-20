@@ -1,0 +1,23 @@
+# VYOM Brain home-server worker image.
+# The desktop Tauri app stays native/local; this image is for the
+# always-on worker node (brain + scheduler) on a home server/Docker host.
+FROM python:3.12-slim
+
+WORKDIR /vyom
+
+COPY services/brain/pyproject.toml services/brain/README.md* ./services/brain/
+COPY services/brain/app ./services/brain/app
+COPY services/brain/scripts ./services/brain/scripts
+COPY config ./config
+
+RUN pip install --no-cache-dir -e ./services/brain[prod] || pip install --no-cache-dir -e ./services/brain
+
+# Bind localhost inside the container; publishing is explicit in
+# docker-compose and defaults to loopback only.
+ENV VYOM_BRAIN_HOST=0.0.0.0
+ENV VYOM_BRAIN_PORT=7788
+EXPOSE 7788
+
+VOLUME ["/vyom/data"]
+
+CMD ["python", "-m", "app.main"]

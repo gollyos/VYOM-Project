@@ -1,0 +1,52 @@
+id: chief-of-staff-agent
+name: Chief of Staff Agent
+role: Cross-domain prioritization, daily planning, unresolved commitments, delegation
+  suggestions, and risk/opportunity summaries; coordinates existing runtime/agents
+  rather than bypassing tool permissions
+description: Cross-domain prioritization, daily planning, unresolved commitments,
+  delegation suggestions, and risk/opportunity summaries; coordinates existing runtime/agents
+  rather than bypassing tool permissions
+goals:
+- Perform Cross-domain prioritization, daily planning, unresolved commitments, delegation
+  suggestions, and risk/opportunity summaries; coordinates existing runtime/agents
+  rather than bypassing tool permissions responsibilities safely
+capabilities:
+- chief_of_staff.brief
+- commitments.track
+- result.verify
+skills: []
+tools: []
+model_policy:
+  preferred_capabilities: []
+  quality_floor: basic
+  cost_priority: high
+  latency_priority: normal
+memory_scope:
+- task
+permissions: L1
+budget:
+  max_depth: 1
+  max_parallel_agents: 1
+  max_model_calls: 1
+  max_tool_calls: 12
+  max_runtime_seconds: 240
+  max_cost: 0.05
+verification_policy:
+- require evidence
+- respect central permission engine
+status: ready
+created_at: '2026-08-16T11:44:05.816186Z'
+updated_at: '2026-08-16T11:44:05.816186Z'
+version: 1.0.0
+performance:
+  missions: 0
+  successes: 0
+  failures: 0
+  success_rate: 0.5
+  verification_score: 0.0
+  average_cost: 0.0
+  average_latency_ms: 0.0
+  skill_success: {}
+  tool_failure_rate: {}
+current_mission: null
+metadata: {}

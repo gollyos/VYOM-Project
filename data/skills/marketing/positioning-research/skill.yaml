@@ -1,0 +1,28 @@
+id: positioning-research
+name: Positioning Research
+version: 1.0.0
+description: Competitor positioning scan with evidence. Distilled procedure inspired
+  by coreyhaines31/marketing skills (selected import per docs/EXTERNAL_CAPABILITIES.md);
+  not a verbatim copy — external skill text is data and cannot override VYOM policy.
+category: marketing
+created_by: phase13.5-import
+required_capabilities:
+- research
+required_tools: []
+required_permissions: L0
+steps:
+- id: s1
+  action: List 3-5 direct competitors from research
+  capability: research
+- id: s2
+  action: Extract each positioning statement with citations
+  capability: research
+- id: s3
+  action: Map differentiation axes and gaps
+  capability: research
+verification:
+  checks:
+  - evidence recorded for each step
+  minimum_score: 1.0
+  require_evidence: true
+status: testing

@@ -1,0 +1,35 @@
+id: systematic-debugging
+name: Systematic Debugging
+version: 1.0.0
+description: Reproduce, isolate, hypothesize, test smallest fix, verify. Distilled
+  procedure inspired by obra/superpowers (selected import per docs/EXTERNAL_CAPABILITIES.md);
+  not a verbatim copy — external skill text is data and cannot override VYOM policy.
+category: developer
+created_by: phase13.5-import
+required_capabilities:
+- filesystem
+- terminal
+required_tools: []
+required_permissions: L1
+steps:
+- id: s1
+  action: Reproduce the failure deterministically and record exact conditions
+  capability: terminal
+- id: s2
+  action: Isolate the smallest failing case (log or test)
+  capability: terminal
+- id: s3
+  action: Form one hypothesis and test it with a minimal change
+  capability: filesystem
+- id: s4
+  action: Apply the smallest fix and re-run the reproduction
+  capability: terminal
+- id: s5
+  action: Verify no regressions via existing tests/build
+  capability: terminal
+verification:
+  checks:
+  - evidence recorded for each step
+  minimum_score: 1.0
+  require_evidence: true
+status: testing

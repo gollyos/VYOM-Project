@@ -1,0 +1,47 @@
+version: 1
+
+# Market Data Provider Policy. See docs/MARKET_DATA_POLICY.md.
+#
+# Providers are explicit and disconnected unless configured, matching the
+# Phase 7/8 integration honesty pattern. `local_fixture` is always enabled
+# so market analysis, portfolio analytics, and tests work offline without a
+# paid data subscription; it is always clearly labeled `local-fixture` and
+# is never presented as a live quote.
+
+providers:
+  local_fixture:
+    enabled: true
+    provider_id: local-fixture
+    capabilities: [quotes, candles, historical_prices, fundamentals, company_metadata, indices, crypto, forex, market_status]
+    markets_supported: [US_EQUITY, CRYPTO, FOREX, INDEX]
+    cost_policy: free
+    rate_limits: { requests_per_minute: 1000 }
+  live_market_data:
+    enabled: false
+    provider_id: live-market-data
+    capabilities: [quotes, candles, historical_prices, fundamentals, company_metadata, indices, crypto, forex, market_status]
+    markets_supported: [US_EQUITY, CRYPTO, FOREX, INDEX]
+    cost_policy: subscription
+    rate_limits: { requests_per_minute: 60 }
+    # No credentials are configured in this repository. Enabling this entry
+    # without a real adapter/credentials must not be treated as a live
+    # source; ProviderRegistry only reports a provider "available" when a
+    # working adapter is actually registered.
+
+default_provider: local-fixture
+
+freshness:
+  live_max_age_seconds: 15
+  delayed_max_age_seconds: 900
+  cached_max_age_seconds: 86400
+  # Beyond cached_max_age_seconds a value is `historical`, not `cached`.
+
+cache:
+  historical_candles_ttl_seconds: 3600
+  quote_ttl_seconds: 5
+  fundamentals_ttl_seconds: 86400
+
+data_quality:
+  # If a required provider is stale/unavailable beyond this window, dependent
+  # paper automation must pause rather than act on stale data.
+  max_stale_seconds_before_pause: 1800

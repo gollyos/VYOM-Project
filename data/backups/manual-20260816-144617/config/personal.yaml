@@ -1,0 +1,22 @@
+version: 1
+
+# Personal profile defaults. See docs/PERSONAL_OS.md. VYOM learns these
+# gradually from explicit user input and verified behavior — nothing here
+# is required, and no field is invented.
+
+defaults:
+  timezone: Asia/Calcutta
+  working_hours: { start: "09:00", end: "18:00" }
+  quiet_hours: { start: "23:00", end: "07:00" }
+
+privacy:
+  # Personal-life data (routines, habits, productivity patterns, sleep
+  # data, personal commitments) defaults to `sensitive`
+  # (docs/MEMORY_ARCHITECTURE.md). Only the minimum relevant fields are
+  # ever included in a model-routed prompt.
+  default_sensitivity: sensitive
+  profile_field_expiry_days: 120   # a learned preference is revalidated after this many days
+
+context_isolation:
+  # rule 53: client/business outputs never include personal data.
+  strip_personal_fields_from_client_context: true

@@ -1,0 +1,20 @@
+version: 1
+embeddings:
+  provider: local_hash
+  dimensions: 96
+  allow_remote: false
+retrieval:
+  default_limit: 8
+  max_candidates: 500
+  project_context_boost: 0.18
+consolidation:
+  minimum_importance: 0.45
+  save_verified_tasks: true
+privacy:
+  default_sensitivity: normal
+  external_model_max_sensitivity: sensitive
+  reject_secret_patterns: true
+learning:
+  event_driven_only: true
+  minimum_lesson_confidence: 0.65
+  max_lessons_per_task: 2

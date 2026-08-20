@@ -1,0 +1,60 @@
+INFO:     Started server process [21224]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:7788 (Press CTRL+C to quit)
+INFO:     127.0.0.1:51482 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:51483 - "GET /api/tasks/task_964f9a0a666145a1a739cb5cb3ee8afd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51484 - "GET /api/tasks/task_964f9a0a666145a1a739cb5cb3ee8afd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52859 - "GET /api/tasks/task_964f9a0a666145a1a739cb5cb3ee8afd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52860 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:52861 - "GET /api/tasks/task_20d24bf8d8274501a38bc93f9f6658ab HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52862 - "GET /api/tasks/task_20d24bf8d8274501a38bc93f9f6658ab HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52863 - "GET /api/tasks/task_20d24bf8d8274501a38bc93f9f6658ab HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60422 - "GET /api/tasks/task_20d24bf8d8274501a38bc93f9f6658ab HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60423 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:60424 - "GET /api/tasks/task_1e7bf03fd48246ada557626232b3642f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60425 - "GET /api/tasks/task_1e7bf03fd48246ada557626232b3642f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60426 - "GET /api/tasks/task_1e7bf03fd48246ada557626232b3642f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60427 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:60428 - "GET /api/tasks/task_265f8b13dc934b0ab09adbe7687c43d4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60430 - "GET /api/tasks/task_265f8b13dc934b0ab09adbe7687c43d4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60431 - "GET /api/tasks/task_265f8b13dc934b0ab09adbe7687c43d4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60432 - "GET /api/tasks/task_265f8b13dc934b0ab09adbe7687c43d4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60433 - "GET /api/tasks/task_265f8b13dc934b0ab09adbe7687c43d4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60434 - "GET /api/tasks/task_265f8b13dc934b0ab09adbe7687c43d4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60435 - "GET /api/tasks/task_265f8b13dc934b0ab09adbe7687c43d4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60436 - "GET /api/tasks/task_265f8b13dc934b0ab09adbe7687c43d4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60439 - "GET /api/tasks/task_265f8b13dc934b0ab09adbe7687c43d4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60442 - "GET /api/tasks/task_265f8b13dc934b0ab09adbe7687c43d4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60446 - "GET /api/tasks/task_265f8b13dc934b0ab09adbe7687c43d4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60447 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:60448 - "GET /api/tasks/task_c02a6efc592047a7a324f6bf0c899900 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60450 - "GET /api/tasks/task_c02a6efc592047a7a324f6bf0c899900 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60451 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:60452 - "GET /api/tasks/task_9f082d9e185a4468b8ec2b9f93301607 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60453 - "GET /api/tasks/task_9f082d9e185a4468b8ec2b9f93301607 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60454 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:60455 - "GET /api/tasks/task_e5b949ebd6d14252a2a243c8c4f07acd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60459 - "GET /api/tasks/task_e5b949ebd6d14252a2a243c8c4f07acd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60460 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:60461 - "GET /api/tasks/task_5566b5f0a6284d56afb547586794245e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60468 - "GET /api/tasks/task_5566b5f0a6284d56afb547586794245e HTTP/1.1" 200 OK
+INFO:     Started server process [17552]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:7788 (Press CTRL+C to quit)
+INFO:     127.0.0.1:62872 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:62873 - "GET /api/tasks/task_a6493b78e8a04854b6277df94c57f4a1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49672 - "GET /api/tasks/task_a6493b78e8a04854b6277df94c57f4a1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49677 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:49678 - "GET /api/tasks/task_962a0e56bca2417e93d04421f8e5bdd0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49679 - "GET /api/tasks/task_962a0e56bca2417e93d04421f8e5bdd0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59370 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:59371 - "GET /api/tasks/task_0e066c0fbdc9401eadd28bc84971cc37 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59373 - "GET /api/tasks/task_0e066c0fbdc9401eadd28bc84971cc37 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59374 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:59375 - "GET /api/tasks/task_0071f228c6384972a0bbab9b129c1592 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59376 - "GET /api/tasks/task_0071f228c6384972a0bbab9b129c1592 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59377 - "POST /api/tasks HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:59378 - "GET /api/tasks/task_87a7803f6d4d46689db09d98c380f226 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61085 - "GET /api/tasks/task_87a7803f6d4d46689db09d98c380f226 HTTP/1.1" 200 OK

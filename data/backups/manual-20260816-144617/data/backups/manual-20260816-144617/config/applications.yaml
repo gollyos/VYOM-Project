@@ -1,0 +1,45 @@
+version: 1
+
+# Known-application seeds for the Application Registry. Executables are
+# resolved at runtime (PATH / common install locations); VYOM never assumes
+# a hard-coded path exists without checking. See docs/NATIVE_APP_AUTOMATION.md.
+applications:
+  - app_id: vscode
+    name: Visual Studio Code
+    executable_candidates: ["code", "code.cmd"]
+    launch_method: cli
+    integration_type: cli
+    supported_actions: [open, open_path, focus, close, status]
+    trust: trusted
+
+  - app_id: terminal
+    name: Windows Terminal
+    executable_candidates: ["wt", "wt.exe"]
+    launch_method: cli
+    integration_type: cli
+    supported_actions: [open, focus, close, status]
+    trust: trusted
+
+  - app_id: notepad
+    name: Notepad
+    executable_candidates: ["notepad", "notepad.exe"]
+    launch_method: native
+    integration_type: native_api
+    supported_actions: [open, focus, close, status]
+    trust: trusted
+
+  - app_id: chrome
+    name: Google Chrome
+    executable_candidates: ["chrome", "chrome.exe"]
+    launch_method: native
+    integration_type: visual_fallback
+    supported_actions: [open, focus, close, status]
+    trust: restricted
+
+  - app_id: file_explorer
+    name: File Explorer
+    executable_candidates: ["explorer", "explorer.exe"]
+    launch_method: native
+    integration_type: native_api
+    supported_actions: [open, focus, status]
+    trust: trusted

@@ -1,0 +1,47 @@
+version: 1
+
+# Phase 12 cross-device synchronization policy.
+
+entities:
+  # Only shared operational state replicates. Large private files never
+  # replicate automatically; memory replicates as metadata only.
+  - tasks
+  - task_events
+  - approvals
+  - agents
+  - automations
+  - memory_metadata
+  - goals
+  - notifications
+  - device_states
+
+journal:
+  append_only: true
+  pull_batch_limit: 500
+
+conflict_policy:
+  tasks: terminal_state_wins
+  task_events: coordinator_wins
+  approvals: coordinator_wins
+  agents: coordinator_wins
+  automations: field_merge
+  memory_metadata: coordinator_wins
+  goals: field_merge
+  notifications: coordinator_wins
+  device_states: coordinator_wins
+
+freshness_windows_seconds:
+  tasks: 15
+  task_events: 15
+  approvals: 20
+  notifications: 60
+  device_states: 30
+  agents: 120
+  automations: 120
+  goals: 300
+  memory_metadata: 300
+
+offline_queue:
+  safe_command_ttl_seconds: 86400
+  consequential_command_ttl_seconds: 300
+  consequential_requires_reconfirmation: true

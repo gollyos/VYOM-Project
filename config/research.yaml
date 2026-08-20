@@ -1,0 +1,112 @@
+version: 1
+
+# Deep Research Runtime defaults. See docs/RESEARCH_ARCHITECTURE.md.
+depths:
+  quick:
+    max_queries: 2
+    max_sources: 4
+    max_model_calls: 1
+    max_browser_time_seconds: 30
+    max_cost: 0.02
+    max_runtime_seconds: 45
+  standard:
+    max_queries: 4
+    max_sources: 8
+    max_model_calls: 2
+    max_browser_time_seconds: 90
+    max_cost: 0.10
+    max_runtime_seconds: 120
+  deep:
+    max_queries: 7
+    max_sources: 14
+    max_model_calls: 4
+    max_browser_time_seconds: 240
+    max_cost: 0.35
+    max_runtime_seconds: 300
+  exhaustive:
+    max_queries: 12
+    max_sources: 24
+    max_model_calls: 8
+    max_browser_time_seconds: 600
+    max_cost: 1.00
+    max_runtime_seconds: 600
+
+default_depth: standard
+default_source_diversity: 2
+
+# Search providers are explicit and disconnected unless configured, matching
+# the Phase 7 integration honesty pattern. `local_fixture` is always
+# available for deterministic offline demos/tests and is clearly labeled.
+search_providers:
+  local_fixture:
+    enabled: true
+  browser_search:
+    enabled: false
+    search_url_template: "https://duckduckgo.com/html/?q={query}"
+
+# Source trust policy weights by source_type. See docs/SOURCE_TRUST_POLICY.md.
+trust_weights:
+  official: 0.95
+  government: 0.95
+  documentation: 0.9
+  research_paper: 0.85
+  database: 0.75
+  company: 0.65
+  news: 0.55
+  community: 0.4
+  social: 0.25
+  unknown: 0.2
+
+freshness:
+  default_stale_after_days: 180
+  time_sensitive_stale_after_days: 7
+
+# Multi-retailer product comparison. VYOM visits each ENABLED retailer
+# itself through the registered browser tool, extracts real product cards,
+# and compares them. A retailer whose bot protection refuses automated
+# browsers is reported as blocked - never substituted with invented
+# products, and never bypassed.
+#
+# Measured against the live sites (2026-08-17):
+#   flipkart  - serves normal HTML to a configured browser: ENABLED
+#   amazon_in - returns a non-HTML download response instead of the search
+#               page; the supported route is the Product Advertising API
+#               with the user's own credentials: DISABLED until configured
+#   meesho    - CDN returns "Access Denied" before the page loads: DISABLED
+shopping:
+  max_results_per_retailer: 8
+  page_settle_ms: 3500
+  retailers:
+    - id: flipkart
+      name: Flipkart
+      enabled: true
+      search_url: "https://www.flipkart.com/search?q={query}"
+      base_url: "https://www.flipkart.com"
+      card_selector: "div[data-id]"
+      # Flipkart card text arrives as: brand, title, price block, badges.
+      price_pattern: '\u20b9([0-9,]+)'
+      rating_pattern: '([0-9]\.[0-9])'
+    - id: amazon_in
+      name: Amazon.in
+      enabled: false
+      disabled_reason: >-
+        Amazon.in responds to an automated browser with a file download
+        instead of the search results page. Enable this only with
+        Product Advertising API credentials; VYOM will not attempt to
+        defeat the bot protection.
+      search_url: "https://www.amazon.in/s?k={query}"
+      base_url: "https://www.amazon.in"
+      card_selector: "div[data-component-type='s-search-result']"
+      price_pattern: '\u20b9?([0-9,]+)'
+      rating_pattern: '([0-9]\.[0-9]) out of 5'
+    - id: meesho
+      name: Meesho
+      enabled: false
+      disabled_reason: >-
+        Meesho's CDN returns "Access Denied" to automated browsers before
+        the page loads. No supported automation route is configured.
+      search_url: "https://www.meesho.com/search?q={query}"
+      base_url: "https://www.meesho.com"
+      card_selector: "div[data-testid='product-card']"
+      price_pattern: '\u20b9([0-9,]+)'
+      rating_pattern: '([0-9]\.[0-9])'

@@ -1,0 +1,32 @@
+version: 1
+
+# Phase 14 adaptive cognitive layer. Model names live in the existing
+# model registry, never here.
+
+enabled: true
+
+retrieval:
+  max_retrieved_experiences: 5
+  experience_decay_half_life_days: 90
+
+learning:
+  minimum_learning_confidence: 0.5
+  consolidation_threshold: 5
+  experience_retention_days: 365
+
+strategies:
+  decay_half_life_days: 60
+  minimum_strategy_sample: 5
+  regime_weight: 0.5
+  recency_weight: 0.3
+  promote_threshold: 0.6
+  allow_paper_strategy_adaptation: true
+
+exploration:
+  rate: 0.1
+  max_experiments_per_day: 3
+
+trading:
+  minimum_strategy_sample: 8
+  regime_weight: 0.6
+  recency_weight: 0.2

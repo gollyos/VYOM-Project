@@ -1,0 +1,30 @@
+version: 1
+
+# Browser Agent 2.0 bounded operation policy. See docs/BROWSER_AGENT.md.
+recovery:
+  max_retries_per_action: 3
+  retry_backoff_ms: [250, 750, 1500]
+  known_overlays:
+    - "cookie"
+    - "consent"
+    - "subscribe"
+    - "newsletter"
+    - "modal"
+
+session_memory:
+  max_completed_actions: 50
+  max_navigation_history: 25
+  persist_credentials: false
+
+form_filling:
+  require_field_preview: true
+  consequential_actions:
+    - "submit"
+    - "purchase"
+    - "pay"
+    - "confirm_order"
+    - "delete_account"
+
+visibility:
+  live_preview_default: hidden
+  live_preview_command: "show me what you're doing"
