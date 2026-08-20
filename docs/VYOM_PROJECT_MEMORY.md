@@ -312,6 +312,77 @@ V0 first proves voice → intent → state → dynamic visuals → return to bio
 
 VYOM should feel like **a living personal AI environment that understands the user's work and life, autonomously performs tasks, chooses the best tools and models, learns from outcomes, and constructs the exact visual workspace needed in response to voice.**
 
+## Persistent Operator Contract Clarification — 2026-08-20
+
+- VYOM is one persistent personal operator, not a chatbot, dashboard,
+  collection of tools, or team of competing agents. Models, Tauri, voice,
+  graphs, integrations, and external automation systems are replaceable
+  resources around the one Brain-owned control loop.
+- Every input source — desktop voice/text, authenticated phone command,
+  durable schedule/cron event, commitment, or approved recovery — must enter
+  the same command/goal ownership path and retain its source, task identity,
+  context scope, permission, evidence, and terminal result.
+- At least ten independent tasks may be owned concurrently without one new
+  command cancelling another or allowing context, events, approvals,
+  observations, results, or memory writes to cross task boundaries. A revised
+  transcription of the same acoustic utterance may explicitly supersede its
+  earlier partial task; an independent utterance may not.
+- Natural chained commands intentionally share an evolving scoped context
+  (for example the same Chrome profile/tab). Independent tasks and different
+  phone/desktop sessions do not share ephemeral referents merely because they
+  run at the same time.
+- Scheduled and recurring work is durable, timezone-aware, idempotent,
+  restart-recoverable, and command-bus-owned. Schedules do not gain extra
+  authority: consequential effects still require the appropriate approval,
+  and every run must produce an observable, verified task result.
+- The phone is an authenticated client of the same Brain, never a second
+  Brain. Pairing, session identity, replay protection, revocation, scoped
+  permissions, remote cancellation, and strong confirmation for L3 remain
+  mandatory.
+- Windows and installed-application coverage should be comprehensive through
+  live capability discovery and the ordered native/API -> accessibility/UIA
+  -> browser -> controlled input fallback. Comprehensive capability does not
+  mean unrestricted model authority: every effect is task-scoped,
+  permission-checked, cancellable, auditable, and verified.
+- Durable user/client/project facts and original command history must remain
+  recallable across decade-scale retention by date/entity/project. Corrections
+  change current truth by supersession without erasing the historical record.
+- Verified project procedures and experience are reused; volatile claims such
+  as current application versions, new n8n nodes/features, prices, laws, or
+  product behavior require freshness-gated live evidence before being stated
+  as current. Old useful knowledge is versioned, not forgotten.
+- Optimize continuity and ownership, not the number of tools, integrations,
+  agents, tests, files, or architectural layers. The authority sequence is:
+  Command -> Context -> Reality -> Capability -> Action/Permission ->
+  Whole-goal Success -> truthful result and evidence-backed learning.
+
+## External Operator Reference Direction — 2026-08-20
+
+- The user explicitly wants VYOM to reach the practical command-to-work depth
+  demonstrated by current personal operators and AI-employee products, with
+  Hermes Agent, Graphify, Myraa/Maya-style systems, HunteAI/Maya, and recent
+  YouTube demonstrations named as research inputs.
+- These references do not replace VYOM's identity. Adopt useful mechanisms,
+  not another product's UI or a second Brain. The detailed dated mapping is in
+  `docs/VYOM_OPERATOR_REFERENCE_RESEARCH_2026-08-20.md`.
+- Hermes confirms the value of one core across channels, a narrow core with
+  capabilities at the edges, procedural skills, bounded delegation, durable
+  schedules, isolated contexts, and delivery back to the requesting channel.
+- Graphify confirms that a deterministic, provenance-labelled, on-device code
+  graph can support impact/context retrieval. A graph remains a replaceable
+  map around VYOM's durable goals, memory, permissions, actions, and evidence;
+  it never becomes the intelligence or command owner.
+- Maya-style professional workflows confirm the product shape objective ->
+  sub-objectives -> instructions -> tools -> verified outcome, plus schedules,
+  event triggers, feedback-driven instruction updates, and automated quality
+  checks. Reusable professional roles are workflow packs owned by one VYOM.
+- Recent video demonstrations may discover interaction and workflow patterns,
+  but must be transcript/date/version recorded and cross-checked against
+  official documentation/source before implementation. A demo is not proof.
+- The exact public products meant by `Myraa` and `HunteAI Maya` were not
+  reliably identifiable from the names alone on 2026-08-20. Similar-name
+  findings must not be silently treated as the user's intended reference.
+
 ## Phase 7 Confirmed Decisions — 2026-08-15
 
 - Daily-work capabilities live behind Brain-side provider interfaces and a persistent Integration Registry; frontend code never owns OAuth tokens or provider logic.

@@ -754,6 +754,47 @@ def create_app(
         intelligence_engine.personal_profile_service = personal_profile_service
 
         async def execute_automation(definition):
+            if definition.action == "run_vyom_command":
+                from app.schemas.tasks import ActionProvenance, TaskCreate, TaskStatus
+
+                command = str((definition.condition or {}).get("command", "")).strip()
+                if not command:
+                    raise RuntimeError("Scheduled VYOM command is empty")
+                created = await runtime.create_task(
+                    TaskCreate(
+                        user_request=command,
+                        context_id=f"schedule:{definition.id}",
+                        source=f"schedule:{definition.id}",
+                        correlation_id=f"schedule:{definition.id}:{definition.run_count + 1}",
+                    ),
+                    provenance=ActionProvenance.APPROVED_SCHEDULE,
+                )
+                deadline = asyncio.get_running_loop().time() + definition.budget.max_runtime_seconds
+                while asyncio.get_running_loop().time() < deadline:
+                    current = await task_store.get(created.id)
+                    if current and current.status in {
+                        TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED,
+                        TaskStatus.NEEDS_APPROVAL, TaskStatus.PAUSED,
+                    }:
+                        if current.status == TaskStatus.COMPLETED:
+                            return {
+                                "summary": current.result.response if current.result else "Scheduled task completed",
+                                "acted": True,
+                                "task_id": current.id,
+                                "task_status": current.status.value,
+                                "goal_verification": current.metadata.get("goal_verification"),
+                            }
+                        if current.status in {TaskStatus.NEEDS_APPROVAL, TaskStatus.PAUSED}:
+                            return {
+                                "summary": "Scheduled task is waiting for required approval",
+                                "acted": False,
+                                "awaiting_approval": True,
+                                "task_id": current.id,
+                                "task_status": current.status.value,
+                            }
+                        raise RuntimeError(current.error or f"Scheduled task ended as {current.status.value}")
+                    await asyncio.sleep(0.05)
+                raise TimeoutError(f"Scheduled task {created.id} exceeded its runtime budget")
             if definition.action == "prepare_agency_briefing":
                 briefing = await briefing_service.generate()
                 return {"summary": briefing.summary, "generated_at": briefing.generated_at.isoformat()}
@@ -1470,6 +1511,7 @@ def create_app(
         runtime.memory_retriever = MemoryRetriever(memory_store, embedding_provider)
         runtime.memory_store = memory_store
         runtime.memory_manager = memory_manager
+        runtime.automation_store = automation_store
         # Phase 12 crash recovery runs BEFORE any task is restarted: a
         # consequential task with evidence of a partial external action
         # (or one owned by another node) must never be blindly

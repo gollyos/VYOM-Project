@@ -19,6 +19,11 @@ class MemoryRetriever:
             project_id=query.project_id,
             client_id=query.client_id,
             agent_id=query.agent_id,
+            entities=query.entities or None,
+            sources=query.sources or None,
+            created_after=query.created_after,
+            created_before=query.created_before,
+            include_expired=query.include_expired,
             max_sensitivity=query.max_sensitivity,
             verification_states=query.verification_states or None,
         )
@@ -26,7 +31,10 @@ class MemoryRetriever:
         query_embedding = await self.embeddings.embed(query.text) if query.text else None
         ranked: list[MemorySearchResult] = []
         for memory in candidates:
-            if memory.verification_state == VerificationState.SUPERSEDED:
+            if (
+                memory.verification_state == VerificationState.SUPERSEDED
+                and not query.include_superseded
+            ):
                 continue
             haystack = " ".join([memory.title, memory.summary, memory.content, *memory.tags, *memory.entities]).lower()
             memory_tokens = set(re.findall(r"[a-z0-9_]+", haystack))

@@ -26,6 +26,7 @@ class Database:
                 updated_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+            CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
 
             CREATE TABLE IF NOT EXISTS model_performance (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,6 +72,8 @@ class Database:
                 ON memories(client_id);
             CREATE INDEX IF NOT EXISTS idx_memories_updated
                 ON memories(updated_at);
+            CREATE INDEX IF NOT EXISTS idx_memories_created
+                ON memories(created_at);
 
             CREATE TABLE IF NOT EXISTS memory_relationships (
                 id TEXT PRIMARY KEY,

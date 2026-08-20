@@ -1,14 +1,24 @@
 from __future__ import annotations
 
+import importlib.util
 import time
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
-try:
-    from pywinauto import Application, Desktop
-    PYWINAUTO_AVAILABLE = True
-except ImportError:
-    PYWINAUTO_AVAILABLE = False
+PYWINAUTO_AVAILABLE = importlib.util.find_spec("pywinauto") is not None
+Application = None
+Desktop = None
+
+
+def _load_pywinauto() -> None:
+    """Load Windows UI Automation only when a desktop task needs it."""
+    global Application, Desktop
+    if Application is not None and Desktop is not None:
+        return
+    from pywinauto import Application as PywinautoApplication, Desktop as PywinautoDesktop
+
+    Application = PywinautoApplication
+    Desktop = PywinautoDesktop
 
 
 class AccessibilityUnavailableError(Exception):
@@ -112,6 +122,7 @@ class NativeAccessibilityController:
                 "Windows UI Automation is unavailable (pywinauto is not installed in this "
                 "Brain environment). VYOM will not silently fall back to pixel automation."
             )
+        _load_pywinauto()
 
     @property
     def available(self) -> bool:

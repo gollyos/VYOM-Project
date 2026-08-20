@@ -89,6 +89,13 @@ class TaskCreate(BaseModel):
     user_request: str = Field(min_length=1, max_length=20_000)
     priority: str = "normal"
     parent_task_id: str | None = None
+    # Commands from desktop, a paired phone session, a schedule, or a
+    # recovery all enter the same TaskRuntime but keep distinct context
+    # scopes. This prevents "it / same tab" in one source from resolving
+    # to an object observed by another concurrent source.
+    context_id: str = Field(default="desktop:primary", min_length=1, max_length=200)
+    source: str = Field(default="desktop", min_length=1, max_length=120)
+    correlation_id: str | None = Field(default=None, max_length=200)
     budget: TaskBudget = Field(default_factory=TaskBudget)
 
 
@@ -105,6 +112,9 @@ class Task(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     parent_task_id: str | None = None
+    context_id: str = "desktop:primary"
+    source: str = "desktop"
+    correlation_id: str | None = None
     subtasks: list[str] = Field(default_factory=list)
     plan: list[PlanStep] = Field(default_factory=list)
     current_step: int = 0
@@ -131,6 +141,8 @@ class Task(BaseModel):
             user_request=request.user_request,
             priority=request.priority,
             parent_task_id=request.parent_task_id,
+            context_id=request.context_id,
+            source=request.source,
+            correlation_id=request.correlation_id,
             budget=request.budget,
         )
-

@@ -76,7 +76,22 @@ class CognitiveRuntime:
         self.resolution = resolution_chain
         self.context_service = context_service          # AdaptiveContextService
         self.emit = emit                                # async (task, EventType, message, payload)
+        # Context is scoped by command source/session. `active` remains the
+        # desktop-primary alias for compatibility with existing callers;
+        # phone and scheduled contexts never overwrite it.
         self.active = ActiveContext()
+        self._contexts: dict[str, ActiveContext] = {"desktop:primary": self.active}
+
+    def context_for(self, context_id: str | None) -> ActiveContext:
+        key = (context_id or "desktop:primary").strip() or "desktop:primary"
+        # A few focused contract tests construct this runtime with
+        # object.__new__ and inject only `active`. Keep that supported, and
+        # also make legacy/deserialised instances safe during an upgrade.
+        if not hasattr(self, "_contexts"):
+            self._contexts = {"desktop:primary": self.active}
+        elif key == "desktop:primary" and self._contexts.get(key) is not self.active:
+            self._contexts[key] = self.active
+        return self._contexts.setdefault(key, ActiveContext())
 
     async def _emit(self, task: Task, event_type: EventType, message: str, payload: dict) -> None:
         if self.emit is None:
@@ -94,7 +109,7 @@ class CognitiveRuntime:
 
         # Follow-up understanding: resolve 'that'/'it'/'continue' against
         # the active context before hitting the chain.
-        resolved_reference = self.resolve_reference(goal)
+        resolved_reference = self.resolve_reference(goal, context_id=task.context_id)
         if resolved_reference:
             goal = f"{goal} [re: {resolved_reference[:80]}]"
 
@@ -140,20 +155,21 @@ class CognitiveRuntime:
         return cognitive
 
     def _update_active_context(self, task: Task, resolution) -> None:
-        self.active.last_task_id = task.id
-        self.active.history.append(task.user_request[:120])
-        self.active.history = self.active.history[-10:]
+        active = self.context_for(task.context_id)
+        active.last_task_id = task.id
+        active.history.append(task.user_request[:120])
+        active.history = active.history[-10:]
         if resolution.resolved and resolution.source in ("memory", "experience"):
             first = resolution.hits[0] if resolution.hits else {}
             goal_text = first.get("goal") or first.get("title")
             if goal_text:
-                self.active.last_verified_goal = str(goal_text)[:160]
+                active.last_verified_goal = str(goal_text)[:160]
         if resolution.namespace == CognitiveNamespace.PROJECTS:
-            self.active.project = task.user_request[:80]
+            active.project = task.user_request[:80]
         if resolution.namespace == CognitiveNamespace.AGENCY:
-            self.active.client = task.user_request[:80]
+            active.client = task.user_request[:80]
         if resolution.namespace == CognitiveNamespace.RESEARCH:
-            self.active.research = task.user_request[:80]
+            active.research = task.user_request[:80]
 
     # -- memory before questions (rule 2) -----------------------------------
 
@@ -198,14 +214,14 @@ class CognitiveRuntime:
     #: "isko", "ye kya hai" - was not even recognised as a follow-up and
     #: fell through to a keyword search of durable memory.
     _REFERENT_MARKERS = (
-        "that", "fix it", "continue", "show it", "from this", "yesterday",
+        "that", "fix it", "open it", "close it", "continue", "show it", "from this", "yesterday",
         "usko", "usko ", "isko", "ise", "use ", "uske", "iske", "wo ", "woh",
         "ye ", "yeh ", "is ko", "us ko", "isi", "usi", "uspe", "ispe",
         "इसको", "उसको", "इसे", "उसे", "यह", "ये", "वह", "वो", "इसी", "उसी",
         "this one", "it.", " it ", "same",
     )
 
-    def resolve_reference(self, text: str) -> str | None:
+    def resolve_reference(self, text: str, *, context_id: str | None = None) -> str | None:
         """Resolve a pronoun to what it actually points at.
 
         PRIORITY (the control contract's order):
@@ -220,23 +236,25 @@ class CognitiveRuntime:
         if not any(marker in lowered for marker in self._REFERENT_MARKERS):
             return None
 
+        active = self.context_for(context_id)
+
         # "continue"/"yesterday" explicitly reach back across the session.
         if "continue" in lowered or "yesterday" in lowered:
-            return self.active.last_verified_goal
+            return active.last_verified_goal
 
         # 1. the active mission
-        for candidate in (self.active.last_target, self.active.last_url,
-                          self.active.last_entity, self.active.last_app):
+        for candidate in (active.last_target, active.last_url,
+                          active.last_entity, active.last_app):
             if candidate:
                 return str(candidate)[:160]
         # 2. the last real observation
-        if self.active.last_screen:
-            window = self.active.last_screen.get("active")
+        if active.last_screen:
+            window = active.last_screen.get("active")
             if window:
                 return str(window)[:160]
         # 3. durable memory, last
-        return self.active.last_verified_goal or (
-            self.active.history[-2] if len(self.active.history) >= 2 else None)
+        return active.last_verified_goal or (
+            active.history[-2] if len(active.history) >= 2 else None)
 
     # -- what actually happened ---------------------------------------------
 
@@ -249,6 +267,7 @@ class CognitiveRuntime:
         against whatever memory happened to rank highest."""
         import time as _time
 
+        active = self.context_for(getattr(task, "context_id", None))
         data = getattr(result, "structured_data", None) or {}
         if not isinstance(data, dict):
             return
@@ -275,43 +294,43 @@ class CognitiveRuntime:
         for payload in payloads:
             url = payload.get("url") or payload.get("target")
             if url and str(url).startswith(("http://", "https://")):
-                self.active.last_url = str(url)
-                self.active.last_target = str(url)
+                active.last_url = str(url)
+                active.last_target = str(url)
             if payload.get("app_id"):
-                self.active.last_app = str(payload["app_id"])
+                active.last_app = str(payload["app_id"])
             if isinstance(payload.get("profile"), dict) and payload["profile"].get("directory"):
-                self.active.last_browser_profile = dict(payload["profile"])
+                active.last_browser_profile = dict(payload["profile"])
 
             # A real reading of the screen, with the time it was taken.
             window = payload.get("window")
             windows = payload.get("windows")
             active_window = payload.get("active_window")
             if isinstance(window, dict) and window.get("title"):
-                self.active.last_screen = {"active": window.get("title"), "all": []}
-                self.active.last_screen_at = _time.time()
+                active.last_screen = {"active": window.get("title"), "all": []}
+                active.last_screen_at = _time.time()
             elif isinstance(active_window, dict) and active_window.get("title"):
-                self.active.last_screen = {"active": active_window.get("title"), "all": []}
-                self.active.last_screen_at = _time.time()
+                active.last_screen = {"active": active_window.get("title"), "all": []}
+                active.last_screen_at = _time.time()
             elif isinstance(windows, list) and windows:
                 titles = [str(item.get("title", "")) for item in windows
                           if isinstance(item, dict) and item.get("title")]
                 focused = next((str(item.get("title")) for item in windows
                                 if isinstance(item, dict) and item.get("focused")), None)
-                self.active.last_screen = {"active": focused or (titles[0] if titles else None),
-                                           "all": titles[:12]}
-                self.active.last_screen_at = _time.time()
+                active.last_screen = {"active": focused or (titles[0] if titles else None),
+                                      "all": titles[:12]}
+                active.last_screen_at = _time.time()
 
         # Only when nothing more specific was observed does the app itself
         # become the referent.
-        if not self.active.last_target and self.active.last_app:
-            self.active.last_target = self.active.last_app
+        if not active.last_target and active.last_app:
+            active.last_target = active.last_app
 
         goal = getattr(task, "user_request", "") or ""
         status = getattr(getattr(task, "status", None), "value", "")
         if status == "completed":
-            self.active.last_successful_action = goal[:160]
+            active.last_successful_action = goal[:160]
         elif status in {"failed", "cancelled"}:
-            self.active.last_failure = f"{goal[:80]} — {str(getattr(task, 'error', ''))[:120]}"
+            active.last_failure = f"{goal[:80]} — {str(getattr(task, 'error', ''))[:120]}"
 
     async def continue_session(self) -> dict:
         """Cross-session continuation through the existing Phase 15

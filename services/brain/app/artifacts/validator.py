@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import importlib.util
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,20 +11,9 @@ from .presentation_builder import PresentationBuilder, SlideDeckSpec
 from .schemas import ArtifactSpec
 from .spreadsheet_builder import SpreadsheetSpec
 
-try:
-    from docx import Document as DocxDocument
-except ImportError:
-    DocxDocument = None  # type: ignore[assignment]
-
-try:
-    from openpyxl import load_workbook
-except ImportError:
-    load_workbook = None  # type: ignore[assignment]
-
-try:
-    from pptx import Presentation
-except ImportError:
-    Presentation = None  # type: ignore[assignment]
+DOCX_AVAILABLE = importlib.util.find_spec("docx") is not None
+OPENPYXL_AVAILABLE = importlib.util.find_spec("openpyxl") is not None
+PPTX_AVAILABLE = importlib.util.find_spec("pptx") is not None
 
 
 @dataclass
@@ -77,9 +67,11 @@ class ArtifactValidator:
     def validate_docx(self, path: Path) -> ValidationReport:
         if not path.exists():
             return ValidationReport(False, ["File does not exist"])
-        if DocxDocument is None:
+        if not DOCX_AVAILABLE:
             return ValidationReport(False, ["python-docx is not installed; cannot verify DOCX opens"])
         try:
+            from docx import Document as DocxDocument
+
             document = DocxDocument(str(path))
             if not document.paragraphs:
                 return ValidationReport(False, ["DOCX has no content"])
@@ -90,9 +82,11 @@ class ArtifactValidator:
     def validate_spreadsheet(self, path: Path, spreadsheet: SpreadsheetSpec) -> ValidationReport:
         if not path.exists():
             return ValidationReport(False, ["File does not exist"])
-        if load_workbook is None:
+        if not OPENPYXL_AVAILABLE:
             return ValidationReport(False, ["openpyxl is not installed; cannot verify workbook opens"])
         try:
+            from openpyxl import load_workbook
+
             workbook = load_workbook(str(path))
         except Exception as error:
             return ValidationReport(False, [f"Workbook failed to open: {error}"])
@@ -105,9 +99,11 @@ class ArtifactValidator:
         structural_errors = PresentationBuilder.validate(deck)
         if not path.exists():
             return ValidationReport(False, ["File does not exist", *structural_errors])
-        if Presentation is None:
+        if not PPTX_AVAILABLE:
             return ValidationReport(False, ["python-pptx is not installed; cannot verify file opens", *structural_errors])
         try:
+            from pptx import Presentation
+
             presentation = Presentation(str(path))
         except Exception as error:
             return ValidationReport(False, [f"Presentation failed to open: {error}", *structural_errors])

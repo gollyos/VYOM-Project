@@ -10,7 +10,10 @@ from app.devices.schemas import utc_now
 class BudgetLimits:
     daily_model_cost: float = 5.0
     daily_research_calls: int = 50
-    max_concurrent_tasks: int = 6
+    # The personal operator contract guarantees that a burst of ten
+    # independent tasks can remain separately owned. This is a capacity
+    # ceiling, not permission to mix their contexts or effects.
+    max_concurrent_tasks: int = 10
     max_active_agents: int = 8
     max_browser_sessions: int = 3
 

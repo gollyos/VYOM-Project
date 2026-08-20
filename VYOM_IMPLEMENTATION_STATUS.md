@@ -2,7 +2,7 @@
 
 > Persistent implementation ledger. Update this file after every completed work slice.
 >
-> Last updated: 2026-08-19 (Asia/Calcutta, late) — Gate B page-operator pass: type/click/scroll/read-the-visible-page through Windows UI Automation, intended-window continuity, honest tab-activation verification. Full suite 640 passed / 2 skipped. See the newest Verification record entry.
+> Last updated: 2026-08-20 (Asia/Calcutta, 22:00) — persistent-operator reconstruction: independent concurrent tasks, decade-scale history, freshness gating, durable natural/cron command scheduling, shared phone/schedule/desktop task provenance, startup lazy-loading, release rebuild and cleanup. Final Brain suite 665 passed / 2 skipped; native release and one persistent Brain verified. See the newest Verification record and `VYOM_RECONSTRUCTION_REPORT_2026-08-20.md`.
 
 ## Authority and purpose
 
@@ -34,6 +34,8 @@ Before every future handoff:
 **VYOM V0 — Phases 1–16 are implemented (production-hardened alpha with the live cognitive runtime, learned routing, bounded mission loop, and completed media workbench): Living Core, Dynamic UI Composer, Real Voice Runtime, persistent VYOM Brain, controlled Tool Execution, Long-term Intelligence, the first daily-work/agency Operating Layer, the advanced Web Intelligence / Professional Delivery layer, the native Desktop/Device Execution layer, the Financial Intelligence / Controlled Paper-Trading layer, the Personal Operating System / Chief-of-Staff layer, and the persistent multi-device Distributed Runtime.**
 
 Overall VYOM is not complete. The native experience now connects to an async local Brain that can plan and execute registered tools, persist/retrieve scoped memory, reuse sandboxed skills, create bounded declarative agents, learn controlled lessons from verified failures, enforce approval policy, dynamically compose evidence, run bounded multi-source research with source ranking/contradiction detection/citations, drive a semantic Browser Agent 2.0 over the existing Playwright layer, discover capabilities/subscriptions/MCP/API/SaaS alternatives before proposing new integrations, search/compare/reserve/verify bounded bookings, generate/validate/version real professional artifacts behind a quality-gated client delivery package, launch/focus/close registered applications, manage native windows across multiple monitors, read/write the clipboard deliberately, capture and understand the active screen on request, dispatch meaningful native notifications, run bounded accessibility-first input automation with a policy-gated last-resort mouse/keyboard fallback, pair/authenticate a local device node, fetch provider-independent market data with honest freshness labeling, track portfolio P&L/exposure/concentration, build evidence-backed trading theses and structured setups, size positions and gate every proposed trade through a strict PASS/REDUCE/REJECT Risk Engine, simulate market/limit/stop orders through a local PAPER broker with a journal and kill switches, run lookahead-protected historical backtests with walk-forward evaluation, check deterministic price/technical/portfolio alerts, and now manage structured goals with evidence-based progress, track habits through explicit check-ins with evidence-gated pattern insight and respectful (never shaming) interventions, run structured routines through the existing permission-gated tool layer, track focus sessions and real workload/work-pattern signals, prioritize cross-domain work through a Chief-of-Staff orchestrator that returns one justified recommendation, gate every proactive suggestion through an importance/timing/duplicate-suppression check before it ever interrupts the user, apply notification priority/batching/quiet-hours policy, and assemble morning/evening/weekly/monthly reviews from real recorded events only — all behind the same Permission Engine, Tool Registry, and evidence/audit boundary as every earlier phase, with no real-money execution path anywhere in the codebase and no continuous surveillance of any kind. Real cloud-model, live web-search/booking/delivery/market-data providers, voice E2E verification, and a real remote device transport still require locally configured credentials or hardware.
+
+**Persistent operator reconstruction note (2026-08-20):** Independent voice/text commands no longer cancel each other; only a revised transcription of the same utterance can supersede its earlier task. Desktop, authenticated remote, and scheduled sources now create ordinary Task Runtime tasks with scoped context/source/correlation identity. The default distributed budget is ten concurrent tasks. Historical task and memory retrieval filters before limiting and supports dates/entities/clients/projects/sources plus superseded history; current truth still excludes superseded facts. Natural command schedules and five-field cron persist in the existing AutomationStore and execute through the same permissions/verifier. Product freshness phrases (including n8n-style “what's new/new nodes”) require current evidence. The full required A–AH truth table, cleanup evidence, exact release identity, and remaining limitations are recorded in `VYOM_RECONSTRUCTION_REPORT_2026-08-20.md`.
 
 **Phase 17 note (2026-08-17):** `app/adaptive/learned_router.py`, `app/runtime/mission_loop.py`, `app/runtime/cognitive_runtime.py`, `app/workbench/engine.py`, and `app/runtime/mission_packs.py` (8 mission packs: deep-research, coding, agency, browser, document, media, chief-of-staff, paper-trading) are present in the repository and wired into `main.py`. A first verification pass this same day found two real bugs (a dropped mission-context argument, and a browser-automation event-loop-blocking bug) and deliberately reverted an attempted fix rather than ship it unsafely.
 
@@ -339,6 +341,61 @@ Developer focus remains a deliberate local composition and `Close everything` do
 | `docs/` | Product memory, architecture, model-routing, autonomy, and event protocol documentation. |
 
 ## Verification record
+
+### 2026-08-20 - Persistent operator reconstruction and release gate
+
+**Implemented in existing owners:**
+
+- Decade-scale history: `MemoryQuery`/SQLite filters now apply before limit;
+  date/entity/client/project/source and include-history fields are supported;
+  original persisted user requests can be recalled deterministically by date
+  and subject; corrections supersede current truth without deleting history.
+- Task isolation: task schemas carry `context_id`, `source`, and
+  `correlation_id`; the cognitive runtime owns contexts per desktop, remote, or
+  schedule session; the frontend only cancels a prior task when the voice layer
+  explicitly identifies a same-utterance revision. Independent tasks run in
+  the background and cannot steal current UI/TTS ownership.
+- Scheduling: added standard five-field cron, bounded natural English/Hinglish
+  schedule parsing, persisted read-back verification, and `run_vyom_command`.
+  Every scheduled run re-enters Task Runtime and re-applies permission policy;
+  approval-required runs pause honestly instead of being marked complete.
+- Remote provenance: authenticated phone commands enter the same Task Runtime
+  with a remote session context and correlation ID; no second Brain/context is
+  created.
+- Frontend semantic ownership: removed frontend-local success for `close
+  everything`; the Brain returns a verified `clear_workspace` instruction.
+- Startup: DOCX/XLSX/PPTX and pywinauto imports now load only on first use.
+  Warm `app.main` import profile improved from 7.60 s to 3.00 s; focused
+  artifact/UIA regressions remained green.
+- External operator research: Hermes/Graphify/Maya patterns and a YouTube
+  transcript/version verification protocol are mapped in
+  `docs/VYOM_OPERATOR_REFERENCE_RESEARCH_2026-08-20.md`.
+
+**Verification actually performed:**
+
+- Targeted sets: 147 passed; 175 passed; 222 passed; 225 passed; final focused
+  startup/artifact/UIA set 96 passed / 2 skipped.
+- Final complete Brain suite after all source changes: **665 passed, 2 skipped,
+  3 warnings, 0 failures in 137.43 s**. Warnings are one Starlette/httpx
+  deprecation and two known aiosqlite test-teardown thread warnings.
+- `npm run build` passed. `npm run desktop:build` passed and generated the
+  optimized executable and NSIS installer. Earlier Rust test gate: 3 passed.
+- Native shell response measured 0.09–0.30 s. True no-Brain first boot reached
+  TCP `/health` + `/readyz` in about 24 s; the detached Brain then remains
+  persistent for warm reopen. Warm import optimization does not erase this
+  first-boot limitation.
+- Post-cleanup retained `vyom.exe` stayed alive in a hidden five-second launch
+  probe and auto-started exactly one Brain. Current Brain PID **8228** is
+  Python 3.12 running `-m uvicorn app.main:app --host 127.0.0.1 --port 7788`;
+  `/health` is ok and `/readyz` reports ready with no reasons.
+- Release: `src-tauri/target/release/vyom.exe`; installer:
+  `src-tauri/target/release/bundle/nsis/VYOM_0.2.0_x64-setup.exe`.
+- Cleanup: 15.07 GiB / 31,881 files -> **0.33 GiB / 15,127 files**, preserving
+  the production database, backups, logs/evidence, source, release artifacts,
+  and checkpoint. See `LEGACY_CLEANUP_REPORT.md`.
+
+**Gate:** READY_FOR_USER_MIC_TEST. This does not claim the physical microphone
+session or physical phone/network path passed; those remain user/hardware E2E.
 
 ### 2026-08-19 (late) - Gate B: the visible-browser page operator
 
@@ -739,6 +796,25 @@ Follow-up to the Phase 17 verification pass below, same day: fixes both bugs tha
 
 ## Known limitations and non-blocking notes
 
+- **Open after 2026-08-20 reconstruction:** physical microphone acceptance was
+  intentionally not executed. Physical phone/network delivery remains locally
+  architecture/API-tested, not hardware E2E. Arbitrary installed-app coverage
+  remains adapter/observable-UI dependent; unsupported work must fail honestly.
+- **Startup:** the desktop shell responds in under 0.3 s, but a first Python
+  Brain boot still takes about 24 s on this Windows machine. The Brain is
+  intentionally detached/persistent so later window opens reuse it. Office/UIA
+  lazy-loading reduced warm module import from 7.60 s to 3.00 s.
+- **Release portability:** the current executable/installer are verified on
+  this source/Python-equipped PC. The Tauri launcher still resolves the Brain
+  from the compile-time project tree and uses Python from PATH; a standalone
+  installer for a different machine is not proven.
+- **Schedules:** approval-required scheduled work pauses safely. A complete
+  resume-after-approval UX, richer catch-up/delivery destinations, and event
+  trigger catalog remain follow-up work.
+- **Reference products:** the exact `Myraa` and `HunteAI Maya` products named by
+  the user could not be identified reliably from their names alone. Similar
+  public products are not treated as the intended sources without confirmation.
+
 - Codex launches GUI processes inside an isolated Windows desktop/session. Detached release launches can be torn down with that invocation and the native window handle is not enumerable from the shell session. The Tauri dev process remains alive while its host session is active; renderer-level visual QA is performed against the exact Vite frontend used by Tauri.
 - `bundle.active` is currently `false`; a distributable MSI/NSIS installer is not generated yet. The production executable is available directly.
 - The Three.js spatial chunk produces a Vite size advisory. Current scene performance is protected through geometry reuse, instancing, DPR capping, and the absence of post-processing. Code splitting can be evaluated when application modules grow.
@@ -808,6 +884,33 @@ Do not start a new capability merely because it appears in the future vision. Im
 Recommended next phase when approved: **Phase 17 - Production Integration Activation** (carried): Brain-as-Tauri-sidecar lifecycle, one real Google OAuth E2E, one real web-search/booking/delivery/market-data provider E2E, `pywinauto` accessibility, proactive engine on real triggers, a real second device hardware-verifying the distributed runtime, home-server Docker deployment, code-signing keys + signed updates, and the Expo app on hardware. Phase 16 follow-ups to fold in: register a real planner contract for mission planning (model-assisted planning for genuinely novel multi-step goals, still bounded), route Defuddle/Playwright selection through LearnedRouter.preferred_tool at the research fetch site, and stream mission-loop events into the desktop Core states live.
 
 ## Change log
+
+### 2026-08-20 - Persistent personal operator reconstruction
+
+- Preserved one Task Runtime/Brain and fixed frontend/voice ownership so ten
+  independent commands can coexist without global cancellation or context/TTS
+  mixing; same-utterance revisions retain explicit supersession.
+- Added task source/context/correlation provenance for desktop, remote, and
+  scheduled work; remote and scheduled commands now enter the same runtime.
+- Added durable five-field cron and natural English/Hinglish command schedules
+  with timezone-aware next runs, read-back evidence, restart persistence,
+  per-run permissions, and honest approval pause.
+- Added deterministic decade-scale task/memory history by date/entity/client/
+  project/source, historical supersession inclusion, and pre-limit SQL filters.
+- Added current-information freshness markers for new features/nodes/releases
+  without misclassifying ordinary uses of the word “new.”
+- Removed the frontend-only `close everything` semantic bypass and retained
+  Brain-owned verified UI clearing.
+- Lazy-loaded optional Office artifact and pywinauto libraries; import profile
+  improved 7.60 s -> 3.00 s with 96 focused tests passing / 2 skipped.
+- Rebuilt the optimized Tauri/NSIS release; final Brain regression 665 passed /
+  2 skipped / 3 warnings; native health/readiness and exact active Brain
+  identity verified.
+- Safely reduced the repository from 15.07 GiB to 0.33 GiB while preserving
+  authoritative data/evidence/release outputs; recorded cleanup evidence.
+- Recorded Hermes, Graphify, Maya-style workflow and YouTube research patterns
+  as dated product guidance without installing an unreviewed external control
+  plane or pretending ambiguous product names were verified.
 
 ### 2026-08-17 - Phase 18: Local-PC Alpha Activation
 

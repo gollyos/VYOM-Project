@@ -48,8 +48,17 @@ class AutomationScheduler:
                 continue
             try:
                 run.result = await asyncio.wait_for(self.action(automation), timeout=automation.budget.max_runtime_seconds)
-                run.status = "completed"
-                automation.advance(current)
+                if run.result.get("awaiting_approval"):
+                    # The scheduled event successfully created an owned
+                    # Brain task, but the real-world effect is not complete.
+                    # Pause this automation until the user resolves the
+                    # per-run approval; never label it completed or enqueue
+                    # another occurrence over the top of it.
+                    run.status = "waiting_approval"
+                    automation.status = AutomationStatus.PAUSED
+                else:
+                    run.status = "completed"
+                    automation.advance(current)
             except Exception as error:
                 run.status = "failed"
                 run.error = str(error)

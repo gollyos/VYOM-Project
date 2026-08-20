@@ -192,6 +192,14 @@ class PostconditionVerifier:
             return False, "the process did not report an exit code (it may still be running)"
         return exit_code == 0, f"exit code {exit_code}"
 
+    def _check_automation_scheduled(self, context: dict) -> tuple[bool, str]:
+        automation_id = str(context.get("automation_id", "")).strip()
+        if not automation_id or not context.get("persisted"):
+            return False, "the automation was not read back from durable storage"
+        if not context.get("next_run_at"):
+            return False, f"{automation_id} has no next run time"
+        return True, f"{automation_id} is durably stored for {context['next_run_at']}"
+
     def _check_research(self, context: dict) -> tuple[bool, str]:
         sources = context.get("sources") or []
         characters = int(context.get("characters") or 0)
@@ -470,6 +478,7 @@ GOAL_POSTCONDITIONS: dict[str, str] = {
     "create_project_file": "file_write",
     "run_command": "command",
     "run_tests": "command",
+    "schedule_command": "automation_scheduled",
 }
 
 
@@ -830,4 +839,12 @@ class GoalVerifier:
                 command = data.get("command") or {}
                 exit_code = command.get("exit_code") if isinstance(command, dict) else None
             return {"exit_code": exit_code}
+        if kind == "automation_scheduled":
+            if not data.get("automation_id"):
+                return None
+            return {
+                "automation_id": data.get("automation_id"),
+                "persisted": data.get("persisted"),
+                "next_run_at": data.get("next_run_at"),
+            }
         return None

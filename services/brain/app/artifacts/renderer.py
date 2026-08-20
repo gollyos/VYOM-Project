@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import importlib.util
 import json
 from pathlib import Path
 from typing import Any
@@ -10,23 +11,9 @@ from .presentation_builder import SlideDeckSpec
 from .schemas import ArtifactSpec
 from .spreadsheet_builder import SpreadsheetSpec
 
-try:
-    from docx import Document
-    DOCX_AVAILABLE = True
-except ImportError:
-    DOCX_AVAILABLE = False
-
-try:
-    from openpyxl import Workbook
-    OPENPYXL_AVAILABLE = True
-except ImportError:
-    OPENPYXL_AVAILABLE = False
-
-try:
-    from pptx import Presentation
-    PPTX_AVAILABLE = True
-except ImportError:
-    PPTX_AVAILABLE = False
+DOCX_AVAILABLE = importlib.util.find_spec("docx") is not None
+OPENPYXL_AVAILABLE = importlib.util.find_spec("openpyxl") is not None
+PPTX_AVAILABLE = importlib.util.find_spec("pptx") is not None
 
 
 class ArtifactUnavailableError(Exception):
@@ -103,6 +90,12 @@ class ArtifactRenderer:
     def render_docx_file(self, spec: ArtifactSpec, version: str) -> Path:
         if not DOCX_AVAILABLE:
             raise ArtifactUnavailableError("python-docx is not installed; DOCX rendering is unavailable")
+        # Office renderers are intentionally imported only when their
+        # capability is used.  Importing all three during Brain boot added
+        # seconds to every desktop launch even when the user only wanted a
+        # voice or memory command.
+        from docx import Document
+
         directory = self.artifact_dir(spec.id, version)
         document = Document()
         document.add_heading(spec.title, level=1)
@@ -121,6 +114,8 @@ class ArtifactRenderer:
     def render_spreadsheet_file(self, spec: ArtifactSpec, version: str, spreadsheet: SpreadsheetSpec) -> Path:
         if not OPENPYXL_AVAILABLE:
             raise ArtifactUnavailableError("openpyxl is not installed; spreadsheet rendering is unavailable")
+        from openpyxl import Workbook
+
         directory = self.artifact_dir(spec.id, version)
         workbook = Workbook()
         workbook.remove(workbook.active)
@@ -142,6 +137,8 @@ class ArtifactRenderer:
     def render_presentation_file(self, spec: ArtifactSpec, version: str, deck: SlideDeckSpec) -> Path:
         if not PPTX_AVAILABLE:
             raise ArtifactUnavailableError("python-pptx is not installed; presentation rendering is unavailable")
+        from pptx import Presentation
+
         directory = self.artifact_dir(spec.id, version)
         presentation = Presentation()
         title_layout = presentation.slide_layouts[0]

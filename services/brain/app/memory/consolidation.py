@@ -141,15 +141,15 @@ _FACT_PATTERNS: list[tuple[str, str, str]] = [
      "business", "User business"),
     (r"(?:बिजनेस|व्यवसाय|कंपनी)\s+का\s+नाम\s+([ऀ-ॣ०-ॿ\w .'&-]{2,60})",
      "business", "User business"),
-    (r"\bmy website is\s+([\w.:/-]{4,80})", "business", "User website"),
-    (r"मेरी वेबसाइट\s*(?:है)?\s*([\w.:/-]{4,80})", "business", "User website"),
+    (r"\bmy website is\s+([\w\s.:/-]{4,80})", "business", "User website"),
+    (r"मेरी वेबसाइट\s*(?:है)?\s*([\w\s.:/-]{4,80})", "business", "User website"),
     # Hinglish, which is how this user actually speaks. Without it
     # "meri website luxora-designs.example hai" wrote nothing at all.
-    (r"\bmeri\s+(?:website|websites|site)\s*(?:hai)?\s*([\w.:/-]{4,80})",
+    (r"\bmeri\s+(?:website|websites|site)\s*(?:hai)?\s*([\w\s.:/-]{4,80})",
      "business", "User website"),
     # The REPLACEMENT half of a spoken correction: "X meri website nahi
     # hai. Correct website Y hai." The new value is what becomes active.
-    (r"\b(?:correct|sahi|sahee)\s+(?:website|site)\s*(?:hai|is)?\s*([\w.:/-]{4,80})",
+    (r"\b(?:correct|sahi|sahee)\s+(?:website|site)\s*(?:hai|is)?\s*([\w\s.:/-]{4,80})",
      "business", "User website"),
     (r"\b(?:correct|sahi)\s+(?:naam|name)\s*(?:hai|is)?\s*([\w{_DEV} .'-]{{2,40}})".format(_DEV=_DEV),
      "identity", "User name"),
@@ -197,6 +197,17 @@ _NON_VALUES = frozenset({
     "correct", "sahi", "galat", "गलत", "wrong", "kya", "क्या", "yeh", "ye", "वह", "woh",
 })
 
+# A website memory is an address, not merely the token that happened to
+# follow the word "website".  The physical-mic command "meri website
+# kholo" used to match the fact pattern above and persisted `kholo` as the
+# user's website.  Requiring an actual dotted host/URL shape fixes the
+# ownership boundary structurally: action verbs remain commands and only
+# address-shaped values can enter the website slot.
+_WEBSITE_VALUE = _re.compile(
+    r"^(?:https?://)?(?:www\.)?[\w-]+(?:\.[\w-]+)+(?:[/:?#][^\s]*)?$",
+    _re.IGNORECASE,
+)
+
 
 def _clean_value(raw: str) -> str:
     """Reduce a captured span to just the fact's value."""
@@ -237,6 +248,13 @@ def extract_durable_facts(utterance: str) -> list[dict]:
             value = _clean_value(match.group(1))
             if not value or len(value) > 120:
                 continue
+            if title == "User website":
+                # STT commonly inserts spaces inside a spoken domain
+                # ("luxora designs . space").  Domain whitespace is not
+                # semantic, so normalize it before validating/storing.
+                value = _re.sub(r"\s+", "", value)
+                if not _WEBSITE_VALUE.fullmatch(value):
+                    continue
             if value.strip().lower() in _NON_VALUES:
                 continue
             facts.append({"kind": kind, "title": title, "value": value,

@@ -9,7 +9,7 @@ from app.desktop.app_launcher import ApplicationRegistry, AppLauncher, AppLaunch
 from app.desktop.clipboard import ClipboardController
 from app.desktop.controller import DesktopController
 from app.desktop.notifications import NotificationDispatcher, NotificationPolicy
-from app.desktop.schemas import ApplicationHealth, NotificationRequest
+from app.desktop.schemas import ApplicationHealth, ApplicationTrust, NotificationRequest
 from app.desktop.startup import InMemoryStartupBackend, StartupController
 from app.desktop.system_status import SystemStatusService
 from app.desktop.window_manager import WindowManager

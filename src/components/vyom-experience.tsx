@@ -33,6 +33,7 @@ export function VyomExperience() {
     composerPhase,
     brainConnection,
     activeTaskId,
+    terminalEventKey,
     approval,
     runCommand,
     decideApproval,
@@ -94,21 +95,21 @@ export function VyomExperience() {
   // response used to be spoken, which is why it repeated "on it" while a
   // mission was still working. Progress belongs on the canvas; the voice
   // is reserved for the outcome (or a state that needs the user).
-  const spokenResponseRef = useRef<string | null>(null);
+  const spokenTerminalRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!voice.sessionActive || !response) return;
+    if (!voice.sessionActive || !response || !terminalEventKey) return;
     const terminal =
       composerState === "Completed" || composerState === "Failed" || composerState === "WaitingApproval";
     if (!terminal) return;
-    if (spokenResponseRef.current === response) return;
-    spokenResponseRef.current = response;
+    if (spokenTerminalRef.current === terminalEventKey) return;
+    spokenTerminalRef.current = terminalEventKey;
     // The final TTS hop of the command path, through the same trace
     // mechanism as every other hop, so a session can be analyzed
     // end-to-end (utterance -> task -> terminal -> ONE spoken answer)
     // from the existing trace file.
     trace(newCorrelationId(), "tts.speak", { state: composerState, text: response.slice(0, 200) });
     voice.speak(response);
-  }, [response, composerState, voice]);
+  }, [response, composerState, terminalEventKey, voice]);
   const state = voice.sessionActive && voice.state !== "Idle" ? voice.state : composerState;
   const visual = STATE_VISUALS[state];
   const isBusy = busy || (voice.sessionActive && voice.state !== "Idle");

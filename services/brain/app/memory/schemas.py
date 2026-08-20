@@ -105,6 +105,12 @@ class MemoryQuery(BaseModel):
     project_id: str | None = None
     client_id: str | None = None
     agent_id: str | None = None
+    entities: set[str] = Field(default_factory=set)
+    sources: set[str] = Field(default_factory=set)
+    created_after: datetime | None = None
+    created_before: datetime | None = None
+    include_superseded: bool = False
+    include_expired: bool = False
     max_sensitivity: Sensitivity = Sensitivity.SENSITIVE
     verification_states: set[VerificationState] = Field(default_factory=set)
     limit: int = Field(default=8, ge=1, le=100)

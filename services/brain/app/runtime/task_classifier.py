@@ -145,12 +145,14 @@ _AUDIBLE_VOCABULARY = frozenset({
     "project", "code", "test", "build", "status", "system", "pc", "desktop",
     "battery", "network", "internet", "phone", "call", "message", "email",
     "calendar", "meeting", "price", "news", "latest", "update", "version",
+    "client", "told", "said", "date", "ago", "history", "old",
     # Hindi/Hinglish function + command words (romanised and Devanagari)
     "kya", "kyu", "kyun", "kaise", "kaisa", "kab", "kaun", "konsa", "kaunsa",
     "kholo", "khol", "kholo", "khol", "kholiye", "band", "karo", "kar", "karo",
     "kijiye", "chala", "chalao", "bajao", "baja", "dekho", "dikhao", "dikh",
     "hai", "hain", "nahi", "nahin", "mera", "meri", "mere", "me", "mein", "se",
     "ko", "ki", "ka", "ke", "naam", "kaam", "abhi", "bas", "ruko", "chhodo",
+    "bataya", "bola", "yaad", "purana", "tareekh", "tarikh",
     "wala", "wale", "achha", "achchha", "koi", "accha", "thik", "theek", "aur",
     "yaar", "bhai", "ji", "nahi", "haan", "han", "matlab", "phone", "gana",
     "gaana", "bhajan", "बंद", "क्या", "क्यों", "कैसे", "कब", "कौन", "खोलो",
@@ -689,6 +691,28 @@ class TaskClassifier:
         request = normalise_hinglish(request)
         text = request.strip().lower()
         self._original = original
+
+        # Dated history questions contain hyphenated/slashed dates that
+        # resemble arithmetic ("2016-08-20"). Resolve this command-level
+        # intent before generic calculator/UI detection so the original
+        # user record is read locally rather than sent to Calculator.
+        from app.memory.history import is_historical_recall
+
+        if is_historical_recall(original):
+            return TaskProfile(
+                domain=TaskDomain.PERSONAL, complexity=1, latency_priority="high",
+                deterministic=True, intent="memory_history_recall", needs=set(),
+            )
+
+        # A natural schedule owns a FUTURE command; the embedded words
+        # ("show status", "open Chrome") must not execute immediately.
+        from app.automation.natural_schedule import is_schedule_request
+
+        if is_schedule_request(original):
+            return TaskProfile(
+                domain=TaskDomain.PLANNING, complexity=1, latency_priority="high",
+                deterministic=True, intent="schedule_command", needs=set(),
+            )
 
         if "what needs approval" in text or "show pending approvals" in text:
             return TaskProfile(domain=TaskDomain.AGENCY, complexity=1, deterministic=True, intent="approval_query", needs={"business"})

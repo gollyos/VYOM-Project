@@ -12,7 +12,11 @@ import type {
 } from "./types";
 
 type VoiceRuntimeOptions = {
-  onCommand: (command: string, correlationId?: string) => void;
+  onCommand: (
+    command: string,
+    correlationId?: string,
+    options?: { supersedesPrevious?: boolean },
+  ) => void;
 };
 
 type VoiceRuntimeSnapshot = {
@@ -52,6 +56,34 @@ const CONVERSATIONAL_ONLY = /^(hi|hey|hello|yo|thanks|thank you|thankyou|ok|okay
 // comfortably longer than a breath and still well under the point where
 // the user would perceive VYOM as slow to react.
 const DISPATCH_SETTLE_MS = 1400;
+
+// STOP is a kernel interrupt, so it must not pay the normal long-sentence
+// settle cost.  This is intentionally only a debounce hint in the voice
+// adapter: the text still enters the same Brain command bus, where
+// is_interrupt_command() remains the authoritative classifier.  A short
+// settle window gives a following object ("stop Chrome") time to arrive
+// without making a bare "stop" feel unresponsive.
+const INTERRUPT_DISPATCH_SETTLE_MS = 220;
+
+const INTERRUPT_TOKENS = new Set([
+  "stop", "cancel", "halt", "abort", "enough", "ruko", "ruk", "ja", "jao",
+  "rukiye", "bas", "karo", "band", "kar", "chhodo", "chodo", "mat", "nahi",
+  "rehne", "rahne", "do", "रुको", "रुक", "जाओ", "बस", "करो", "बंद", "छोड़ो",
+  "मत", "रहने", "दो", "थम", "चुप", "हो",
+]);
+
+const INTERRUPT_FILLER = new Set([
+  "vyom", "hey", "ok", "okay", "please", "abhi", "now", "yaar", "arre", "अभी", "अरे",
+  "this", "that", "it", "ise", "isko", "usko", "ye", "yeh", "current", "task", "kaam",
+  "इसको", "इसे", "ये", "यह", "काम",
+]);
+
+function isLikelyInterruptCandidate(text: string) {
+  const words = normaliseForCommit(text).split(" ").filter(Boolean);
+  if (words.length === 0 || words.length > 6) return false;
+  const meaningful = words.filter((word) => !INTERRUPT_FILLER.has(word));
+  return meaningful.length > 0 && meaningful.every((word) => INTERRUPT_TOKENS.has(word));
+}
 
 /**
  * ONE SPOKEN UTTERANCE = ONE IDENTITY.
@@ -384,6 +416,9 @@ export function useVoiceRuntime({ onCommand }: VoiceRuntimeOptions): VoiceRuntim
 
         if (dispatchTimerRef.current) window.clearTimeout(dispatchTimerRef.current);
         const armedRevision = utteranceRef.current.revision;
+        const settleMs = isLikelyInterruptCandidate(utteranceRef.current.text)
+          ? INTERRUPT_DISPATCH_SETTLE_MS
+          : DISPATCH_SETTLE_MS;
         dispatchTimerRef.current = window.setTimeout(() => {
           dispatchTimerRef.current = null;
           const utterance = utteranceRef.current;
@@ -443,7 +478,8 @@ export function useVoiceRuntime({ onCommand }: VoiceRuntimeOptions): VoiceRuntim
           // revision, the new text supersedes it: submitToBrain cancels
           // the in-flight task server-side, so one sentence can never own
           // two concurrent reasoning missions.
-          if (utterance.dispatchedText !== null) {
+          const supersedesPrevious = utterance.dispatchedText !== null;
+          if (supersedesPrevious) {
             utterance.state = "superseded";
             trace(correlationId, "voice.utterance.superseded", {
               utterance_id: utterance.id, revision: utterance.revision,
@@ -460,8 +496,8 @@ export function useVoiceRuntime({ onCommand }: VoiceRuntimeOptions): VoiceRuntim
             utterance_id: utterance.id, revision: utterance.revision,
             is_final: true, transcript: text,
           });
-          onCommandRef.current(text, correlationId);
-        }, DISPATCH_SETTLE_MS);
+          onCommandRef.current(text, correlationId, { supersedesPrevious });
+        }, settleMs);
         break;
       }
       case "output-transcript":

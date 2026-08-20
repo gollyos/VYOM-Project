@@ -60,7 +60,12 @@ async def submit_command(payload: RemoteCommandEnvelope, request: Request) -> di
     if result.get("accepted"):
         from app.schemas.tasks import TaskCreate
 
-        created = await request.app.state.runtime.create_task(TaskCreate(user_request=payload.command))
+        created = await request.app.state.runtime.create_task(TaskCreate(
+            user_request=payload.command,
+            context_id=f"remote:{payload.session_id}",
+            source=f"remote:{payload.source_node}",
+            correlation_id=payload.command_id,
+        ))
         await request.app.state.remote_sessions.update_context(payload.session_id, active_task_id=created.id)
         result["task_id"] = created.id
         result["task_status"] = created.status.value

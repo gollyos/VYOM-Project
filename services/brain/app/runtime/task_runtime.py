@@ -91,6 +91,7 @@ class TaskRuntime:
         self.memory_retriever = None  # attached post-construction in main.py, same pattern
         self.memory_store = None  # attached post-construction in main.py, same pattern
         self.memory_manager = None  # attached post-construction in main.py, same pattern
+        self.automation_store = None  # attached post-construction; one durable scheduler/store
         from .verifier import GoalVerifier, PostconditionVerifier
         self.postconditions = PostconditionVerifier()
         # The ONE authority that can promote a task to VERIFIED_COMPLETE.
@@ -124,6 +125,10 @@ class TaskRuntime:
         # - pass their own provenance explicitly. ActionEngine.execute()
         # is the one place this is actually enforced before anything runs.
         task.metadata["provenance"] = provenance.value
+        task.metadata["command_source"] = task.source
+        task.metadata["context_id"] = task.context_id
+        if task.correlation_id:
+            task.metadata["correlation_id"] = task.correlation_id
 
         # KERNEL INTERRUPT. Recognised before classification, routing,
         # planning, memory or any capability - STOP outranks every
@@ -577,6 +582,16 @@ class TaskRuntime:
                     task, started, feedback=profile.intent == "user_feedback")
                 return
 
+            if profile.intent == "memory_history_recall":
+                task.plan = self.planner.create_plan(task, profile)
+                await self._answer_from_history(task, started)
+                return
+
+            if profile.intent == "schedule_command":
+                task.plan = self.planner.create_plan(task, profile)
+                await self._schedule_command(task, started)
+                return
+
             if profile.intent in {"profile_recall", "profile_statement"}:
                 task.plan = self.planner.create_plan(task, profile)
                 await self._answer_from_profile(task, profile, started)
@@ -880,6 +895,161 @@ class TaskRuntime:
                                          "status": i.status.value} for i in active[:5]]},
             ui_composition=composition,
             evidence=[f"{len(active)} active task(s) read from the runtime"],
+            usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
+        await self._finish_result(task, result, None, started, 0, False)
+
+    async def _schedule_command(self, task: Task, started: float) -> None:
+        from app.automation.natural_schedule import parse_schedule_request
+        from app.automation.schemas import Automation
+        from app.schemas.results import ExecutionResult
+        from app.schemas.routing import UsageRecord
+
+        if self.automation_store is None:
+            raise RuntimeError("The durable automation store is unavailable")
+        request = parse_schedule_request(task.user_request)
+        # The embedded command's real permission is authoritative; a user
+        # cannot lower it by wording the outer schedule as harmless.
+        embedded = str((request.condition or {}).get("command", ""))
+        request.permission_level = self.permission_engine.classify(embedded).value
+        automation = Automation.from_create(request)
+        await self.automation_store.save(automation)
+        persisted = await self.automation_store.get(automation.id)
+
+        task.assigned_model = "local-scheduler-v1"
+        await self.task_store.save(task)
+        await self._emit(
+            task, EventType.MODEL_SELECTED, "Created a durable schedule locally",
+            {"routing": {"primary_model": "local-scheduler-v1", "primary_provider": "local",
+                         "fallback_models": [], "estimated_cost_tier": "free",
+                         "reason_selected": "Deterministic schedule parsing and SQLite persistence"}},
+        )
+        await self._emit(
+            task, EventType.AUTOMATION_SCHEDULED,
+            f"Scheduled {embedded[:100]}",
+            {"automation_id": persisted.id, "next_run_at": persisted.next_run_at.isoformat() if persisted.next_run_at else None},
+        )
+        when = persisted.next_run_at.astimezone().strftime("%d %b %Y, %H:%M") if persisted.next_run_at else "when its condition matches"
+        response = f"Scheduled '{embedded}' for {when}."
+        result = ExecutionResult(
+            response=response,
+            structured_data={
+                "automation_id": persisted.id,
+                "persisted": True,
+                "next_run_at": persisted.next_run_at.isoformat() if persisted.next_run_at else None,
+                "cron_expression": persisted.cron_expression,
+                "permission_level": persisted.permission_level,
+            },
+            evidence=[f"automation:{persisted.id}:persisted"],
+            usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
+        await self._finish_result(task, result, None, started, 0, False)
+
+    async def _answer_from_history(self, task: Task, started: float) -> None:
+        """Recall what was actually said/stored at a past time, locally.
+
+        Current-truth lookup excludes superseded entries. Historical
+        lookup intentionally includes them and labels their state, so a
+        correction preserves the audit trail without reviving an old fact
+        as present truth.
+        """
+        from app.memory.history import USER_TIMEZONE, parse_historical_memory_request
+        from app.memory.schemas import MemoryQuery
+        from app.schemas.results import ExecutionResult
+        from app.schemas.routing import UsageRecord
+        from app.security.redaction import redact_text
+
+        parsed = parse_historical_memory_request(task.user_request)
+        task.assigned_model = "local-history-v1"
+        await self.task_store.save(task)
+        await self._emit(
+            task, EventType.MODEL_SELECTED, "Read VYOM's durable history locally",
+            {"routing": {"primary_model": "local-history-v1", "primary_provider": "local",
+                         "fallback_models": [], "estimated_cost_tier": "free",
+                         "reason_selected": "Dated task and memory lookup; no model call required"}},
+        )
+
+        tasks = await self.task_store.search_history(
+            created_after=parsed.created_after,
+            created_before=parsed.created_before,
+            text=parsed.subject,
+            exclude_task_id=task.id,
+            limit=12,
+        )
+        memories = []
+        if self.memory_retriever is not None:
+            try:
+                memories = await self.memory_retriever.search(MemoryQuery(
+                    text=parsed.subject,
+                    created_after=parsed.created_after,
+                    created_before=parsed.created_before,
+                    include_superseded=True,
+                    include_expired=True,
+                    limit=12,
+                ))
+            except Exception:
+                import logging
+
+                logging.getLogger("vyom.memory").exception("historical memory lookup failed")
+
+        records: list[dict] = []
+        seen_task_ids: set[str] = set()
+        for old_task in tasks:
+            seen_task_ids.add(old_task.id)
+            local_time = old_task.created_at.astimezone(USER_TIMEZONE)
+            records.append({
+                "kind": "user_statement",
+                "id": old_task.id,
+                "timestamp": local_time.isoformat(),
+                "text": redact_text(old_task.user_request)[:1000],
+                "state": "recorded",
+            })
+        for hit in memories:
+            memory = hit.memory
+            # A task-result memory tied to a task already shown is its
+            # generated outcome, not another thing the user said.
+            if memory.task_id and memory.task_id in seen_task_ids:
+                continue
+            local_time = memory.created_at.astimezone(USER_TIMEZONE)
+            records.append({
+                "kind": "trusted_memory",
+                "id": memory.id,
+                "timestamp": local_time.isoformat(),
+                "text": redact_text(memory.summary or memory.content)[:1000],
+                "title": memory.title,
+                "state": memory.verification_state.value,
+                "source": memory.source or memory.provenance[0].type.value,
+            })
+        records.sort(key=lambda item: item["timestamp"], reverse=True)
+        records = records[:16]
+
+        date_label = parsed.local_date.strftime("%d %b %Y") if parsed.local_date else "the matching history"
+        subject_label = f" about {parsed.subject}" if parsed.subject else ""
+        if not records:
+            summary = f"I found no stored record for {date_label}{subject_label}."
+        else:
+            lines = []
+            for record in records[:8]:
+                stamp = datetime.fromisoformat(record["timestamp"]).strftime("%d %b %Y, %H:%M")
+                label = "You said" if record["kind"] == "user_statement" else "Memory"
+                state = f" [{record['state']}]" if record["kind"] == "trusted_memory" else ""
+                lines.append(f"{stamp} — {label}{state}: {record['text']}")
+            summary = (
+                f"I found {len(records)} stored record(s) for {date_label}{subject_label}:\n"
+                + "\n".join(lines)
+            )
+
+        result = ExecutionResult(
+            response=summary,
+            structured_data={
+                "historical_records": records,
+                "local_date": parsed.local_date.isoformat() if parsed.local_date else None,
+                "subject": parsed.subject,
+                "history_includes_superseded": True,
+                "current_truth_includes_superseded": False,
+            },
+            evidence=[f"task:{item.id}" for item in tasks]
+                     + [f"memory:{item.memory.id}" for item in memories],
             usage=UsageRecord(total_tokens=0, estimated_cost=0),
         )
         await self._finish_result(task, result, None, started, 0, False)

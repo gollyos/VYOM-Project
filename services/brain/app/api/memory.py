@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -42,9 +43,31 @@ class MemoryUpdate(BaseModel):
 
 
 @router.get("")
-async def search_memory(request: Request, q: str = "", type: MemoryType | None = None, project_id: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+async def search_memory(
+    request: Request,
+    q: str = "",
+    type: MemoryType | None = None,
+    project_id: str | None = None,
+    client_id: str | None = None,
+    entity: str | None = None,
+    source: str | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
+    include_history: bool = False,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
     results = await request.app.state.memory_manager.search(MemoryQuery(
-        text=q, types={type} if type else set(), project_id=project_id, limit=min(max(limit, 1), 100)
+        text=q,
+        types={type} if type else set(),
+        project_id=project_id,
+        client_id=client_id,
+        entities={entity} if entity else set(),
+        sources={source} if source else set(),
+        created_after=created_after,
+        created_before=created_before,
+        include_superseded=include_history,
+        include_expired=include_history,
+        limit=min(max(limit, 1), 100),
     ))
     return [item.model_dump(mode="json") for item in results]
 

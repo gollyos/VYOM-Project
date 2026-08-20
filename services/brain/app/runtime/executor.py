@@ -83,8 +83,12 @@ class Executor:
         if profile.intent == "close_everything":
             return ExecutionResult(
                 response="Everything is clear.",
-                structured_data={"command": "close_everything", "deterministic": True},
-                evidence=["Handled locally without a model call"],
+                structured_data={
+                    "command": "close_everything",
+                    "deterministic": True,
+                    "clear_workspace": True,
+                },
+                evidence=["Canonical Brain task requested the frontend workspace clear"],
                 usage=UsageRecord(total_tokens=0, estimated_cost=0),
             )
 

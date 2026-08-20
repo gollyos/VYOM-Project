@@ -104,6 +104,13 @@ export type BrainEvent = {
     composition?: UIComposition;
     response?: string;
     error?: string;
+    task?: {
+      result?: {
+        structured_data?: {
+          clear_workspace?: boolean;
+        };
+      };
+    };
     /**
      * Telemetry the Brain emits about ITSELF (health checks, resource
      * sampling). It is recorded internally but must never take over the

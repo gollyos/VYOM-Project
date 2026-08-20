@@ -184,6 +184,13 @@ FRESHNESS_MARKERS = (
     # gated, because none of the above matched "real time". The user
     # explicitly called this out: "यह पुराना डिटेल है" (this is old detail).
     "real time", "realtime", "right now",
+    # Application ecosystems change independently of VYOM's durable
+    # project memory.  These phrases must force live evidence (for example
+    # official n8n release/node documentation) instead of treating an old
+    # successful procedure as current product truth.
+    "what's new", "what is new", "new feature", "new features", "new node",
+    "new nodes", "kya naya", "kya nayi", "kya aaya", "kya aya",
+    "नया क्या", "क्या नया", "नए फीचर", "नया नोड",
 )
 
 #: Phrases a model uses to decline. VYOM never shows these before its own

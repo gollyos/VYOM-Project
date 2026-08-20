@@ -220,6 +220,19 @@ def test_a_question_stores_nothing():
     assert extract_durable_facts("Mera naam kya hai?") == []
 
 
+def test_open_my_website_is_a_command_not_a_fact():
+    """The physical command must never persist its trailing verb as truth."""
+    assert extract_durable_facts("meri website kholo") == []
+    assert extract_durable_facts("open my website") == []
+
+
+def test_spoken_whitespace_inside_a_domain_is_normalised():
+    facts = extract_durable_facts("meri website luxora designs.space hai")
+    assert [(fact["title"], fact["value"]) for fact in facts] == [
+        ("User website", "luxoradesigns.space")
+    ]
+
+
 # ======================================================================
 # What the user hears is never internal bookkeeping
 # ======================================================================
