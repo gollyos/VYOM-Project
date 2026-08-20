@@ -91,6 +91,42 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_relationship_target
                 ON memory_relationships(target_id, relation);
 
+            -- Unified VYOM operating graph. These are rebuildable projections
+            -- over the authoritative stores plus separately-owned explicit
+            -- relationships; they are not a second memory database.
+            CREATE TABLE IF NOT EXISTS brain_nodes (
+                entity_id TEXT PRIMARY KEY,
+                entity_type TEXT NOT NULL,
+                native_id TEXT NOT NULL,
+                label TEXT NOT NULL,
+                status TEXT,
+                source_store TEXT NOT NULL,
+                node_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                origin TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_brain_nodes_type
+                ON brain_nodes(entity_type, updated_at);
+
+            CREATE TABLE IF NOT EXISTS brain_relationships (
+                id TEXT PRIMARY KEY,
+                source_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                relation TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                verified INTEGER NOT NULL,
+                origin TEXT NOT NULL,
+                provenance TEXT NOT NULL,
+                edge_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_brain_rel_source
+                ON brain_relationships(source_id, relation);
+            CREATE INDEX IF NOT EXISTS idx_brain_rel_target
+                ON brain_relationships(target_id, relation);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_brain_rel_semantic
+                ON brain_relationships(source_id, target_id, relation, origin);
+
             CREATE TABLE IF NOT EXISTS integrations (
                 id TEXT PRIMARY KEY,
                 provider TEXT NOT NULL,

@@ -32,12 +32,13 @@ class ResolutionChain:
     """
 
     def __init__(self, memory=None, experience_store=None, skill_registry=None,
-                 tool_registry=None, capability_registry=None):
+                 tool_registry=None, capability_registry=None, brain_graph=None):
         self.memory = memory
         self.experience_store = experience_store
         self.skill_registry = skill_registry
         self.tool_registry = tool_registry
         self.capability_registry = capability_registry
+        self.brain_graph = brain_graph
 
     async def resolve(self, query: str, *, namespace: CognitiveNamespace | None = None,
                       domain: str = "", text: str = "") -> ResolutionResult:
@@ -70,8 +71,13 @@ class ResolutionChain:
             else:
                 pool = [h for h in hits if h.memory.type not in (MemoryType.PERSON, MemoryType.CLIENT)]
             for hit in pool[:2]:
-                result.hits.append({"source": "memory", "title": hit.memory.title,
-                                    "summary": hit.memory.summary, "confidence": hit.memory.confidence})
+                item = {"source": "memory", "id": hit.memory.id, "title": hit.memory.title,
+                        "summary": hit.memory.summary, "confidence": hit.memory.confidence}
+                if self.brain_graph is not None:
+                    item["connections"] = await self.brain_graph.linked_context(
+                        f"memory:{hit.memory.id}", limit=6,
+                    )
+                result.hits.append(item)
             if result.hits:
                 result.resolved, result.source = True, "memory"
                 result.trace.append(f"memory: {len(result.hits)} hit(s) in namespace '{namespace.value}'")

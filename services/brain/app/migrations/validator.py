@@ -4,6 +4,7 @@ import sqlite3
 
 REQUIRED_TABLES = (
     "tasks", "model_performance", "memories", "memory_relationships",
+    "brain_nodes", "brain_relationships",
     "integrations", "crm_records", "email_drafts", "automations", "automation_runs",
     "meeting_notes", "booking_requests", "artifacts", "delivery_packages",
     "portfolios", "watchlists", "paper_orders", "trade_journal", "strategies",

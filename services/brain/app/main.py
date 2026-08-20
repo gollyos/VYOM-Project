@@ -8,7 +8,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agency, agents, alerts as alerts_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discovery as discovery_api, email as email_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, markets as markets_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, skills, sync_api, tasks, tools, websocket
+from app.api import agency, agents, alerts as alerts_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discovery as discovery_api, email as email_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, markets as markets_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, skills, sync_api, tasks, tools, websocket
 from app.agency.service import AgencyService, DisconnectedLeadResearchProvider
 from app.agents.evaluator import AgentEvaluator
 from app.agents.factory import AgentFactory
@@ -153,6 +153,7 @@ from app.adaptive.learner import AdaptiveLearningBridge
 from app.adaptive.self_improvement import SafeSelfImprovement
 from app.memory.namespaces import NamespaceMemoryRouter
 from app.memory.resolution import ResolutionChain
+from app.brain_graph import BrainGraphService
 from app.workbench import UniversalWorkbench
 from app.runtime.cognitive_runtime import CognitiveRuntime
 from app.runtime.mission_loop import MissionLoop, MissionLimits
@@ -1194,12 +1195,22 @@ def create_app(
 
         # -- Phase 15 structured-intelligence stack -------------------------
         namespace_router = NamespaceMemoryRouter(memory_manager)
+        brain_graph = BrainGraphService(
+            database,
+            skill_registry=skill_registry,
+            agent_registry=agent_registry,
+            capability_registry=capability_registry,
+        )
+        # Rebuilding several years of cross-store relationships is useful
+        # background work, never a reason to delay VYOM becoming ready.
+        brain_graph.start_refresh()
         resolution_chain = ResolutionChain(
             memory=memory_manager,
             experience_store=adaptive_experience_store,
             skill_registry=skill_registry,
             tool_registry=tool_registry,
             capability_registry=capability_registry,
+            brain_graph=brain_graph,
         )
         self_improvement = SafeSelfImprovement(project_root=project_root)
         universal_workbench = UniversalWorkbench(learner=adaptive_learner)
@@ -1326,6 +1337,7 @@ def create_app(
         application.state.action_engine = action_engine
         application.state.memory_store = memory_store
         application.state.memory_manager = memory_manager
+        application.state.brain_graph = brain_graph
         application.state.embedding_provider = embedding_provider
         application.state.capability_registry = capability_registry
         application.state.capability_discovery = capability_discovery
@@ -1555,6 +1567,7 @@ def create_app(
             await asyncio.gather(*runtime.active.values(), return_exceptions=True)
         await action_engine.shutdown()
         await browser_session.shutdown()
+        await brain_graph.close()
         await database.close()
 
     application = FastAPI(
@@ -1582,6 +1595,7 @@ def create_app(
     application.include_router(models.router)
     application.include_router(tools.router)
     application.include_router(memory.router)
+    application.include_router(brain_graph_api.router)
     application.include_router(skills.router)
     application.include_router(agents.router)
     application.include_router(capabilities.router)

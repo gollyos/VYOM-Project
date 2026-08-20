@@ -466,3 +466,31 @@ VYOM should feel like **a living personal AI environment that understands the us
 - The LearnedRouter adds historical evidence to the existing routers without replacing them: per-condition tool preference (minimum two samples), per-domain model bias inside ModelRouter scoring, and strategy reuse decisions against current conditions.
 - The MissionLoop is the bounded autonomous working loop (goal-derived deterministic planning, verified steps, failure inspection + experience retrieval + adaptation with bounded retries, checkpoints in the existing store, step-level cancellation, L2/L3 step-pause with checkpoint resume, honest limit-stop) and feeds every mission outcome into Phase 14 learning.
 - The Universal Workbench completed media with one FFmpeg adapter (ffmpeg 9.0; every output verified by ffprobe — never exit-code-only) and one PDF dependency (PyMuPDF; merge/split reopened and counted); generation stays in the Artifact Engine; no separate media agents; missing backends stay honestly unavailable.
+
+## Unified Operating Graph Decisions — 2026-08-20
+
+- VYOM has one Intelligence Core. The operating graph is a rebuildable,
+  provenance-labelled projection over the existing authoritative task, memory,
+  CRM, goal, milestone, commitment, automation, artifact, experience, strategy,
+  skill, agent, capability, model, tool, device and evidence owners. It is not a
+  second Brain, graph-database authority or replacement memory store.
+- Every projected item has a canonical typed identity and a `KNOWN_BY` link to
+  the VYOM Core; useful domain edges preserve their specific meaning (belongs
+  to, uses, produced, supported by, learned from, supersedes, blocked by,
+  milestone and run relationships).
+- Derived links and explicit user/runtime links have separate ownership.
+  Projection refresh may rebuild derived nodes/edges but can never erase an
+  explicit relationship. Missing endpoints fail closed.
+- Highly-sensitive memories, secret-shaped values, raw content and hidden
+  reasoning never enter the operating graph. Central redaction runs before any
+  label or summary is persisted.
+- Cognitive memory retrieval receives a small direct-neighbor context from the
+  graph. It never deserializes or sends the full graph/history to a model.
+- Large graph refreshes are batched and run in the background; the last
+  consistent projection remains readable while refresh is in progress, so a
+  graph rebuild cannot add multi-second latency to every user command.
+- HunteAI/Maya transcript patterns are reference inputs only. VYOM adopts
+  durable mission/schedule/artifact/delivery, capability-broker and teachable-
+  skill patterns while rejecting antivirus bypass, unrestricted delegated
+  access, automatic URL installs, private reasoning exposure and tool-count
+  marketing as measures of intelligence.

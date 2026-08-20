@@ -2,7 +2,7 @@
 
 > Persistent implementation ledger. Update this file after every completed work slice.
 >
-> Last updated: 2026-08-20 (Asia/Calcutta, 22:00) — persistent-operator reconstruction: independent concurrent tasks, decade-scale history, freshness gating, durable natural/cron command scheduling, shared phone/schedule/desktop task provenance, startup lazy-loading, release rebuild and cleanup. Final Brain suite 665 passed / 2 skipped; native release and one persistent Brain verified. See the newest Verification record and `VYOM_RECONSTRUCTION_REPORT_2026-08-20.md`.
+> Last updated: 2026-08-20 (Asia/Calcutta, 23:05) — unified VYOM operating graph: tasks, memory, CRM, goals, milestones, commitments, automations, artifacts, experiences, strategies, skills, agents, capabilities, models, tools, devices and evidence now form one provenance-labelled traversable projection connected to the Intelligence Core; linked context feeds cognitive retrieval. Final Brain suite 670 passed / 2 skipped; live Brain/API verified. See the newest Verification record.
 
 ## Authority and purpose
 
@@ -36,6 +36,8 @@ Before every future handoff:
 Overall VYOM is not complete. The native experience now connects to an async local Brain that can plan and execute registered tools, persist/retrieve scoped memory, reuse sandboxed skills, create bounded declarative agents, learn controlled lessons from verified failures, enforce approval policy, dynamically compose evidence, run bounded multi-source research with source ranking/contradiction detection/citations, drive a semantic Browser Agent 2.0 over the existing Playwright layer, discover capabilities/subscriptions/MCP/API/SaaS alternatives before proposing new integrations, search/compare/reserve/verify bounded bookings, generate/validate/version real professional artifacts behind a quality-gated client delivery package, launch/focus/close registered applications, manage native windows across multiple monitors, read/write the clipboard deliberately, capture and understand the active screen on request, dispatch meaningful native notifications, run bounded accessibility-first input automation with a policy-gated last-resort mouse/keyboard fallback, pair/authenticate a local device node, fetch provider-independent market data with honest freshness labeling, track portfolio P&L/exposure/concentration, build evidence-backed trading theses and structured setups, size positions and gate every proposed trade through a strict PASS/REDUCE/REJECT Risk Engine, simulate market/limit/stop orders through a local PAPER broker with a journal and kill switches, run lookahead-protected historical backtests with walk-forward evaluation, check deterministic price/technical/portfolio alerts, and now manage structured goals with evidence-based progress, track habits through explicit check-ins with evidence-gated pattern insight and respectful (never shaming) interventions, run structured routines through the existing permission-gated tool layer, track focus sessions and real workload/work-pattern signals, prioritize cross-domain work through a Chief-of-Staff orchestrator that returns one justified recommendation, gate every proactive suggestion through an importance/timing/duplicate-suppression check before it ever interrupts the user, apply notification priority/batching/quiet-hours policy, and assemble morning/evening/weekly/monthly reviews from real recorded events only — all behind the same Permission Engine, Tool Registry, and evidence/audit boundary as every earlier phase, with no real-money execution path anywhere in the codebase and no continuous surveillance of any kind. Real cloud-model, live web-search/booking/delivery/market-data providers, voice E2E verification, and a real remote device transport still require locally configured credentials or hardware.
 
 **Persistent operator reconstruction note (2026-08-20):** Independent voice/text commands no longer cancel each other; only a revised transcription of the same utterance can supersede its earlier task. Desktop, authenticated remote, and scheduled sources now create ordinary Task Runtime tasks with scoped context/source/correlation identity. The default distributed budget is ten concurrent tasks. Historical task and memory retrieval filters before limiting and supports dates/entities/clients/projects/sources plus superseded history; current truth still excludes superseded facts. Natural command schedules and five-field cron persist in the existing AutomationStore and execute through the same permissions/verifier. Product freshness phrases (including n8n-style “what's new/new nodes”) require current evidence. The full required A–AH truth table, cleanup evidence, exact release identity, and remaining limitations are recorded in `VYOM_RECONSTRUCTION_REPORT_2026-08-20.md`.
+
+**Unified operating graph note (2026-08-20):** The former graph was limited to memory-to-memory edges. `app/brain_graph/` now materializes a rebuildable cross-store projection while every original store remains authoritative. Explicit relationships survive projection refresh, highly-sensitive memories and secret-shaped text are excluded/redacted, and cognitive memory hits receive only their small direct-neighbor context. Batched refresh runs in the background so it does not block command handling. The live graph currently contains 5,318 nodes and 11,219 relationships (5,902 specific/non-Core links).
 
 **Phase 17 note (2026-08-17):** `app/adaptive/learned_router.py`, `app/runtime/mission_loop.py`, `app/runtime/cognitive_runtime.py`, `app/workbench/engine.py`, and `app/runtime/mission_packs.py` (8 mission packs: deep-research, coding, agency, browser, document, media, chief-of-staff, paper-trading) are present in the repository and wired into `main.py`. A first verification pass this same day found two real bugs (a dropped mission-context argument, and a browser-automation event-loop-blocking bug) and deliberately reverted an attempted fix rather than ship it unsafely.
 
@@ -79,6 +81,7 @@ Overall VYOM is not complete. The native experience now connects to an async loc
 | Real OS/filesystem/tool actions | Complete within Phase 5 boundary | Only registered, policy-gated actions are available; unrestricted OS control remains prohibited. |
 | Typed persistent memory | Complete | SQLite store, 14 memory types, provenance, confidence, sensitivity, supersession, expiry, user CRUD/correction/forget, and restart persistence. |
 | Hybrid memory retrieval and graph | Complete | Structured filters, keyword, local semantic hash, recency/importance/confidence/verification/relationship ranking, disabled-embedding fallback, and depth-bounded graph API. |
+| Unified VYOM operating graph | Complete first cross-store slice | Rebuildable projection over tasks/memory/CRM/goals/milestones/commitments/automations/artifacts/experiences/strategies/skills/agents/capabilities/models/tools/devices/evidence; explicit links persist separately; secret/high-sensitivity exclusion; bounded graph/context APIs; direct linked context feeds cognitive retrieval; background batched refresh avoids command-path rebuild latency. No dedicated Living-Core graph visualizer yet. |
 | Capability Registry | Complete for current sources | Health-backed tools, configured models, MCP discovery contract, active skills, and ready agents; unavailable capabilities stay observable. |
 | Skill system | Complete for first real skill | Structured/versioned storage, semantic duplicate check, matcher, sandbox, evaluation, metrics, promotion policy, rollback, and real project-build-check execution. |
 | Agent Factory/runtime | Complete for first real agent | Permanent seed registry, AgentSpec validation, Project Health Agent factory, sample mission, delegation, lifecycle, budgets, performance, and generated visuals. |
@@ -341,6 +344,56 @@ Developer focus remains a deliberate local composition and `Close everything` do
 | `docs/` | Product memory, architecture, model-routing, autonomy, and event protocol documentation. |
 
 ## Verification record
+
+### 2026-08-20 - Unified VYOM operating graph and transcript-derived Brain connectivity
+
+**Implemented:**
+
+- Confirmed the prior `memory_relationships` graph could connect only two
+  existing memories. It could not traverse from a remembered fact to its task,
+  goal, client/project, artifact, commitment, automation, experience, skill,
+  tool, model, agent or evidence.
+- Added migration v3 and `app/brain_graph/`: canonical typed nodes, specific
+  provenance-labelled relationships, central Core membership, an explicit-link
+  owner that survives projection refresh, fail-closed endpoint validation,
+  bounded traversal/context/summary APIs, and startup/runtime wiring.
+- Added projections for tasks, non-highly-sensitive memories, CRM records,
+  artifacts, commitments, goals/milestones/habits, automations/runs,
+  experiences/strategies, devices, skills, agents and capabilities. Task result
+  and verifier evidence become inspectable evidence nodes.
+- Added central redaction before labels/summaries are persisted. Highly
+  sensitive memories, secrets, raw content and hidden reasoning are excluded.
+- Wired direct linked context into `ResolutionChain` memory hits. Retrieval
+  executes a targeted adjacency query; it never loads/sends the complete graph.
+- Replaced per-row refresh writes with batched SQLite operations and made
+  rebuilds background/eventually-consistent so 5,000+ node refreshes do not
+  block VYOM readiness or every user command.
+- Reviewed the three user-provided Maya/HunteAI transcript files and the live
+  38-second The Hunter AI stock-research short; mapped useful patterns and
+  explicit rejections in `docs/VYOM_OPERATOR_REFERENCE_RESEARCH_2026-08-20.md`.
+
+**Verification actually performed:**
+
+- New graph tests: **5 passed** (cross-store traversal, goal/milestone branch,
+  explicit-link persistence/removal, highly-sensitive exclusion, missing-node
+  failure, and cognitive linked-context feed).
+- Focused memory/personal/migration/adaptive/cognitive matrix: **141 passed**.
+- Final complete Brain suite after performance changes: **670 passed, 2
+  skipped, 3 warnings, 0 failures**. Warnings are the existing Starlette/httpx
+  deprecation and two known aiosqlite voice-test teardown warnings.
+- Live Brain PID **4568**: `/readyz` returned ready. Background projection
+  produced **5,318 nodes / 11,219 relationships / 5,902 specific links**.
+- Live direct-neighbor memory context returned its originating task in **72 ms**.
+  Five warm summary API calls measured **43–54 ms** after the first call.
+- Live explicit relationship API created a verified `RELATED_TO` edge and then
+  deleted it successfully, leaving no verification edge behind.
+- No frontend/Rust file changed; frontend/native rebuild was not run in this
+  backend-only slice.
+
+**Known limitation:** projection freshness is intentionally eventual (a stale
+consistent graph may be read while its background refresh runs). The Living
+Core has no dedicated cross-store graph visualizer yet. Physical phone/mic and
+live third-party delivery remain outside this verification pass.
 
 ### 2026-08-20 - Persistent operator reconstruction and release gate
 
@@ -884,6 +937,20 @@ Do not start a new capability merely because it appears in the future vision. Im
 Recommended next phase when approved: **Phase 17 - Production Integration Activation** (carried): Brain-as-Tauri-sidecar lifecycle, one real Google OAuth E2E, one real web-search/booking/delivery/market-data provider E2E, `pywinauto` accessibility, proactive engine on real triggers, a real second device hardware-verifying the distributed runtime, home-server Docker deployment, code-signing keys + signed updates, and the Expo app on hardware. Phase 16 follow-ups to fold in: register a real planner contract for mission planning (model-assisted planning for genuinely novel multi-step goals, still bounded), route Defuddle/Playwright selection through LearnedRouter.preferred_tool at the research fetch site, and stream mission-loop events into the desktop Core states live.
 
 ## Change log
+
+### 2026-08-20 - Unified VYOM operating graph
+
+- Added one cross-store operating graph without replacing TaskStore,
+  MemoryStore, CRM, goals, automations, artifacts, adaptive experience, skills,
+  agents, capabilities, permissions or evidence ownership.
+- Connected every projected durable item to the Intelligence Core and added
+  specific task/memory/project/goal/artifact/evidence/experience/skill/tool
+  branches with provenance.
+- Added persistent explicit relationships, bounded local APIs, privacy and
+  redaction boundaries, migration v3, cognitive linked-context retrieval and
+  non-blocking batched refresh.
+- Added five focused tests and re-ran the full 670-test Brain suite; restarted
+  and verified the persistent live Brain and graph APIs.
 
 ### 2026-08-20 - Persistent personal operator reconstruction
 

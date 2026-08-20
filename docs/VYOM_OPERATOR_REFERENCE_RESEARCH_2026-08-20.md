@@ -112,6 +112,57 @@ Initial video indexes reviewed:
 - Graphify official video/article index:
   https://graphify.com/blog
 
+### HunteAI Maya 6.0 / Android transcript set and stock-research short
+
+User-supplied transcript sources reviewed on 2026-08-20:
+
+- `32eb9a45-d7a6-400e-a763-9858dcd726fc/pasted-text.txt`
+- `9ab87745-56b3-40d4-ae3c-c6a89fbce743/pasted-text.txt`
+- `d1b4e7ab-831b-4f63-b826-37db2db4eae9/pasted-text.txt`
+- The Hunter AI short, uploaded 2026-08-19:
+  https://www.youtube.com/shorts/Na0AWCkM4aY
+  (`Maya Ko Stock Market Research Agent Banane Ko Bola…`; duration 38 s).
+
+The short had no exposed YouTube transcript in the reviewed session. Its title,
+description, duration, channel and upload date were checked against the live
+page, then cross-matched to the user-supplied transcripts. Demonstrated product
+claims remain reference evidence, not independent proof that the product can
+reliably perform them.
+
+Useful patterns:
+
+- Raw conversation/history is kept separately from filtered durable knowledge,
+  with provenance visible as layers/branches rather than flattening everything
+  into the current identity.
+- A spoken objective can create a named worker, schedule it, run it now, show
+  mission status, save an artifact and deliver it through another channel.
+- A restricted worker requests privileged delivery from the owner agent rather
+  than receiving unrestricted WhatsApp/PC access directly. This maps cleanly to
+  VYOM's central capability broker and Permission Engine.
+- Teachable macros record a sequence, accept corrections while recording, and
+  identify values that must be requested at execution time. VYOM should map
+  that to versioned SkillSpecs with typed runtime input slots, validation and
+  outcome verification—not blind coordinate replay.
+- Direct APIs/CLI are faster and more reliable than visual screen automation;
+  visual automation belongs at the end of the fallback order and needs progress,
+  timeout, take-over and postcondition evidence.
+- Phone/text/voice are useful command transports, while the durable task,
+  permission, memory and evidence owners remain in the one Brain.
+
+Patterns explicitly rejected for VYOM:
+
+- Disabling Windows Defender, SmartScreen, Play Protect or other OS security to
+  install unsigned automation software.
+- Granting unrestricted PC/phone/accessibility authority to a delegated worker.
+- Installing a plugin/MCP/capability directly from a URL without controlled
+  intake, pinning, sandboxing, benchmark, permission review and approval.
+- Showing or persisting private chain-of-thought. VYOM exposes operational
+  actions, observations, errors, corrections and evidence only.
+- Treating a large tool count as intelligence. VYOM measures verified task-level
+  completion, latency, retries, cost and safe reuse.
+- Copying romantic/dependency-forming persona behavior. VYOM may be warm and
+  natural without pretending emotional dependence or weakening user autonomy.
+
 ## VYOM priority order derived from this research
 
 1. Preserve one durable Brain and one command/task/evidence path.
@@ -126,4 +177,6 @@ Initial video indexes reviewed:
    resolution chain; keep edge provenance and an honest fallback.
 7. Build professional end-to-end acceptance packs (research, coding, agency,
    documents, meetings, CRM, n8n) that measure whole-goal completion.
-
+8. Turn the currently separate task/memory/goal/project/commitment/artifact/
+   experience/skill/evidence stores into one provenance-labelled, traversable
+   operating graph without replacing any authoritative owner.
