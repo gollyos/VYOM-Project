@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
+from app.skills.teachable import TeachableSkillCreate
 
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
@@ -24,3 +25,23 @@ async def create_build_check(request: Request) -> dict:
     skill, evaluation, created = await request.app.state.skill_builder.create_build_check(created_by="local-api")
     request.app.state.capability_discovery.from_skill(skill)
     return {"skill": skill.model_dump(mode="json"), "evaluation": evaluation.model_dump(mode="json") if evaluation else None, "created": created}
+
+
+@router.post("/teachable")
+async def create_teachable_skill(payload: TeachableSkillCreate, request: Request) -> dict:
+    try:
+        skill = request.app.state.teachable_skills.create(payload)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {"skill": skill.model_dump(mode="json"), "activation_required": True}
+
+
+@router.post("/{skill_id}/activate")
+async def activate_teachable_skill(skill_id: str, request: Request) -> dict:
+    try:
+        skill = request.app.state.teachable_skills.activate(skill_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Skill not found") from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {"skill": skill.model_dump(mode="json"), "active": True}

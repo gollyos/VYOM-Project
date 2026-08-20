@@ -236,6 +236,16 @@ class TaskRuntime:
             task.permission_level = self.permission_engine.raise_to_intent_floor(
                 self.permission_engine.classify(task.user_request), profile.intent
             )
+            if profile.intent == "run_taught_skill" and self.intelligence_engine is not None:
+                from app.skills.teachable import parse_skill_command
+
+                skill_id, _ = parse_skill_command(task.user_request)
+                taught_skill = self.intelligence_engine.skill_registry.get(skill_id)
+                if taught_skill is None:
+                    raise RuntimeError(f"Unknown taught skill: {skill_id}")
+                order = {PermissionLevel.L0: 0, PermissionLevel.L1: 1, PermissionLevel.L2: 2, PermissionLevel.L3: 3}
+                if order[taught_skill.required_permissions] > order[task.permission_level]:
+                    task.permission_level = taught_skill.required_permissions
             task.requires_approval = self.permission_engine.requires_approval(task.permission_level)
             task.requires_tools = "tools" in profile.needs
             # ACTION PROVENANCE. Every externally observable action this

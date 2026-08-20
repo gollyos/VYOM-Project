@@ -480,6 +480,17 @@ class Database:
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS remote_deliveries (
+                delivery_id TEXT PRIMARY KEY,
+                node_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                delivery_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                acknowledged_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_remote_deliveries_node
+                ON remote_deliveries(node_id, status, created_at);
+
             CREATE TABLE IF NOT EXISTS distributed_audit (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 task_id TEXT,

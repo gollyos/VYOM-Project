@@ -704,6 +704,21 @@ class TaskClassifier:
                 deterministic=True, intent="memory_history_recall", needs=set(),
             )
 
+        if re.search(r"\brun\s+skill\s+[a-z0-9][a-z0-9-]{2,63}(?:\s+with\s+.+)?$", original):
+            return TaskProfile(
+                domain=TaskDomain.SYSTEM, complexity=2, deterministic=True,
+                intent="run_taught_skill", needs={"intelligence", "tools"},
+            )
+
+        if any(phrase in original for phrase in (
+            "show my brain", "show vyom brain", "brain graph", "brain connections",
+            "living core graph", "show what you know",
+        )):
+            return TaskProfile(
+                domain=TaskDomain.ANALYSIS, complexity=1, deterministic=True,
+                intent="show_brain_graph", needs={"intelligence"},
+            )
+
         # A natural schedule owns a FUTURE command; the embedded words
         # ("show status", "open Chrome") must not execute immediately.
         from app.automation.natural_schedule import is_schedule_request

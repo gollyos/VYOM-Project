@@ -25,6 +25,13 @@ export interface RemoteApproval {
   requires_strong_verification: boolean;
 }
 
+export interface PairingTicket { request_id: string; code: string; expires_at: string }
+export interface RemoteDelivery {
+  delivery_id: string;
+  kind: string;
+  payload: { task_id?: string; status?: string; summary?: string; evidence?: string[] };
+}
+
 const BASE_URL_KEY = "vyom.base_url";
 const SESSION_KEY = "vyom.session_id";
 const NODE_ID_KEY = "vyom.node_id";
@@ -33,9 +40,41 @@ async function baseUrl(): Promise<string> {
   return (await AsyncStorage.getItem(BASE_URL_KEY)) ?? "http://127.0.0.1:7788";
 }
 
-export async function pair(base: string, token: string): Promise<void> {
+export async function pair(base: string, nodeId: string, token: string): Promise<void> {
   await AsyncStorage.setItem(BASE_URL_KEY, base);
+  await AsyncStorage.setItem(NODE_ID_KEY, nodeId);
   await SecureStore.setItemAsync("vyom.token", token);
+}
+
+export async function isPaired(): Promise<boolean> {
+  return Boolean(await AsyncStorage.getItem(NODE_ID_KEY)) && Boolean(await SecureStore.getItemAsync("vyom.token"));
+}
+
+export async function startPairing(base: string, name = "My phone"): Promise<PairingTicket> {
+  const normalized = base.replace(/\/$/, "");
+  const parsed = new URL(normalized);
+  if (parsed.protocol !== "https:" && !["127.0.0.1", "localhost"].includes(parsed.hostname)) {
+    throw new Error("A phone connection must use HTTPS; plain HTTP is allowed only on this PC");
+  }
+  const response = await fetch(`${normalized}/api/devices/pair`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, device_type: "mobile", platform: "expo", requested_capabilities: ["notifications.send", "input.voice"] }),
+  });
+  if (!response.ok) throw new Error(`Pairing failed (${response.status})`);
+  await AsyncStorage.setItem(BASE_URL_KEY, normalized);
+  return await response.json();
+}
+
+export async function claimPairing(ticket: PairingTicket): Promise<boolean> {
+  const response = await fetch(`${await baseUrl()}/api/devices/pair/${ticket.request_id}/claim`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: ticket.code }),
+  });
+  if (response.status === 409) return false;
+  if (!response.ok) throw new Error(`Pairing claim failed (${response.status})`);
+  const data = await response.json();
+  await pair(await baseUrl(), data.node.node_id, data.token);
+  return true;
 }
 
 export const vyomClient = {
@@ -79,7 +118,13 @@ export const vyomClient = {
 
   async approvals(): Promise<RemoteApproval[]> {
     try {
-      const response = await fetch(`${await baseUrl()}/api/remote/approvals`);
+      let session = await this.session();
+      if (!session) session = await this.openSession();
+      const nodeId = await AsyncStorage.getItem(NODE_ID_KEY);
+      if (!session || !nodeId) return [];
+      const response = await fetch(`${await baseUrl()}/api/remote/approvals`, {
+        headers: { "X-VYOM-Node-ID": nodeId, "X-VYOM-Session": session },
+      });
       if (!response.ok) return [];
       return await response.json();
     } catch {
@@ -87,10 +132,10 @@ export const vyomClient = {
     }
   },
 
-  async command(command: string): Promise<{ summary?: string }> {
+  async command(command: string): Promise<{ summary?: string; accepted: boolean }> {
     let session = await this.session();
     if (!session) session = await this.openSession();
-    if (!session) return { summary: "Not paired" };
+    if (!session) return { summary: "Not paired", accepted: false };
     const nodeId = (await AsyncStorage.getItem(NODE_ID_KEY)) ?? "mobile";
     const response = await fetch(`${await baseUrl()}/api/remote/command`, {
       method: "POST",
@@ -104,17 +149,46 @@ export const vyomClient = {
         permission_context: { origin: "mobile" },
       }),
     });
-    if (!response.ok) return { summary: `Rejected (${response.status})` };
+    if (!response.ok) return { summary: `Rejected (${response.status})`, accepted: false };
     const data = await response.json();
-    return { summary: `Task ${data.task_id ?? "?"} ${data.task_status ?? "queued"}` };
+    return { summary: `Task ${data.task_id ?? "?"} ${data.task_status ?? "queued"}`, accepted: true };
   },
 
   async decideApproval(taskId: string, decision: string, strongVerification: boolean): Promise<void> {
     const nodeId = (await AsyncStorage.getItem(NODE_ID_KEY)) ?? "mobile";
+    let session = await this.session();
+    if (!session) session = await this.openSession();
+    if (!session) return;
     await fetch(`${await baseUrl()}/api/remote/approvals/${taskId}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-VYOM-Session": session },
       body: JSON.stringify({ decision, node_id: nodeId, strong_verification: strongVerification }),
+    });
+  },
+
+  async deliveries(): Promise<RemoteDelivery[]> {
+    let session = await this.session();
+    if (!session) session = await this.openSession();
+    const nodeId = await AsyncStorage.getItem(NODE_ID_KEY);
+    if (!session || !nodeId) return [];
+    const response = await fetch(`${await baseUrl()}/api/remote/deliveries`, {
+      headers: { "X-VYOM-Node-ID": nodeId, "X-VYOM-Session": session },
+    });
+    if (response.status === 401) {
+      await AsyncStorage.removeItem(SESSION_KEY);
+      return [];
+    }
+    if (!response.ok) return [];
+    return await response.json();
+  },
+
+  async acknowledge(deliveryId: string): Promise<void> {
+    const session = await this.session();
+    const nodeId = await AsyncStorage.getItem(NODE_ID_KEY);
+    if (!session || !nodeId) return;
+    await fetch(`${await baseUrl()}/api/remote/deliveries/${deliveryId}/ack`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ node_id: nodeId, session_id: session }),
     });
   },
 };
@@ -146,8 +220,9 @@ export const OfflineQueue = {
     let submitted = 0;
     for (const item of queue) {
       try {
-        await client.command(item.command);
-        submitted += 1;
+        const result = await client.command(item.command);
+        if (result.accepted) submitted += 1;
+        else remaining.push(item);
       } catch {
         remaining.push(item);
       }

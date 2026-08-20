@@ -59,6 +59,7 @@ import type {
   TaskMissionObject,
   TerminalOutputObject,
   MemoryClusterObject,
+  BrainGraphObject,
   SkillProcedureObject,
   EmailThreadObject,
   LeadProfileObject,
@@ -108,6 +109,7 @@ const iconByType: Record<UIObject["type"], ReactNode> = {
   "code-diff": <Braces size={13} />,
   "browser-preview": <Monitor size={13} />,
   "memory-cluster": <Brain size={13} />,
+  "brain-graph": <Network size={13} />,
   "skill-procedure": <Workflow size={13} />,
   "email-thread": <Mail size={13} />,
   "lead-profile": <Building2 size={13} />,
@@ -452,6 +454,46 @@ function MemoryCluster({ object }: { object: MemoryClusterObject }) {
         ))}
       </div>
       {object.caption && <p className="memory-caption">{object.caption}</p>}
+    </Surface>
+  );
+}
+
+function BrainGraph({ object }: { object: BrainGraphObject }) {
+  const visible = object.nodes.slice(0, 32);
+  const positions = new Map(visible.map((node, index) => {
+    if (node.id === object.rootId) return [node.id, { x: 50, y: 50 }];
+    const ringIndex = index - (visible.some((item) => item.id === object.rootId) ? 1 : 0);
+    const count = Math.max(visible.length - 1, 1);
+    const angle = (ringIndex / count) * Math.PI * 2 - Math.PI / 2;
+    const radius = ringIndex % 2 === 0 ? 36 : 27;
+    return [node.id, { x: 50 + Math.cos(angle) * radius, y: 50 + Math.sin(angle) * radius }];
+  }));
+  return (
+    <Surface object={object}>
+      <div className="brain-graph-meta">
+        <span>{object.totalNodes.toLocaleString()} entities</span>
+        <span>{object.totalRelationships.toLocaleString()} links</span>
+        <small>Showing {visible.length} nearest entities</small>
+      </div>
+      <div className="brain-graph-canvas" role="img" aria-label="VYOM persistent operating brain graph">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          {object.edges.map((edge) => {
+            const from = positions.get(edge.from); const to = positions.get(edge.to);
+            if (!from || !to) return null;
+            return <line key={`${edge.from}-${edge.to}-${edge.relation}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} className={edge.verified ? "verified" : ""} />;
+          })}
+        </svg>
+        {visible.map((node) => {
+          const point = positions.get(node.id)!;
+          const core = node.id === object.rootId;
+          return (
+            <div key={node.id} className={`brain-graph-node${core ? " brain-graph-core" : ""}`}
+              style={{ left: `${point.x}%`, top: `${point.y}%` }} title={`${node.kind}: ${node.label}`}>
+              <i /><strong>{core ? "VYOM" : node.label}</strong><small>{node.kind}</small>
+            </div>
+          );
+        })}
+      </div>
     </Surface>
   );
 }
@@ -853,6 +895,7 @@ function ObjectRenderer({ object }: { object: UIObject }) {
     case "code-diff": return <CodeDiff object={object} />;
     case "browser-preview": return <BrowserPreview object={object} />;
     case "memory-cluster": return <MemoryCluster object={object} />;
+    case "brain-graph": return <BrainGraph object={object} />;
     case "skill-procedure": return <SkillProcedure object={object} />;
     case "email-thread": return <EmailThread object={object} />;
     case "lead-profile": return <LeadProfile object={object} />;

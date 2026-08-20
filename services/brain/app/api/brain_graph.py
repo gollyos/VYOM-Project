@@ -25,6 +25,22 @@ async def graph_summary(request: Request) -> dict:
     return await request.app.state.brain_graph.summary()
 
 
+@router.get("/composition")
+async def graph_composition(request: Request) -> dict:
+    """Return the same Living Core composition used by a natural Brain command."""
+    from app.schemas.tasks import Task, TaskProfile, TaskDomain
+
+    task = Task(user_request="show my brain", goal="Show my brain")
+    profile = TaskProfile(domain=TaskDomain.ANALYSIS, complexity=1, deterministic=True,
+                          intent="show_brain_graph", needs={"intelligence"})
+
+    async def emit(*_args, **_kwargs):
+        return None
+
+    result = await request.app.state.intelligence_engine.execute(task, profile, emit)
+    return result.ui_composition or {}
+
+
 @router.get("/{entity_id:path}/context")
 async def linked_context(entity_id: str, request: Request, limit: int = 8) -> dict:
     try:

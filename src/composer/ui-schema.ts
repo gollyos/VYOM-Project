@@ -16,6 +16,7 @@ export type UIObjectType =
   | "code-diff"
   | "browser-preview"
   | "memory-cluster"
+  | "brain-graph"
   | "skill-procedure"
   | "email-thread"
   | "lead-profile"
@@ -93,6 +94,14 @@ export type MemoryClusterObject = UIObjectBase<"memory-cluster"> & {
   }>;
   edges: Array<{ from: string; to: string; label?: string }>;
   caption?: string;
+};
+
+export type BrainGraphObject = UIObjectBase<"brain-graph"> & {
+  rootId: string;
+  nodes: Array<{ id: string; label: string; kind: string; status?: string | null }>;
+  edges: Array<{ from: string; to: string; relation: string; verified: boolean }>;
+  totalNodes: number;
+  totalRelationships: number;
 };
 
 export type SkillProcedureObject = UIObjectBase<"skill-procedure"> & {
@@ -382,6 +391,7 @@ export type UIObject =
   | CodeDiffObject
   | BrowserPreviewObject
   | MemoryClusterObject
+  | BrainGraphObject
   | SkillProcedureObject
   | EmailThreadObject
   | LeadProfileObject

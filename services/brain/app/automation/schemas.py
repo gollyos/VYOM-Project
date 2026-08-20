@@ -61,6 +61,22 @@ class AutomationCreate(BaseModel):
                 parse_cron(self.cron_expression)
         if self.type == AutomationType.CONDITIONAL and not self.condition:
             raise ValueError("condition is required for conditional automations")
+        if self.type == AutomationType.CONDITIONAL:
+            from app.schemas.events import EventType
+
+            event_type = str((self.condition or {}).get("event_type", "")).strip()
+            if not event_type:
+                raise ValueError("Conditional automations require condition.event_type")
+            try:
+                EventType(event_type)
+            except ValueError as error:
+                raise ValueError(f"Unknown condition.event_type: {event_type}") from error
+            filters = (self.condition or {}).get("filters", {})
+            if not isinstance(filters, dict):
+                raise ValueError("condition.filters must be an object of exact-match fields")
+            debounce = (self.condition or {}).get("debounce_seconds", 0)
+            if not isinstance(debounce, (int, float)) or not 0 <= debounce <= 86400:
+                raise ValueError("condition.debounce_seconds must be between 0 and 86400")
         if self.permission_level in {"L2", "L3"} and self.action != "run_vyom_command":
             raise ValueError("Consequential automation actions require per-run approval and cannot be auto-enabled")
         if self.action == "run_vyom_command" and not str((self.condition or {}).get("command", "")).strip():

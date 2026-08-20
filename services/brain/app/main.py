@@ -98,6 +98,7 @@ from app.remote import (
     RemoteNotificationRouter,
     RemoteSessionManager,
 )
+from app.remote.delivery import RemoteDeliveryBridge, RemoteDeliveryStore
 from app.backup import BackupManager, RestoreService, SnapshotService
 from app.security.authentication import LocalAuthPolicy, TrustMode, UserIdentity
 from app.security.authorization import AuthorizationService
@@ -252,6 +253,7 @@ from app.memory.store import MemoryStore
 from app.learning.improvement_engine import ImprovementEngine
 from app.learning.intelligence_engine import IntelligenceEngine
 from app.automation.scheduler import AutomationScheduler
+from app.automation.events import AutomationEventEngine
 from app.automation.store import AutomationStore
 from app.briefing.engine import BusinessEngine
 from app.briefing.service import BriefingService
@@ -272,6 +274,7 @@ from app.tools.registry import ToolRegistry
 from app.tools_builtin import BrowserTool, DesktopTool, FilesystemTool, GitTool, InputControlTool, ScreenObserveTool, ScreenshotTool, SystemTool, TerminalTool
 from app.skills.builder import SkillBuilder
 from app.skills.executor import SkillExecutor
+from app.skills.teachable import TeachableSkillService
 from app.skills.registry import SkillRegistry
 from app.skills.sandbox import SkillSandbox
 
@@ -441,6 +444,7 @@ def create_app(
         skill_sandbox = SkillSandbox(capability_registry, tool_registry)
         skill_builder = SkillBuilder(skill_registry, skill_sandbox)
         skill_executor = SkillExecutor(skill_registry, action_engine)
+        teachable_skills = TeachableSkillService(skill_registry, tool_registry)
 
         agent_registry = AgentRegistry(selected_settings.agents_root)
         agent_registry.load()
@@ -761,14 +765,17 @@ def create_app(
                 command = str((definition.condition or {}).get("command", "")).strip()
                 if not command:
                     raise RuntimeError("Scheduled VYOM command is empty")
+                is_event_trigger = definition.type.value == "conditional"
+                origin = "automation" if is_event_trigger else "schedule"
                 created = await runtime.create_task(
                     TaskCreate(
                         user_request=command,
-                        context_id=f"schedule:{definition.id}",
-                        source=f"schedule:{definition.id}",
-                        correlation_id=f"schedule:{definition.id}:{definition.run_count + 1}",
+                        context_id=f"{origin}:{definition.id}",
+                        source=f"{origin}:{definition.id}",
+                        correlation_id=f"{origin}:{definition.id}:{definition.run_count + 1}",
                     ),
-                    provenance=ActionProvenance.APPROVED_SCHEDULE,
+                    provenance=(ActionProvenance.APPROVED_AUTOMATION if is_event_trigger
+                                else ActionProvenance.APPROVED_SCHEDULE),
                 )
                 deadline = asyncio.get_running_loop().time() + definition.budget.max_runtime_seconds
                 while asyncio.get_running_loop().time() < deadline:
@@ -868,6 +875,7 @@ def create_app(
             raise RuntimeError("Automation action is not registered")
 
         automation_scheduler = AutomationScheduler(automation_store, execute_automation)
+        automation_events = AutomationEventEngine(automation_store, automation_scheduler, event_bus)
         model_router = ModelRouter(
             model_registry,
             providers,
@@ -1035,6 +1043,8 @@ def create_app(
             approval_ttl_seconds=int(reliability_config.get("approvals", {}).get("remote_ttl_seconds", 1800)),
         )
         remote_notification_router = RemoteNotificationRouter(sync_journal)
+        remote_delivery_store = RemoteDeliveryStore(database)
+        remote_delivery_bridge = RemoteDeliveryBridge(event_bus, task_store, remote_delivery_store)
 
         backup_config = reliability_config.get("backup", {})
         snapshot_service = SnapshotService(
@@ -1201,6 +1211,7 @@ def create_app(
             agent_registry=agent_registry,
             capability_registry=capability_registry,
         )
+        intelligence_engine.brain_graph = brain_graph
         # Rebuilding several years of cross-store relationships is useful
         # background work, never a reason to delay VYOM becoming ready.
         brain_graph.start_refresh()
@@ -1344,6 +1355,7 @@ def create_app(
         application.state.skill_registry = skill_registry
         application.state.skill_builder = skill_builder
         application.state.skill_executor = skill_executor
+        application.state.teachable_skills = teachable_skills
         application.state.agent_registry = agent_registry
         application.state.agent_factory = agent_factory
         application.state.agent_lifecycle = agent_lifecycle
@@ -1360,6 +1372,7 @@ def create_app(
         application.state.meeting_service = meeting_service
         application.state.automation_store = automation_store
         application.state.automation_scheduler = automation_scheduler
+        application.state.automation_events = automation_events
         application.state.briefing_service = briefing_service
         application.state.business_engine = business_engine
         application.state.notification_service = notification_service
@@ -1459,6 +1472,8 @@ def create_app(
         application.state.remote_command_gateway = remote_command_gateway
         application.state.remote_approvals = remote_approvals
         application.state.remote_notification_router = remote_notification_router
+        application.state.remote_delivery_store = remote_delivery_store
+        application.state.remote_delivery_bridge = remote_delivery_bridge
         application.state.backup_manager = backup_manager
         application.state.restore_service = restore_service
         application.state.activity_summary = activity_summary
@@ -1553,6 +1568,8 @@ def create_app(
         else:
             readiness_tracker.mark_degraded(startup_report.failures)
         automation_scheduler.start()
+        automation_events.start()
+        remote_delivery_bridge.start()
         supervisor.start()
         await sync_bridge.start()
         adaptive_learning_bridge.start()
@@ -1560,6 +1577,8 @@ def create_app(
         await adaptive_learning_bridge.stop()
         await sync_bridge.stop()
         await supervisor.stop()
+        await automation_events.stop()
+        await remote_delivery_bridge.stop()
         await automation_scheduler.stop()
         for active in tuple(runtime.active.values()):
             active.cancel()

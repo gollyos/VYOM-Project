@@ -1,9 +1,9 @@
 # VYOM Mobile Companion (Phase 12)
 
-App: `apps/mobile/` (React Native + Expo scaffold). In-repo
-verification path: `services/brain/scripts/phase12_mobile_mock.py`
-(mock node) + Phase 12 tests. Real-device E2E is deferred — the Expo
-toolchain is not installed in this environment.
+App: `apps/mobile/` (React Native + Expo). Secure pairing, authenticated
+commands and durable result delivery are implemented. Dependencies are
+installed and strict TypeScript compilation passes. Real-device E2E remains
+deferred because no Android SDK/emulator or physical phone is available.
 
 ## Architecture
 
@@ -18,7 +18,7 @@ It never holds provider/model credentials and never runs tools itself.
 ## Authentication
 
 Pairing (8-char code → user approval on a trusted device) → token →
-session. Wrong/expired credentials are rejected 401; revoked nodes lose
+one-time mobile claim → session. Pair approval is local-PC only. Wrong/expired credentials are rejected 401; revoked nodes lose
 their sessions immediately.
 
 ## Command flow
@@ -29,8 +29,8 @@ voice/text command
                              nonce, permission context)
 → Brain validates + Permission Engine
 → Task Runtime creates the task (L2/L3 still gate to approvals)
-→ progress streams through the sync journal
-→ notification when relevant
+→ terminal result enters the node's durable authenticated delivery inbox
+→ mobile reads and acknowledges it
 ```
 
 Voice commands from desktop and mobile route to the same Brain/context
@@ -41,10 +41,10 @@ desktop) resolves through the persisted active-task context.
 
 ## Approvals
 
-`GET /api/remote/approvals` returns full context (action, reason,
+`GET /api/remote/approvals` requires a node-bound session and returns full context (action, reason,
 impact, agent, evidence, risk). Decisions: approve / reject / modify /
-pause / cancel. L3 requires the device biometric/OS confirmation flag —
-no one-tap blind approval. Approvals expire after 30 minutes.
+pause / cancel. L3 remains denied by the current mobile UI because OS biometric
+attestation is not implemented; no one-tap blind approval is claimed.
 
 ## Notifications
 
@@ -65,7 +65,9 @@ nagging.
 
 ## Limitations (honest)
 
-- The Expo app is scaffolded, not yet built/run on hardware here.
+- The Expo app compiles but is not yet run on hardware here.
 - Push notifications use a provider abstraction with no live push
   provider configured yet.
+- Physical-phone connections must use HTTPS (local TLS proxy/VPN); plain LAN
+  HTTP is rejected by the client.
 - No watch/wearable, no home-screen widgets, no background location.

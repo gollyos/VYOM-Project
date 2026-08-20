@@ -83,9 +83,22 @@ class MigrationManager:
         validation_expected=(2,),
     )
 
+    REMOTE_DELIVERY = Migration(
+        version=4,
+        name="authenticated_remote_delivery_v1",
+        statements=(
+            """CREATE TABLE IF NOT EXISTS remote_deliveries (
+                delivery_id TEXT PRIMARY KEY, node_id TEXT NOT NULL, status TEXT NOT NULL,
+                delivery_json TEXT NOT NULL, created_at TEXT NOT NULL, acknowledged_at TEXT)""",
+            "CREATE INDEX IF NOT EXISTS idx_remote_deliveries_node ON remote_deliveries(node_id, status, created_at)",
+        ),
+        validation_query="SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='remote_deliveries'",
+        validation_expected=(1,),
+    )
+
     def __init__(self, database, migrations: list[Migration] | None = None):
         self.database = database
-        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH], key=lambda item: item.version)
+        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY], key=lambda item: item.version)
         self.last_error: str | None = None
 
     async def ensure_table(self) -> None:

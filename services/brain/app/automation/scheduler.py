@@ -37,37 +37,47 @@ class AutomationScheduler:
         current = now or datetime.now(timezone.utc)
         completed: list[AutomationRun] = []
         for automation in await self.store.due(current, self.recovery_limit):
-            if await self.store.runs_today(automation.id, current) >= automation.budget.max_runs_per_day:
-                automation.status = AutomationStatus.PAUSED
-                await self.store.save(automation)
-                continue
             slot = automation.next_run_at or current
-            digest = hashlib.sha256(f"{automation.id}:{slot.isoformat()}".encode()).hexdigest()[:24]
-            run = AutomationRun(automation_id=automation.id, idempotency_key=f"{automation.id}:{digest}")
-            if not await self.store.begin_run(run):
-                continue
-            try:
-                run.result = await asyncio.wait_for(self.action(automation), timeout=automation.budget.max_runtime_seconds)
-                if run.result.get("awaiting_approval"):
-                    # The scheduled event successfully created an owned
-                    # Brain task, but the real-world effect is not complete.
-                    # Pause this automation until the user resolves the
-                    # per-run approval; never label it completed or enqueue
-                    # another occurrence over the top of it.
-                    run.status = "waiting_approval"
-                    automation.status = AutomationStatus.PAUSED
-                else:
-                    run.status = "completed"
-                    automation.advance(current)
-            except Exception as error:
-                run.status = "failed"
-                run.error = str(error)
-                automation.status = AutomationStatus.PAUSED
-            run.completed_at = datetime.now(timezone.utc)
-            await self.store.finish_run(run)
-            await self.store.save(automation)
-            completed.append(run)
+            run = await self.run_automation(automation, slot.isoformat(), current=current, advance=True)
+            if run is not None:
+                completed.append(run)
         return completed
+
+    async def run_automation(self, automation: Automation, idempotency_basis: str, *,
+                             current: datetime | None = None, advance: bool = False,
+                             trigger: dict | None = None) -> AutomationRun | None:
+        now = current or datetime.now(timezone.utc)
+        if await self.store.runs_today(automation.id, now) >= automation.budget.max_runs_per_day:
+            automation.status = AutomationStatus.PAUSED
+            await self.store.save(automation)
+            return None
+        digest = hashlib.sha256(f"{automation.id}:{idempotency_basis}".encode()).hexdigest()[:24]
+        run = AutomationRun(automation_id=automation.id, idempotency_key=f"{automation.id}:{digest}")
+        if trigger:
+            run.result["trigger"] = trigger
+        if not await self.store.begin_run(run):
+            return None
+        try:
+            action_result = await asyncio.wait_for(self.action(automation), timeout=automation.budget.max_runtime_seconds)
+            run.result.update(action_result)
+            if run.result.get("awaiting_approval"):
+                run.status = "waiting_approval"
+                automation.status = AutomationStatus.PAUSED
+            else:
+                run.status = "completed"
+                if advance:
+                    automation.advance(now)
+                else:
+                    automation.last_run_at = now
+                    automation.run_count += 1
+        except Exception as error:
+            run.status = "failed"
+            run.error = str(error)
+            automation.status = AutomationStatus.PAUSED
+        run.completed_at = datetime.now(timezone.utc)
+        await self.store.finish_run(run)
+        await self.store.save(automation)
+        return run
 
     async def _loop(self) -> None:
         while not self._stop.is_set():

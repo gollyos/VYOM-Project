@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel
 
 from app.remote.approvals import ApprovalExpiredError, StrongVerificationRequired
@@ -24,6 +24,22 @@ class ApprovalDecisionRequest(BaseModel):
 
 class NotifyStateRequest(BaseModel):
     state: str  # read | acted_on | dismissed
+
+
+class DeliveryAuth(BaseModel):
+    node_id: str
+    session_id: str
+
+
+def _require_session(state, node_id: str, session_id: str):
+    session = state.remote_sessions.get(session_id)
+    if session is None or session.node_id != node_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired device session")
+    node = state.device_registry.get(node_id)
+    if node is None or node.trust_level.value != "trusted":
+        raise HTTPException(status_code=403, detail="Device is not trusted")
+    state.remote_sessions.touch(session)
+    return session
 
 
 @router.post("/session")
@@ -86,13 +102,17 @@ async def cancel_task(task_id: str, payload: OpenSessionRequest, request: Reques
 
 
 @router.get("/approvals")
-async def list_approvals(request: Request) -> list[dict]:
+async def list_approvals(request: Request, x_vyom_node_id: str = Header(),
+                         x_vyom_session: str = Header()) -> list[dict]:
+    _require_session(request.app.state, x_vyom_node_id, x_vyom_session)
     service = request.app.state.remote_approvals
     return [view.model_dump() for view in await service.pending()]
 
 
 @router.post("/approvals/{task_id}")
-async def decide_approval(task_id: str, payload: ApprovalDecisionRequest, request: Request) -> dict:
+async def decide_approval(task_id: str, payload: ApprovalDecisionRequest, request: Request,
+                          x_vyom_session: str = Header()) -> dict:
+    _require_session(request.app.state, payload.node_id, x_vyom_session)
     service = request.app.state.remote_approvals
     try:
         return await service.decide(
@@ -141,3 +161,21 @@ async def away_summary(request: Request, since_iso: str) -> dict:
         raise HTTPException(status_code=400, detail="Invalid since_iso") from error
     builder = request.app.state.activity_summary
     return await builder.build(since)
+
+
+@router.get("/deliveries")
+async def list_deliveries(request: Request, x_vyom_node_id: str = Header(),
+                          x_vyom_session: str = Header(), limit: int = 50) -> list[dict]:
+    _require_session(request.app.state, x_vyom_node_id, x_vyom_session)
+    deliveries = await request.app.state.remote_delivery_store.pending(x_vyom_node_id, limit)
+    return [item.model_dump(mode="json") for item in deliveries]
+
+
+@router.post("/deliveries/{delivery_id}/ack")
+async def acknowledge_delivery(delivery_id: str, payload: DeliveryAuth, request: Request) -> dict:
+    _require_session(request.app.state, payload.node_id, payload.session_id)
+    try:
+        delivery = await request.app.state.remote_delivery_store.acknowledge(payload.node_id, delivery_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Delivery not found") from error
+    return delivery.model_dump(mode="json")

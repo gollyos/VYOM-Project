@@ -40,6 +40,14 @@ class DevicePairingService:
         self.token_store = token_store
         self._pending: dict[str, PairingRequest] = {}
         self._tokens: dict[str, str] = {}
+        self._approved_claims: dict[str, tuple[str, DeviceNode, str, datetime]] = {}
+
+    def _prune_expired(self) -> None:
+        now = datetime.now(timezone.utc)
+        self._pending = {key: value for key, value in self._pending.items() if value.expires_at >= now}
+        self._approved_claims = {
+            key: value for key, value in self._approved_claims.items() if value[3] >= now
+        }
 
     async def load_tokens(self) -> None:
         if self.token_store is None:
@@ -52,6 +60,7 @@ class DevicePairingService:
     def start_pairing(
         self, name: str, device_type: DeviceType, platform: str, requested_capabilities: list[DeviceCapability],
     ) -> PairingRequest:
+        self._prune_expired()
         if len(self._pending) >= self.max_pending_requests:
             raise PairingError("Too many pending pairing requests")
         code = secrets.token_hex(4)
@@ -64,6 +73,7 @@ class DevicePairingService:
         return request
 
     def approve(self, request_id: str, *, allowed_capabilities: list[DeviceCapability]) -> tuple[DeviceNode, str]:
+        self._prune_expired()
         request = self._pending.pop(request_id, None)
         if request is None:
             raise PairingError("Unknown or already-resolved pairing request")
@@ -76,6 +86,27 @@ class DevicePairingService:
         )
         token = secrets.token_urlsafe(32)
         self._tokens[node.node_id] = _hash_token(token)
+        self._approved_claims[request_id] = (request.code, node, token, request.expires_at)
+        return node, token
+
+    def pending(self) -> list[PairingRequest]:
+        self._prune_expired()
+        return list(self._pending.values())
+
+    def claim(self, request_id: str, code: str) -> tuple[DeviceNode, str]:
+        self._prune_expired()
+        approved = self._approved_claims.get(request_id)
+        if approved is None:
+            if request_id in self._pending:
+                raise PairingError("Pairing request is waiting for approval")
+            raise PairingError("Unknown or expired pairing claim")
+        expected_code, node, token, expires_at = approved
+        if datetime.now(timezone.utc) > expires_at:
+            self._approved_claims.pop(request_id, None)
+            raise PairingError("Pairing claim expired")
+        if not secrets.compare_digest(expected_code, code):
+            raise PairingError("Pairing code does not match")
+        self._approved_claims.pop(request_id, None)
         return node, token
 
     def reject(self, request_id: str) -> None:

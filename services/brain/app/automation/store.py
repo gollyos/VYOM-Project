@@ -46,6 +46,18 @@ class AutomationStore:
         )).fetchall()
         return [Automation.model_validate_json(row["automation_json"]) for row in rows]
 
+    async def conditional(self, limit: int = 100) -> list[Automation]:
+        connection = self.database.require_connection()
+        rows = await (await connection.execute(
+            "SELECT automation_json FROM automations WHERE status = ? AND next_run_at IS NULL "
+            "ORDER BY updated_at ASC LIMIT ?",
+            (AutomationStatus.ACTIVE.value, min(max(limit, 1), 500)),
+        )).fetchall()
+        return [
+            automation for automation in (Automation.model_validate_json(row["automation_json"]) for row in rows)
+            if automation.type.value == "conditional"
+        ]
+
     async def begin_run(self, run: AutomationRun) -> bool:
         connection = self.database.require_connection()
         try:

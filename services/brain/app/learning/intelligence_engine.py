@@ -41,6 +41,7 @@ PHASE6_INTENTS = {
     "correct_memory", "inspect_project_memory", "recall_project_build", "show_related_memory",
     "create_build_skill", "run_build_skill", "create_project_health_agent",
     "run_project_health_agent", "learn_from_failure", "recall_failure_lesson",
+    "run_taught_skill", "show_brain_graph",
 }
 
 
@@ -64,6 +65,7 @@ class IntelligenceEngine:
         improvement: ImprovementEngine,
         project_id: str,
         personal_profile_service: PersonalProfileService | None = None,
+        brain_graph=None,
     ):
         self.memory = memory
         self.capabilities = capabilities
@@ -80,6 +82,7 @@ class IntelligenceEngine:
         self.project_id = project_id
         self.personal_profile_service = personal_profile_service
         self.preference_extractor = PreferenceExtractor()
+        self.brain_graph = brain_graph
 
     def supports(self, intent: str) -> bool:
         return intent in PHASE6_INTENTS
@@ -100,8 +103,56 @@ class IntelligenceEngine:
             "run_project_health_agent": self._run_project_health_agent,
             "learn_from_failure": self._learn_from_failure,
             "recall_failure_lesson": self._recall_failure_lesson,
+            "run_taught_skill": self._run_taught_skill,
+            "show_brain_graph": self._show_brain_graph,
         }
         return await handlers[profile.intent](task, emit)
+
+    async def _run_taught_skill(self, task: Task, emit) -> ExecutionResult:
+        from app.skills.teachable import parse_skill_command
+
+        skill_id, runtime_inputs = parse_skill_command(task.user_request)
+        await emit("skill_matched", f"Matched taught skill {skill_id}", {
+            "skill_id": skill_id, "runtime_input_names": sorted(runtime_inputs),
+        })
+        return await self.skill_executor.execute(skill_id, task, emit, runtime_inputs)
+
+    async def _show_brain_graph(self, task: Task, emit) -> ExecutionResult:
+        if self.brain_graph is None:
+            raise RuntimeError("Brain graph is not attached")
+        graph = await self.brain_graph.graph("core:vyom", depth=1, limit=80, include_core_edges=True)
+        summary_data = await self.brain_graph.summary()
+        graph_nodes = sorted(graph.nodes, key=lambda node: (node.id != "core:vyom", node.kind, node.label))
+        nodes = [
+            {"id": node.id, "label": node.label, "kind": node.kind, "status": node.status}
+            for node in graph_nodes
+        ]
+        edges = [
+            {"from": edge.source_id, "to": edge.target_id, "relation": edge.relation.value,
+             "verified": edge.verified}
+            for edge in graph.edges
+        ]
+        summary = (
+            f"VYOM Brain has {summary_data['nodes']} connected entities and "
+            f"{summary_data['specific_relationships']} specific relationships."
+        )
+        await emit("memory_retrieved", "Composed the persistent operating graph", {
+            "nodes_shown": len(nodes), "edges_shown": len(edges), "graph_summary": summary_data,
+        })
+        objects = [{
+            "id": "brain-graph", "type": "brain-graph", "title": "Living Core knowledge graph",
+            "eyebrow": "Persistent operating intelligence", "tone": "intelligence",
+            "rootId": "core:vyom", "nodes": nodes, "edges": edges,
+            "totalNodes": summary_data["nodes"], "totalRelationships": summary_data["relationships"],
+            "frame": {"x": 3, "y": 5, "width": 94},
+        }]
+        return ExecutionResult(
+            response=summary, structured_data={"graph": graph.model_dump(mode="json"), "summary": summary_data},
+            ui_composition=self._base_composition("living-core-brain-graph", summary, objects),
+            evidence=[f"Graph projection refreshed at {summary_data['refreshed_at']}",
+                      f"Rendered {len(nodes)} nodes and {len(edges)} edges"],
+            usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
 
     async def consolidate_task(self, task: Task, emit) -> None:
         if task.profile and self.supports(task.profile.intent):

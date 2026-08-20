@@ -23,6 +23,35 @@ class SkillStatus(str, Enum):
     FAILED = "failed"
 
 
+class SkillInputType(str, Enum):
+    STRING = "string"
+    INTEGER = "integer"
+    NUMBER = "number"
+    BOOLEAN = "boolean"
+    PATH = "path"
+    URL = "url"
+
+
+class SkillInputSlot(BaseModel):
+    """A value supplied when a taught skill runs, never baked into its steps."""
+
+    name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
+    type: SkillInputType = SkillInputType.STRING
+    description: str = ""
+    required: bool = True
+    default: Any | None = None
+    sensitive: bool = False
+    choices: list[Any] = Field(default_factory=list, max_length=50)
+
+    @model_validator(mode="after")
+    def validate_default(self):
+        if self.required and self.default is None:
+            return self
+        if self.default is not None and self.choices and self.default not in self.choices:
+            raise ValueError(f"Default for {self.name} is not one of its choices")
+        return self
+
+
 class SkillStep(BaseModel):
     id: str
     action: str
@@ -68,6 +97,7 @@ class SkillSpec(BaseModel):
     description: str
     category: str
     inputs: dict[str, Any] = Field(default_factory=dict)
+    input_slots: list[SkillInputSlot] = Field(default_factory=list)
     outputs: dict[str, Any] = Field(default_factory=dict)
     required_capabilities: list[str]
     required_tools: list[str]
@@ -87,6 +117,9 @@ class SkillSpec(BaseModel):
 
     @model_validator(mode="after")
     def validate_graph(self):
+        slot_names = [slot.name for slot in self.input_slots]
+        if len(slot_names) != len(set(slot_names)):
+            raise ValueError("Skill input slot names must be unique")
         ids = {step.id for step in self.steps}
         if len(ids) != len(self.steps):
             raise ValueError("Skill step IDs must be unique")

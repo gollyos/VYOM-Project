@@ -12,7 +12,7 @@ REQUIRED_TABLES = (
     "goals", "milestones", "habits", "habit_events", "routines", "routine_runs",
     "focus_sessions", "proactive_suggestions", "notification_records",
     "nodes", "node_tokens", "task_leases", "task_checkpoints", "sync_journal",
-    "sync_conflicts", "offline_commands", "remote_commands", "remote_sessions",
+    "sync_conflicts", "offline_commands", "remote_commands", "remote_sessions", "remote_deliveries",
     "distributed_audit", "backup_records", "idempotency_records", "budget_usage",
     "schema_migrations",
 )

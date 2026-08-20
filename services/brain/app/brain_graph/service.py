@@ -86,6 +86,12 @@ class BrainGraphService:
         last consistent projection while a new one is built; it must never pay
         a multi-second all-store rebuild on the user's command path.
         """
+        if self._last_refresh_monotonic == 0:
+            # First boot has no last-consistent projection to serve. Await
+            # the one startup build once; all later refreshes stay off the
+            # command path and continue serving the previous projection.
+            await self.start_refresh()
+            return
         if time.monotonic() - self._last_refresh_monotonic > max_age_seconds:
             self.start_refresh()
 

@@ -1677,6 +1677,45 @@ button {
   gap: 7px;
 }
 
+.brain-graph-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(173, 224, 219, 0.82);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+.brain-graph-meta small { margin-left: auto; color: rgba(130, 174, 176, 0.55); }
+.brain-graph-canvas {
+  position: relative;
+  height: 320px;
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(111, 205, 198, 0.1);
+  background: radial-gradient(circle at center, rgba(49, 169, 162, 0.12), transparent 42%);
+}
+.brain-graph-canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.brain-graph-canvas line { stroke: rgba(107, 178, 178, 0.18); stroke-width: 0.22; }
+.brain-graph-canvas line.verified { stroke: rgba(141, 211, 174, 0.45); stroke-width: 0.34; }
+.brain-graph-node {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  width: 72px;
+  transform: translate(-50%, -50%);
+  color: rgba(204, 231, 228, 0.74);
+  text-align: center;
+}
+.brain-graph-node i {
+  width: 7px; height: 7px; margin-bottom: 3px; border: 1px solid rgba(116, 219, 210, 0.55);
+  border-radius: 50%; background: rgba(74, 157, 153, 0.28); box-shadow: 0 0 9px rgba(90, 221, 211, 0.28);
+}
+.brain-graph-node strong { width: 100%; overflow: hidden; font-size: 7px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.brain-graph-node small { color: rgba(130, 174, 176, 0.45); font-size: 5px; letter-spacing: 0.1em; text-transform: uppercase; }
+.brain-graph-core { width: 96px; color: rgba(225, 251, 247, 0.95); }
+.brain-graph-core i { width: 20px; height: 20px; border-width: 2px; box-shadow: 0 0 28px rgba(91, 230, 219, 0.65); }
+.brain-graph-core strong { font-size: 11px; letter-spacing: 0.22em; }
+
 .memory-node {
   display: grid;
   grid-template-columns: 24px 1fr auto;

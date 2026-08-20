@@ -2,7 +2,7 @@
 
 > Persistent implementation ledger. Update this file after every completed work slice.
 >
-> Last updated: 2026-08-20 (Asia/Calcutta, 23:05) — unified VYOM operating graph: tasks, memory, CRM, goals, milestones, commitments, automations, artifacts, experiences, strategies, skills, agents, capabilities, models, tools, devices and evidence now form one provenance-labelled traversable projection connected to the Intelligence Core; linked context feeds cognitive retrieval. Final Brain suite 670 passed / 2 skipped; live Brain/API verified. See the newest Verification record.
+> Last updated: 2026-08-21 (Asia/Calcutta, 00:20) — completed the approved remaining operator slice: user-taught skills with typed runtime slots and verified tool execution, durable EventBus-triggered automations, a Living Core Brain-graph composition, and secure phone pairing plus authenticated durable result delivery. Final Brain suite 677 passed / 2 intentional opt-in skips; those two real Notepad tests also passed 2/2 with the live-app gate enabled. Desktop build and mobile TypeScript compile pass; latest Brain PID 3528 is ready. See the newest Verification record.
 
 ## Authority and purpose
 
@@ -33,7 +33,7 @@ Before every future handoff:
 
 **VYOM V0 — Phases 1–16 are implemented (production-hardened alpha with the live cognitive runtime, learned routing, bounded mission loop, and completed media workbench): Living Core, Dynamic UI Composer, Real Voice Runtime, persistent VYOM Brain, controlled Tool Execution, Long-term Intelligence, the first daily-work/agency Operating Layer, the advanced Web Intelligence / Professional Delivery layer, the native Desktop/Device Execution layer, the Financial Intelligence / Controlled Paper-Trading layer, the Personal Operating System / Chief-of-Staff layer, and the persistent multi-device Distributed Runtime.**
 
-Overall VYOM is not complete. The native experience now connects to an async local Brain that can plan and execute registered tools, persist/retrieve scoped memory, reuse sandboxed skills, create bounded declarative agents, learn controlled lessons from verified failures, enforce approval policy, dynamically compose evidence, run bounded multi-source research with source ranking/contradiction detection/citations, drive a semantic Browser Agent 2.0 over the existing Playwright layer, discover capabilities/subscriptions/MCP/API/SaaS alternatives before proposing new integrations, search/compare/reserve/verify bounded bookings, generate/validate/version real professional artifacts behind a quality-gated client delivery package, launch/focus/close registered applications, manage native windows across multiple monitors, read/write the clipboard deliberately, capture and understand the active screen on request, dispatch meaningful native notifications, run bounded accessibility-first input automation with a policy-gated last-resort mouse/keyboard fallback, pair/authenticate a local device node, fetch provider-independent market data with honest freshness labeling, track portfolio P&L/exposure/concentration, build evidence-backed trading theses and structured setups, size positions and gate every proposed trade through a strict PASS/REDUCE/REJECT Risk Engine, simulate market/limit/stop orders through a local PAPER broker with a journal and kill switches, run lookahead-protected historical backtests with walk-forward evaluation, check deterministic price/technical/portfolio alerts, and now manage structured goals with evidence-based progress, track habits through explicit check-ins with evidence-gated pattern insight and respectful (never shaming) interventions, run structured routines through the existing permission-gated tool layer, track focus sessions and real workload/work-pattern signals, prioritize cross-domain work through a Chief-of-Staff orchestrator that returns one justified recommendation, gate every proactive suggestion through an importance/timing/duplicate-suppression check before it ever interrupts the user, apply notification priority/batching/quiet-hours policy, and assemble morning/evening/weekly/monthly reviews from real recorded events only — all behind the same Permission Engine, Tool Registry, and evidence/audit boundary as every earlier phase, with no real-money execution path anywhere in the codebase and no continuous surveillance of any kind. Real cloud-model, live web-search/booking/delivery/market-data providers, voice E2E verification, and a real remote device transport still require locally configured credentials or hardware.
+Overall VYOM is not complete. The native experience now connects to an async local Brain that can plan and execute registered tools, persist/retrieve scoped memory, reuse sandboxed skills, create bounded declarative agents, learn controlled lessons from verified failures, enforce approval policy, dynamically compose evidence, run bounded multi-source research with source ranking/contradiction detection/citations, drive a semantic Browser Agent 2.0 over the existing Playwright layer, discover capabilities/subscriptions/MCP/API/SaaS alternatives before proposing new integrations, search/compare/reserve/verify bounded bookings, generate/validate/version real professional artifacts behind a quality-gated client delivery package, launch/focus/close registered applications, manage native windows across multiple monitors, read/write the clipboard deliberately, capture and understand the active screen on request, dispatch meaningful native notifications, run bounded accessibility-first input automation with a policy-gated last-resort mouse/keyboard fallback, pair/authenticate a local device node, fetch provider-independent market data with honest freshness labeling, track portfolio P&L/exposure/concentration, build evidence-backed trading theses and structured setups, size positions and gate every proposed trade through a strict PASS/REDUCE/REJECT Risk Engine, simulate market/limit/stop orders through a local PAPER broker with a journal and kill switches, run lookahead-protected historical backtests with walk-forward evaluation, check deterministic price/technical/portfolio alerts, and now manage structured goals with evidence-based progress, track habits through explicit check-ins with evidence-gated pattern insight and respectful (never shaming) interventions, run structured routines through the existing permission-gated tool layer, track focus sessions and real workload/work-pattern signals, prioritize cross-domain work through a Chief-of-Staff orchestrator that returns one justified recommendation, gate every proactive suggestion through an importance/timing/duplicate-suppression check before it ever interrupts the user, apply notification priority/batching/quiet-hours policy, and assemble morning/evening/weekly/monthly reviews from real recorded events only — all behind the same Permission Engine, Tool Registry, and evidence/audit boundary as every earlier phase, with no real-money execution path anywhere in the codebase and no continuous surveillance of any kind. Real cloud-model, live web-search/booking/third-party messaging/market-data providers, voice E2E verification, and physical-phone/LAN verification still require locally configured credentials or hardware. VYOM's authenticated mobile HTTP transport and durable result inbox are implemented and integration-tested locally.
 
 **Persistent operator reconstruction note (2026-08-20):** Independent voice/text commands no longer cancel each other; only a revised transcription of the same utterance can supersede its earlier task. Desktop, authenticated remote, and scheduled sources now create ordinary Task Runtime tasks with scoped context/source/correlation identity. The default distributed budget is ten concurrent tasks. Historical task and memory retrieval filters before limiting and supports dates/entities/clients/projects/sources plus superseded history; current truth still excludes superseded facts. Natural command schedules and five-field cron persist in the existing AutomationStore and execute through the same permissions/verifier. Product freshness phrases (including n8n-style “what's new/new nodes”) require current evidence. The full required A–AH truth table, cleanup evidence, exact release identity, and remaining limitations are recorded in `VYOM_RECONSTRUCTION_REPORT_2026-08-20.md`.
 
@@ -81,16 +81,16 @@ Overall VYOM is not complete. The native experience now connects to an async loc
 | Real OS/filesystem/tool actions | Complete within Phase 5 boundary | Only registered, policy-gated actions are available; unrestricted OS control remains prohibited. |
 | Typed persistent memory | Complete | SQLite store, 14 memory types, provenance, confidence, sensitivity, supersession, expiry, user CRUD/correction/forget, and restart persistence. |
 | Hybrid memory retrieval and graph | Complete | Structured filters, keyword, local semantic hash, recency/importance/confidence/verification/relationship ranking, disabled-embedding fallback, and depth-bounded graph API. |
-| Unified VYOM operating graph | Complete first cross-store slice | Rebuildable projection over tasks/memory/CRM/goals/milestones/commitments/automations/artifacts/experiences/strategies/skills/agents/capabilities/models/tools/devices/evidence; explicit links persist separately; secret/high-sensitivity exclusion; bounded graph/context APIs; direct linked context feeds cognitive retrieval; background batched refresh avoids command-path rebuild latency. No dedicated Living-Core graph visualizer yet. |
+| Unified VYOM operating graph | Complete first cross-store slice + Living Core view | Rebuildable projection over tasks/memory/CRM/goals/milestones/commitments/automations/artifacts/experiences/strategies/skills/agents/capabilities/models/tools/devices/evidence; explicit links persist separately; secret/high-sensitivity exclusion; bounded graph/context APIs; linked context feeds cognitive retrieval. `show my brain connections` and `/api/brain-graph/composition` render the nearest graph around the Core; first boot awaits one consistent projection, later refreshes stay in the background. |
 | Capability Registry | Complete for current sources | Health-backed tools, configured models, MCP discovery contract, active skills, and ready agents; unavailable capabilities stay observable. |
-| Skill system | Complete for first real skill | Structured/versioned storage, semantic duplicate check, matcher, sandbox, evaluation, metrics, promotion policy, rollback, and real project-build-check execution. |
+| Skill system | Complete for build skill + user-taught macros | Structured/versioned storage, semantic duplicate check, matcher, sandbox/evaluation, metrics and real build execution. Taught macros add typed/default/choice/sensitive input slots, safe `{{slot}}` binding, registered-tool validation, explicit activation, runtime permission/provenance/budget gates, evidence-required completion and secret redaction. Natural execution: `run skill <id> with {...}`. |
 | Agent Factory/runtime | Complete for first real agent | Permanent seed registry, AgentSpec validation, Project Health Agent factory, sample mission, delegation, lifecycle, budgets, performance, and generated visuals. |
 | Controlled learning | Complete for Phase 6 patterns | Verified failure + inferred lesson memory, confidence gate, `LEARNED_FROM`, retrieval/application events, and explicit self-improvement boundaries. |
 | Integration registry / secure tokens | Complete foundation | Persistent health/status registry; OAuth state flow; Windows current-user DPAPI token vault; Google transports disabled by default. |
 | Email / calendar / contacts | Complete contracts and safe mocks; live OAuth pending | Search/read/draft/send/thread, availability/create, verification, contact ambiguity, L0/L1/L2 boundaries. Production providers report disconnected. |
 | Internal CRM | Complete Phase 7 | Persistent clients, persons, leads, opportunities, projects, interactions, campaigns, activity, lead states, DNC, and domain dedupe. |
 | Agency operating workflows | Complete bounded vertical slice | Evidence-based lead research/qualification, persistent pipeline, outreach drafts, reply evidence, DNC, and contextual agents. Live research/email remain unconfigured. |
-| Durable automations | Complete first worker | Persistent definitions/runs, timezone, restart recovery, idempotency, budgets, backlog bounds, pause/resume, and failure pause. |
+| Durable automations | Complete scheduled + event-trigger worker | Persistent definitions/runs, timezone, restart recovery, idempotency, budgets, backlog bounds, pause/resume and failure pause. Conditional automations subscribe to the central EventBus, validate event types, apply exact payload filters/debounce/daily limits, reuse the same action runner and block recursive self-triggered task events. |
 | Real source-aware briefing | Complete | Uses local CRM/drafts/automations/approvals and connected-source health; missing email/calendar are unavailable, never estimated. |
 | Tray, autostart, native notifications | Complete (Phase 9) | Rust tray with 7 actions, close-to-tray, native toast delivery for meaningful Brain events, emergency shortcut, user-controlled startup (verified via stable native launch; interactive tray/toast confirmation remains a user-session check). |
 | Deep Research runtime | Complete | Plan/discover/rank/read/extract/cross-check/synthesize/verify/cite; bounded per-depth budgets; deterministic offline `local-fixture` search provider by default. |
@@ -345,6 +345,62 @@ Developer focus remains a deliberate local composition and `Close everything` do
 
 ## Verification record
 
+### 2026-08-21 - Taught workflows, event triggers, Living Core graph, and authenticated phone delivery
+
+**Implemented:**
+
+- Added user-taught declarative macros with typed runtime input slots, defaults,
+  choices and sensitive flags. Step templates bind only declared `{{slot}}`
+  values. Creation validates every tool, remains `testing` until explicit
+  activation, and execution re-enters task permission/provenance, registered
+  ToolExecutor verification, evidence, cancellation, tool-count/runtime budget
+  and secret-redaction boundaries. Natural execution uses
+  `run skill <skill-id> with {"slot":"value"}`.
+- Completed conditional automations: valid EventBus event type, exact payload
+  filters, bounded debounce, durable event-ID idempotency, daily/runtime
+  budgets, shared scheduled-action execution, correct
+  `APPROVED_AUTOMATION` provenance, approval pause and self-trigger loop
+  suppression.
+- Added `brain-graph` to the existing contextual UI Composer. `show my brain
+  connections` and `/api/brain-graph/composition` render a Core-rooted nearest
+  subgraph with relationship verification styling and full graph totals.
+  First boot awaits exactly one consistent projection; later rebuilds stay
+  background/eventually consistent.
+- Completed the Expo phone protocol: mobile-originated pairing request, local
+  approval, one-time code claim, OS SecureStore token, node-bound expiring
+  session, replay-protected remote commands, migration-v4 durable result inbox,
+  authenticated polling and per-delivery acknowledgement. Terminal results for
+  remote-origin tasks are routed back to that phone without exposing provider
+  credentials on mobile.
+
+**Verification actually performed:**
+
+- Focused unit/integration file: **7 passed**. It covers typed/sensitive macro
+  execution through the tool boundary, invalid placeholders, EventBus trigger
+  idempotency/debounce, one-time pairing claim, durable result/ack lifecycle,
+  deterministic command routing, a real temporary full Brain boot, graph
+  composition and authenticated phone session/inbox.
+- Final exact-source full Brain regression after the mobile security hardening:
+  **677 passed, 2 skipped, 3 warnings, 0 failures in 139.70 s**. Warnings are the existing Starlette/httpx deprecation
+  plus two known aiosqlite voice-test teardown warnings.
+- The two normal-suite skips are intentionally guarded real-GUI tests. With
+  `VYOM_LIVE_APP_TESTS=1`, both opened/observed/managed/closed a real Windows
+  Notepad and passed **2/2 in 3.45 s**; no Notepad process remained afterward.
+- `npm run build` passed (TypeScript + Vite production build). Mobile declared
+  Expo dependencies were installed and `npm exec tsc -- --noEmit` passed using
+  the new mobile `tsconfig.json`.
+- Restarted the idle persistent Brain onto the exact new source (PID **3528**).
+  `/readyz` is ready with no reasons; startup report is non-degraded and records
+  migration v4 `authenticated_remote_delivery_v1` applied. The live graph
+  composition rendered 80 nearest nodes; the current projection has **5,372
+  nodes / 11,326 relationships / 5,955 specific relationships**.
+
+**Remaining environmental boundary:** no physical phone or separate LAN device
+was available, so the real authenticated protocol is integration-tested on a
+temporary local Brain rather than claimed as hardware E2E. WhatsApp/Telegram or
+another third-party messaging/push provider still needs provider credentials
+and explicit connection; the implemented mobile inbox works without one.
+
 ### 2026-08-20 - Unified VYOM operating graph and transcript-derived Brain connectivity
 
 **Implemented:**
@@ -390,10 +446,11 @@ Developer focus remains a deliberate local composition and `Close everything` do
 - No frontend/Rust file changed; frontend/native rebuild was not run in this
   backend-only slice.
 
-**Known limitation:** projection freshness is intentionally eventual (a stale
-consistent graph may be read while its background refresh runs). The Living
-Core has no dedicated cross-store graph visualizer yet. Physical phone/mic and
-live third-party delivery remain outside this verification pass.
+**Known limitation at that pass:** projection freshness is intentionally
+eventual (a stale consistent graph may be read while its background refresh
+runs). The missing Living-Core graph visualizer and authenticated mobile
+delivery were resolved by the 2026-08-21 slice above; physical hardware and
+third-party messaging remain environmental integration work.
 
 ### 2026-08-20 - Persistent operator reconstruction and release gate
 
@@ -850,8 +907,9 @@ Follow-up to the Phase 17 verification pass below, same day: fixes both bugs tha
 ## Known limitations and non-blocking notes
 
 - **Open after 2026-08-20 reconstruction:** physical microphone acceptance was
-  intentionally not executed. Physical phone/network delivery remains locally
-  architecture/API-tested, not hardware E2E. Arbitrary installed-app coverage
+  intentionally not executed. Authenticated phone pairing/commands/durable
+  result delivery are now full-app integration-tested, but a physical phone on
+  the LAN was unavailable, so hardware/network E2E remains open. Arbitrary installed-app coverage
   remains adapter/observable-UI dependent; unsupported work must fail honestly.
 - **Startup:** the desktop shell responds in under 0.3 s, but a first Python
   Brain boot still takes about 24 s on this Windows machine. The Brain is
@@ -861,9 +919,10 @@ Follow-up to the Phase 17 verification pass below, same day: fixes both bugs tha
   this source/Python-equipped PC. The Tauri launcher still resolves the Brain
   from the compile-time project tree and uses Python from PATH; a standalone
   installer for a different machine is not proven.
-- **Schedules:** approval-required scheduled work pauses safely. A complete
-  resume-after-approval UX, richer catch-up/delivery destinations, and event
-  trigger catalog remain follow-up work.
+- **Schedules:** approval-required scheduled/event work pauses safely. EventBus
+  conditional triggers, filters, debounce and loop suppression are implemented.
+  A complete resume-after-approval UX and richer catch-up/delivery destinations
+  remain follow-up work.
 - **Reference products:** the exact `Myraa` and `HunteAI Maya` products named by
   the user could not be identified reliably from their names alone. Similar
   public products are not treated as the intended sources without confirmation.
@@ -894,12 +953,12 @@ Follow-up to the Phase 17 verification pass below, same day: fixes both bugs tha
 - Phase 8 command-to-intent text extraction (party size, date/time, client name, research topic) is deliberately lightweight regex/heuristic parsing, not NLU; unusual phrasing may extract an imperfect topic string while remaining functionally correct.
 - A stray `read_console_messages` reading from a browser tab that pre-dated a mid-session fix showed cached errors that had already been resolved; a fresh tab confirmed zero console errors across all Phase 8 command demonstrations.
 - Native accessibility automation (`pywinauto`) is an optional dependency that is not installed in this environment; `NativeAccessibilityController` honestly raises `AccessibilityUnavailableError` rather than faking semantic UI control. The bounded mouse/keyboard fallback (real `pyautogui` backend) remains available and is architecture-complete either way.
-- The Device Node protocol has no real remote network transport yet; only local, in-process pairing/authentication/heartbeat/command-routing against a mock secondary node is verified. A second physical device is required to verify real remote pairing.
+- The Device Node protocol now has authenticated HTTP pairing/session/command/result-delivery transport and durable acknowledgements. It is verified against a full temporary Brain on localhost; a second physical device is still required to verify actual LAN routing, firewall/TLS configuration and mobile hardware behavior.
 - Some modern Windows apps (Windows 11's re-hosted Notepad/Calculator) exit their launcher PID moments after starting a separately-hosted window process; `DesktopController.app_status`/`app_close` compensate by cross-checking the visible window, but a launcher-PID-only `terminate()` may not always close such an app on the first attempt.
 - The system tray, native notification toast, and global emergency-pause shortcut are verified by a stable native launch (no crash across plugin setup) but a literal visual/interactive confirmation (seeing the tray icon, clicking it, seeing a toast) requires the user's own interactive desktop session, matching how Gemini voice and Google OAuth E2E were handled in earlier phases.
 - Startup auto-registration was verified only against `InMemoryStartupBackend`; the real `WindowsRegistryStartupBackend` was never invoked during this session, so the actual Windows Run-key registration path is implemented and code-reviewed but not live-exercised.
 - Phase 12's multi-node proof is local/in-process and HTTP-against-localhost only: no second physical device, no real remote transport, and no real home-server/cloud hardware were available, so cross-machine pairing, heartbeat, dispatch, and handoff over an actual network remain unverified. The mock mobile node and the 7-demo smoke exercise the exact code paths against real Brain processes.
-- The mobile companion (`apps/mobile/`) is a scaffold: no Expo toolchain/Android SDK in this environment, so it has never been built or run on hardware; mobile flows are verified through `phase12_mobile_mock.py` and API tests. Push notifications have a provider abstraction with no live push provider configured.
+- The mobile companion (`apps/mobile/`) remains pre-hardware: Expo dependencies are installed and strict TypeScript compilation passes, but no Android SDK/emulator or physical phone was available. Secure pairing, sessions and durable delivery are full-app integration-tested; native push and third-party messaging providers remain unconfigured.
 - The home-server Docker Compose stack is architecture + documentation only; no Docker daemon was available to build/run it in this session.
 - The node `register` API makes operator-deployed nodes (desktop/home server) TRUSTED immediately; only client devices go through pairing. On a deployed multi-node network this endpoint must stay operator-restricted (documented in NODE_SECURITY.md; no authentication middleware is enabled yet because VYOM binds localhost by default).
 - Task execution on remote worker nodes is assignment-level: the dispatcher acquires the lease and audits the placement, but worker-side task execution engines beyond the local Brain/mocks are future work; the desktop Brain remains the execution engine in this phase.
@@ -919,7 +978,7 @@ Follow-up to the Phase 17 verification pass below, same day: fixes both bugs tha
 - Unrestricted OS command execution or real destructive `Close everything` behavior
 - System tray, native OS notification delivery, and autostart (the bounded Brain automation worker is implemented)
 - Arbitrary/unbounded mouse/keyboard control beyond the Phase 9 policy-gated paths
-- Real cross-network device transport, hardware-verified multi-node execution, live mobile push delivery, and the built Expo app (Phase 12 ships the local-first architecture, mock/mobile-node and live-localhost verification only)
+- Physical-LAN/hardware-verified multi-node execution, live native push delivery, and an installed Expo hardware build (authenticated mobile HTTP pairing/commands/durable-result delivery are implemented and full-app localhost verified)
 - Large multi-agent teams, arbitrary recursive delegation, or live external agency sending (bounded internal agency workflows are implemented)
 - External MCP server transports and production integration credentials
 - Fully general AI-authored tool plans; Phase 5 uses deterministic intent-to-tool plans for the proven workflows
@@ -928,7 +987,7 @@ Follow-up to the Phase 17 verification pass below, same day: fixes both bugs tha
 - Live web search, live booking providers, and live client-delivery transports (Phase 8 ships the architecture and a disconnected-by-default/local-fixture-only default, per `docs/BOOKING_POLICY.md` and `docs/CLIENT_DELIVERY.md`)
 - CAPTCHA/MFA/security-control bypass, and self-modification of VYOM's core/security code by the Discovery/Browser/Artifact agents
 - Stealth/background screen recording, credential/password capture, keylogging, or any persistence mechanism designed to resist user removal (Phase 9 desktop control is on-request and user-visible only)
-- A real remote device transport, native accessibility automation without the optional dependency installed, and elevated/admin software installation (Phase 9 ships the device-node and accessibility architecture, not live remote/elevated execution)
+- Physical cross-network proof, native accessibility automation without the optional dependency installed, and elevated/admin software installation (the authenticated device transport exists; live remote hardware/elevated execution is not claimed)
 
 ## Next-work rule
 
@@ -937,6 +996,24 @@ Do not start a new capability merely because it appears in the future vision. Im
 Recommended next phase when approved: **Phase 17 - Production Integration Activation** (carried): Brain-as-Tauri-sidecar lifecycle, one real Google OAuth E2E, one real web-search/booking/delivery/market-data provider E2E, `pywinauto` accessibility, proactive engine on real triggers, a real second device hardware-verifying the distributed runtime, home-server Docker deployment, code-signing keys + signed updates, and the Expo app on hardware. Phase 16 follow-ups to fold in: register a real planner contract for mission planning (model-assisted planning for genuinely novel multi-step goals, still bounded), route Defuddle/Playwright selection through LearnedRouter.preferred_tool at the research fetch site, and stream mission-loop events into the desktop Core states live.
 
 ## Change log
+
+### 2026-08-21 - Remaining operator runtime slice
+
+- Generalized the SkillExecutor beyond the fixed build-check skill: typed
+  user-taught inputs, validated registered-tool steps, explicit activation,
+  dependency order, permissions/provenance, time/tool budgets, verified
+  evidence, metrics and sensitive-value redaction.
+- Connected conditional Automation definitions to the central EventBus with
+  validated event types, exact filters, debounce, durable event idempotency,
+  shared execution, approval pause and recursive-trigger suppression.
+- Added a native Composer `brain-graph` surface and deterministic `show my
+  brain connections` route over the unified operating graph.
+- Added migration v4, one-time phone pairing claims, persisted device tokens,
+  authenticated node sessions, durable task-result deliveries and acknowledgements;
+  completed the Expo client pairing/inbox UI and strict TypeScript config.
+- Added seven focused tests. Final regression: 677 passed / 2 normal opt-in
+  skips / 3 warnings; both live Notepad tests passed 2/2 with the gate enabled.
+  Desktop production build and mobile TypeScript compilation passed.
 
 ### 2026-08-20 - Unified VYOM operating graph
 

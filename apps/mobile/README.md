@@ -1,4 +1,4 @@
-# VYOM Mobile Companion (Phase 12 scaffold)
+# VYOM Mobile Companion
 
 React Native + Expo companion for the VYOM Brain. Mobile is **not** a
 clone of the desktop neural canvas: it is a voice-first command surface
@@ -7,19 +7,19 @@ notifications, and device status.
 
 ## Status
 
-Architecture and screens scaffolded; not yet built or run on a device
-in this environment (no Expo toolchain/Android SDK installed here).
-The in-repo verification path for mobile flows is the Brain-side mock
-mobile node (`services/brain/scripts/phase12_mobile_mock.py`) plus the
-Phase 12 API tests — real device E2E is explicitly deferred.
+Secure pairing, remote commands and durable result delivery are implemented.
+Declared Expo dependencies are installed and strict TypeScript compilation
+passes. The app has not been run on Android/iOS hardware in this environment
+because no Android SDK/emulator or physical phone is available.
 
 ## Pairing
 
 1. Brain: `POST /api/devices/pair` → 8-char code.
-2. User approves on an existing trusted device (desktop) →
-   `POST /api/devices/pair/{request_id}/approve` returns the node +
-   one-time token.
-3. Mobile stores the token with `expo-secure-store` (OS-backed, never
+2. User approves locally on the VYOM desktop with
+   `POST /api/devices/pair/{request_id}/approve`.
+3. Mobile claims the approved identity once with its original code at
+   `POST /api/devices/pair/{request_id}/claim` and stores the token with
+   `expo-secure-store` (OS-backed, never
    plaintext). No PINs are ever stored by VYOM itself.
 
 ## Command flow
@@ -32,10 +32,14 @@ unauthenticated commands before anything executes. Consequential
 
 ## Approvals
 
-`GET /api/remote/approvals` returns the full context (action, reason,
-impact, agent, evidence, risk). L3 approvals require the device's
-biometric/OS secure confirmation flag — the Brain refuses one-tap
-blind approval of L3 actions.
+`GET /api/remote/approvals` requires the node and session headers and returns the full context (action, reason,
+impact, agent, evidence, risk). The current app sends no strong-verification
+claim, so L3 approval remains denied until a real OS biometric integration is
+added; a plain boolean is not presented as biometric proof.
+
+Completed remote tasks are placed in the durable authenticated
+`/api/remote/deliveries` inbox. Mobile acknowledges each delivery only after it
+has read it; session IDs travel in headers rather than URLs.
 
 ## Offline
 
@@ -53,6 +57,7 @@ npm install
 npx expo start
 ```
 
-The Brain URL defaults to `http://127.0.0.1:7788` (use a real device's
-reachable address on your network; see docs/DEPLOYMENT.md for secure
-remote access — never expose the Brain's raw API to the internet).
+The pairing screen defaults to `https://vyom.local`. Mobile rejects plain HTTP
+for non-loopback hosts so its pairing token/session cannot cross a LAN in
+plaintext. Put a local TLS reverse proxy/VPN in front of the loopback-bound
+Brain; never expose the raw Brain API to the internet.

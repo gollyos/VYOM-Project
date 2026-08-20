@@ -7,8 +7,8 @@
  * docs/MOBILE_COMPANION.md for the full contract.
  */
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { vyomClient, VyomStatus, RemoteApproval, OfflineQueue } from "./src/vyom";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { vyomClient, VyomStatus, RemoteApproval, OfflineQueue, PairingTicket, isPaired, startPairing, claimPairing } from "./src/vyom";
 
 export default function App() {
   const [connected, setConnected] = useState(false);
@@ -16,15 +16,27 @@ export default function App() {
   const [approvals, setApprovals] = useState<RemoteApproval[]>([]);
   const [message, setMessage] = useState("Ready");
   const [busy, setBusy] = useState(false);
+  const [paired, setPaired] = useState<boolean | null>(null);
+  const [brainUrl, setBrainUrl] = useState("https://vyom.local");
+  const [pairingTicket, setPairingTicket] = useState<PairingTicket | null>(null);
 
   useEffect(() => {
     const poll = async () => {
+      const pairedNow = await isPaired();
+      setPaired(pairedNow);
+      if (!pairedNow) return;
       const ok = await vyomClient.checkHealth();
       setConnected(ok);
       if (!ok) return;
       setStatus(await vyomClient.status());
       setApprovals(await vyomClient.approvals());
       await OfflineQueue.flush(vyomClient);
+      const deliveries = await vyomClient.deliveries();
+      if (deliveries.length) {
+        const latest = deliveries[deliveries.length - 1];
+        setMessage(latest.payload.summary ?? `Task ${latest.payload.status ?? "updated"}`);
+        for (const delivery of deliveries) await vyomClient.acknowledge(delivery.delivery_id);
+      }
     };
     poll();
     const timer = setInterval(poll, 15000);
@@ -51,6 +63,51 @@ export default function App() {
     await vyomClient.decideApproval(taskId, decision, /* strongVerification */ false);
     setApprovals(await vyomClient.approvals());
   };
+
+  const beginPairing = async () => {
+    setBusy(true);
+    try {
+      const ticket = await startPairing(brainUrl);
+      setPairingTicket(ticket);
+      setMessage("Approve this phone on the PC, then tap Finish pairing");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Pairing failed");
+    } finally { setBusy(false); }
+  };
+
+  const finishPairing = async () => {
+    if (!pairingTicket) return;
+    setBusy(true);
+    try {
+      const claimed = await claimPairing(pairingTicket);
+      if (!claimed) setMessage("Still waiting for approval on the PC");
+      else { setPaired(true); setMessage("Phone securely paired"); }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Pairing failed");
+    } finally { setBusy(false); }
+  };
+
+  if (paired === false) return (
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <Text style={styles.identity}>VYOM</Text>
+      <Text style={styles.connection}>Secure phone pairing</Text>
+      <View style={styles.pairingCard}>
+        <Text style={styles.sectionTitle}>PC Brain address</Text>
+        <TextInput value={brainUrl} onChangeText={setBrainUrl} autoCapitalize="none" autoCorrect={false} style={styles.input} />
+        <Pressable style={styles.voiceButton} onPress={beginPairing}><Text style={styles.voiceLabel}>Start pairing</Text></Pressable>
+        {pairingTicket ? <>
+          <Text style={styles.pairingCode}>{pairingTicket.code}</Text>
+          <Text style={styles.statusLine}>Confirm request {pairingTicket.request_id} on your PC.</Text>
+          <Pressable style={styles.approve} onPress={finishPairing}><Text style={styles.rowLabel}>Finish pairing</Text></Pressable>
+        </> : null}
+        {busy ? <ActivityIndicator color="#67e8f9" /> : null}<Text style={styles.coreState}>{message}</Text>
+      </View>
+    </ScrollView>
+  );
+
+  if (paired === null) return (
+    <View style={[styles.screen, styles.loading]}><ActivityIndicator color="#67e8f9" /></View>
+  );
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -145,4 +202,8 @@ const styles = StyleSheet.create({
   rowLabel: { color: "#cfe7f2", fontSize: 12 },
   quick: { backgroundColor: "#071018", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: "#122b33" },
   quickLabel: { color: "#9fd7e8", fontSize: 13 },
+  pairingCard: { gap: 12, marginTop: 32, padding: 18, borderRadius: 12, borderWidth: 1, borderColor: "#122b33", backgroundColor: "#071018" },
+  input: { color: "#d8ecf5", borderWidth: 1, borderColor: "#1e5f6e", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  pairingCode: { color: "#67e8f9", fontSize: 26, letterSpacing: 5, textAlign: "center" },
+  loading: { alignItems: "center", justifyContent: "center" },
 });
