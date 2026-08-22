@@ -6,6 +6,21 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.core.encoding import decode_output
+
+
+def _no_window_flags() -> dict:
+    """Windows creates a visible console for every subprocess unless this
+    flag is set - ffmpeg jobs are long and visible; a flashing console for
+    each media operation is exactly the unrequested window the user never
+    wants to see."""
+    import os
+    import subprocess
+
+    if os.name != "nt":
+        return {}
+    return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0x0800_0000)}
+
 
 @dataclass
 class MediaResult:
@@ -34,13 +49,14 @@ class FFmpegAdapter:
         process = await asyncio.create_subprocess_exec(
             self.ffmpeg, *args,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            **_no_window_flags(),
         )
         try:
             _stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         except TimeoutError:
             process.kill()
             return False, "ffmpeg timed out"
-        return process.returncode == 0, stderr.decode("utf-8", errors="ignore")[-500:]
+        return process.returncode == 0, decode_output(stderr)[-500:]
 
     async def probe(self, path: Path) -> dict:
         if not self.available or not Path(path).exists():
@@ -49,6 +65,7 @@ class FFmpegAdapter:
             self.ffprobe, "-v", "error", "-print_format", "json",
             "-show_format", "-show_streams", str(path),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            **_no_window_flags(),
         )
         stdout, _stderr = await asyncio.wait_for(process.communicate(), timeout=30)
         try:

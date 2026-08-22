@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from app.core.encoding import decode_output
 from app.security.command_policy import CommandPolicy
 from app.security.path_policy import PathPolicy
 
@@ -68,7 +69,7 @@ class ProcessManager:
         if stream is None:
             return
         while chunk := await stream.read(4096):
-            record[key] = (record[key] + chunk.decode(errors="replace"))[-100_000:]
+            record[key] = (record[key] + decode_output(chunk))[-100_000:]
 
     def snapshot(self, process_id: int) -> dict[str, Any]:
         record = self.processes.get(process_id)

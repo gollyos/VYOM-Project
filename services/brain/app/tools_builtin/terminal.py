@@ -6,6 +6,7 @@ import shutil
 import time
 from typing import Any
 
+from app.core.encoding import decode_output
 from app.schemas.approvals import PermissionLevel
 from app.security.command_policy import CommandPolicy
 from app.security.path_policy import PathPolicy
@@ -99,8 +100,19 @@ class TerminalTool(BaseTool):
         command = str(inputs["command"])
         cwd = PathPolicy(context.allowed_roots).require_allowed(str(inputs["cwd"]))
         timeout = min(max(float(inputs.get("timeout", 120)), 0.05), 1800)
-        allowed_names = {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "USERPROFILE", "PATHEXT", "COMSPEC"}
+        # Localized Windows tooling misbehaved silently with only the bare
+        # OS vars: npm wanted APPDATA for its cache, installers wanted
+        # PROGRAMFILES/PROGRAMDATA, scripts wanted SYSTEMDRIVE. PYTHONUTF8/
+        # PYTHONIOENCODING make spawned Python emit UTF-8, which is what
+        # the decoder below assumes first.
+        allowed_names = {
+            "PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "USERPROFILE", "PATHEXT", "COMSPEC",
+            "APPDATA", "LOCALAPPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMDATA",
+            "SYSTEMDRIVE", "HOMEDRIVE", "HOMEPATH", "NUMBER_OF_PROCESSORS",
+            "PYTHONIOENCODING", "PYTHONUTF8",
+        }
         environment = {key: value for key, value in os.environ.items() if key.upper() in allowed_names}
+        environment.setdefault("PYTHONUTF8", "1")
         for key, value in dict(inputs.get("environment", {})).items():
             if key.upper() not in allowed_names:
                 raise ToolValidationError(f"Environment variable is not allowlisted: {key}")
@@ -156,8 +168,8 @@ class TerminalTool(BaseTool):
             communicate.cancel()
             raise ToolTimeoutError(f"Terminal command exceeded {timeout:.2f}s timeout")
         stdout_raw, stderr_raw = communicate.result()
-        stdout = stdout_raw[: self.output_limit].decode(errors="replace")
-        stderr = stderr_raw[: self.output_limit].decode(errors="replace")
+        stdout = decode_output(stdout_raw[: self.output_limit])
+        stderr = decode_output(stderr_raw[: self.output_limit])
         truncated = len(stdout_raw) > self.output_limit or len(stderr_raw) > self.output_limit
         output = {
             "command": command,
