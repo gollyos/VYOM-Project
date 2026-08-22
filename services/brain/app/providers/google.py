@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Any
 
 import httpx
 
@@ -46,6 +47,51 @@ class GoogleProvider(BaseProvider):
     def __init__(self, timeout_seconds: float):
         super().__init__()
         self.timeout_seconds = timeout_seconds
+        # A new AsyncClient per request redid the TCP+TLS handshake for
+        # every call - pure latency and connection churn. One pooled
+        # client keeps connections warm for the process lifetime.
+        self._client: httpx.AsyncClient | None = None
+        #: Optional QuotaBudgeter (app.routing.quota_budgeter), attached at
+        #: wiring time. When present, requests are PACED before they are
+        # sent and daily-quota 429s teach the budgeter the real allowance.
+        self.budgeter: Any = None
+
+    async def aclose(self) -> None:
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+
+    def _pooled_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self.timeout_seconds)
+        return self._client
+
+    async def _paced_post(self, url: str, headers: dict, payload: dict, model: str) -> httpx.Response:
+        """POST with quota pacing: reserve the request first, send once,
+        and let a daily 429 teach the budgeter the real allowance so the
+        router moves traffic to sibling models instead of rediscovering
+        the limit."""
+        from app.routing.quota_budgeter import QuotaWaitTimeout
+
+        budgeter = getattr(self, "budgeter", None)
+        if budgeter is not None:
+            try:
+                await budgeter.acquire("google", model)
+            except QuotaWaitTimeout:
+                # Bounded pacing wait elapsed: surface as an ordinary
+                # (non-daily) rate limit so existing health cooldown and
+                # fallback machinery routes elsewhere.
+                raise ProviderRateLimitError(
+                    f"Pacing window full for {model}", daily_quota=False
+                )
+        response = await self._pooled_client().post(url, headers=headers, json=payload)
+        if response.status_code == 429:
+            daily = _is_daily_quota(response)
+            if daily and budgeter is not None:
+                budgeter.clamp_daily("google", model)
+            raise ProviderRateLimitError(
+                f"Google rate limit for {model}", daily_quota=daily
+            )
+        return response
 
     @property
     def api_key(self) -> str | None:
@@ -71,13 +117,7 @@ class GoogleProvider(BaseProvider):
             "contents": [{"role": "user", "parts": [{"text": request.user_request}]}],
             "generationConfig": {"temperature": 0.2},
         }
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.post(url, headers=self._auth_headers(), json=payload)
-        if response.status_code == 429:
-            raise ProviderRateLimitError(
-                f"Google rate limit for {request.model}",
-                daily_quota=_is_daily_quota(response),
-            )
+        response = await self._paced_post(url, self._auth_headers(), payload, request.model)
         if response.status_code >= 400:
             raise ProviderUnavailableError(f"Google request failed with HTTP {response.status_code}")
         data = response.json()
@@ -145,13 +185,7 @@ class GoogleProvider(BaseProvider):
                 ]
             }]
 
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.post(url, headers=self._auth_headers(), json=payload)
-        if response.status_code == 429:
-            raise ProviderRateLimitError(
-                f"Google rate limit for {request.model}",
-                daily_quota=_is_daily_quota(response),
-            )
+        response = await self._paced_post(url, self._auth_headers(), payload, request.model)
         if response.status_code >= 400:
             raise ProviderUnavailableError(
                 f"Google tool request failed with HTTP {response.status_code}: {response.text[:200]}"

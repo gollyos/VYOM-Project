@@ -43,6 +43,25 @@ models:
     privacy_policy: cloud_standard
     priority: 75
 
+  # THIRD Google free-tier model: Google meters the free allowance PER
+  # MODEL PER DAY, so three registered models are three separate daily
+  # budgets. The quota budgeter spreads traffic across them and skips
+  # whichever is exhausted - one key now carries a whole day instead of
+  # a busy morning.
+  - provider: google
+    model_id: ${GOOGLE_BRAIN_TERTIARY_MODEL_ID:-gemini-flash-latest}
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: balanced
+    speed_tier: fast
+    cost_tier: low
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_standard
+    priority: 72
+
   - provider: openai
     model_id: ${OPENAI_MODEL_ID}
     enabled: true

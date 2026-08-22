@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -8,7 +9,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agency, agents, alerts as alerts_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discovery as discovery_api, email as email_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, markets as markets_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, skills, sync_api, tasks, tools, websocket
+from app.api import agency, agents, alerts as alerts_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discovery as discovery_api, email as email_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, markets as markets_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, skills, sync_api, tasks, tools, websocket
 from app.agency.service import AgencyService, DisconnectedLeadResearchProvider
 from app.agents.evaluator import AgentEvaluator
 from app.agents.factory import AgentFactory
@@ -28,9 +29,11 @@ from app.persistence.database import Database
 from app.persistence.model_performance_store import ModelPerformanceStore
 from app.persistence.task_store import TaskStore
 from app.providers import ProviderRegistry, create_provider_registry
+from app.providers.response_cache import ResponseCache
 from app.routing.model_registry import ModelRegistry
 from app.routing.model_router import ModelRouter
 from app.routing.provider_health import ProviderHealth
+from app.routing.quota_budgeter import QuotaBudgeter
 from app.routing.usage_tracker import UsageTracker
 from app.runtime.event_bus import EventBus
 from app.runtime.executor import Executor
@@ -295,6 +298,18 @@ def create_app(
         model_registry = ModelRegistry.from_yaml(selected_settings.model_registry_path)
         providers = provider_registry or create_provider_registry(selected_settings)
         provider_health = ProviderHealth()
+        # Free-tier budgeting: pace requests BEFORE they are sent and fan
+        # traffic out across sibling models (each has a separate daily
+        # allowance), instead of discovering limits by slamming into them.
+        # Attached the same way learned_router is - optional attribute, so
+        # every existing construction path (tests, tools) keeps working.
+        data_dir = selected_settings.database_path.parent
+        quota_budgeter = QuotaBudgeter(data_dir / "quota-usage.json")
+        response_cache = ResponseCache(data_dir / "response-cache")
+        for provider in providers.providers.values():
+            provider.response_cache = response_cache
+            if hasattr(provider, "budgeter"):
+                provider.budgeter = quota_budgeter
         usage_tracker = UsageTracker()
         tool_registry = ToolRegistry.from_yaml(selected_settings.tool_registry_path)
         playwright_manager = PlaywrightManager()
@@ -882,6 +897,7 @@ def create_app(
             performance_store,
             provider_health,
         )
+        model_router.budgeter = quota_budgeter
         runtime = TaskRuntime(
             task_store=task_store,
             performance_store=performance_store,
@@ -1340,6 +1356,7 @@ def create_app(
         application.state.model_registry = model_registry
         application.state.providers = providers
         application.state.provider_health = provider_health
+        application.state.quota_budgeter = quota_budgeter
         application.state.usage_tracker = usage_tracker
         application.state.tool_registry = tool_registry
         application.state.tool_executor = tool_executor
@@ -1586,6 +1603,12 @@ def create_app(
             await asyncio.gather(*runtime.active.values(), return_exceptions=True)
         await action_engine.shutdown()
         await browser_session.shutdown()
+        # Release pooled provider HTTP connections cleanly.
+        for provider in tuple(providers.providers.values()):
+            closer = getattr(provider, "aclose", None)
+            if closer is not None:
+                with contextlib.suppress(Exception):
+                    await closer()
         await brain_graph.close()
         await database.close()
 
@@ -1653,6 +1676,7 @@ def create_app(
     application.include_router(diagnostics_api.router)
     application.include_router(setup_api.router)
     application.include_router(observability_api.router)
+    application.include_router(quota.router)
     application.include_router(websocket.router)
 
     @application.get("/health")

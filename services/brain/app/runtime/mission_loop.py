@@ -318,31 +318,45 @@ class MissionLoop:
                 mission.model_calls += 1
                 await self._emit(mission.mission_id, EventType.TASK_PLANNING,
                                  "Deciding the next action from what has been observed")
-                # RATE LIMIT = STOP, not retry. A 429 is the provider
-                # telling VYOM to back off; re-sending the same request
-                # three times per model call, across several concurrent
-                # missions, is what turned one exhausted quota into the
-                # retry storm in the Brain log. The circuit breaker marks
-                # the provider unavailable and the mission ends honestly
-                # with whatever it had already verified.
+                # A per-minute burst limit is a WAIT, not a failure: that
+                # quota returns in seconds, and one 429 should not end a
+                # mission that may be minutes from verified completion.
+                # The quota budgeter paces requests to stay under the
+                # limit in the first place; this bounded resume covers
+                # the residual case. A DAILY quota (or two waits already
+                # spent) still fails honestly - that allowance does not
+                # come back today and the router must move to a sibling.
                 from app.providers.base import ProviderRateLimitError
 
-                try:
-                    response = await planner.next_action(goal, history, tools)
-                except ProviderRateLimitError:
-                    mission.status = "failed"
-                    await self._emit(
-                        mission.mission_id, EventType.TASK_PROGRESS,
-                        "The reasoning provider is rate limited, so I stopped rather than "
-                        "retrying against it.",
-                        {"mission_outcome": "failed", "rate_limited": True,
-                         "verified_steps": sum(1 for step in mission.completed if step.verified)})
-                    await self._checkpoint(mission)
-                    await self._learn(mission, success=False)
-                    setattr(mission, "final_text",
-                            "The reasoning provider is rate limited, so I stopped rather than "
-                            "retrying against it.")
-                    return mission
+                response = None
+                rate_limit_waits = 0
+                while True:
+                    try:
+                        response = await planner.next_action(goal, history, tools)
+                        break
+                    except ProviderRateLimitError as limit_error:
+                        if limit_error.daily_quota or rate_limit_waits >= 2:
+                            mission.status = "failed"
+                            await self._emit(
+                                mission.mission_id, EventType.TASK_PROGRESS,
+                                "The reasoning provider is rate limited, so I stopped rather than "
+                                "retrying against it.",
+                                {"mission_outcome": "failed", "rate_limited": True,
+                                 "daily_quota": limit_error.daily_quota,
+                                 "verified_steps": sum(1 for step in mission.completed if step.verified)})
+                            await self._checkpoint(mission)
+                            await self._learn(mission, success=False)
+                            setattr(mission, "final_text",
+                                    "The reasoning provider is rate limited, so I stopped rather than "
+                                    "retrying against it.")
+                            return mission
+                        wait_seconds = (8.0, 20.0)[rate_limit_waits]
+                        rate_limit_waits += 1
+                        await self._emit(
+                            mission.mission_id, EventType.TASK_PROGRESS,
+                            f"Provider burst limit reached; resuming in {wait_seconds:.0f}s",
+                            {"rate_limited": True, "resuming_in_seconds": wait_seconds})
+                        await asyncio.sleep(wait_seconds)
 
                 if not response.tool_calls:
                     # No action chosen. For an actionable or freshness

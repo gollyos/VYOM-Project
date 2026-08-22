@@ -47,7 +47,19 @@ class ModelRouter:
                 continue
             if not self.policy.compatible(model, task, profile):
                 continue
+            # Quota spreading: a model that already burned today's
+            # free-tier allowance is skipped entirely, and near-exhausted
+            # models score worse so traffic fans out across siblings
+            # whose allowances are metered separately. Without this every
+            # call funneled into the primary until it 429'd, then into
+            # the fallback, and the day was over by noon.
+            budgeter = getattr(self, "budgeter", None)
+            if budgeter is not None:
+                if budgeter.exhausted(model.provider, model.model_id):
+                    continue
             score = self.policy.base_score(model, task, profile)
+            if budgeter is not None:
+                score += budgeter.usage_ratio(model.provider, model.model_id) * 15
             statistics = await self.performance.statistics(model.model_id, profile.domain.value)
             if statistics["samples"] >= 3:
                 score += (1 - statistics["success_rate"]) * 30

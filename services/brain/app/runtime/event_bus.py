@@ -70,3 +70,32 @@ class EventBus:
         finally:
             self.subscribers.discard(queue)
 
+    def register(self) -> tuple[asyncio.Queue[BrainEvent], callable]:
+        """Queue-based subscription for callers that must interleave the
+        live stream with other awaits (the websocket endpoint replays
+        history between subscribing and streaming). Returns the queue and
+        an unregister callback."""
+        queue: asyncio.Queue[BrainEvent] = asyncio.Queue(maxsize=200)
+        self.subscribers.add(queue)
+
+        def unregister() -> None:
+            self.subscribers.discard(queue)
+
+        return queue, unregister
+
+    def history_after(self, event_id: str | None) -> list[BrainEvent]:
+        """Events published after the given cursor, oldest first.
+
+        A reconnecting client passes the last event_id it saw; events that
+        fired while it was disconnected used to be lost entirely - the
+        whole point of a durable event stream is that they are not. An
+        unknown cursor (Brain restarted, history rolled over) replays the
+        entire bounded history; the client deduplicates by event_id."""
+        events = list(self.history)
+        if event_id is None:
+            return []
+        for index, event in enumerate(events):
+            if event.event_id == event_id:
+                return events[index + 1 :]
+        return events
+

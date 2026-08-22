@@ -79,6 +79,10 @@ class BaseProvider(ABC):
 
     def __init__(self) -> None:
         self._last_usage = UsageRecord()
+        #: Optional shared disk cache (app.providers.response_cache),
+        #: attached at wiring time - constructed providers default to no
+        #: cache so direct use (tests, tools) is unaffected.
+        self.response_cache: Any = None
 
     @property
     @abstractmethod
@@ -94,7 +98,15 @@ class BaseProvider(ABC):
         yield response.text
 
     async def structured_output(self, request: ProviderRequest) -> ProviderResponse:
-        return await self.generate(request)
+        cache = self.response_cache
+        if cache is not None and cache.enabled:
+            cached = cache.get(request)
+            if cached is not None:
+                return cached
+        response = await self.generate(request)
+        if cache is not None and cache.enabled and response.text.strip():
+            cache.put(request, response)
+        return response
 
     @property
     def supports_tool_calls(self) -> bool:
