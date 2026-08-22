@@ -25,12 +25,26 @@ class MemoryManager:
 
     async def inspect(self, memory_id: str) -> dict | None:
         memory = await self.store.get(memory_id)
-        if not memory:
+        if not memory or memory.deleted_at is not None:
+            # A forgotten memory is out of the user-facing view; the row
+            # itself is preserved for history queries at the store level.
             return None
         return {"memory": memory.model_dump(mode="json"), "provenance": explain_provenance(memory)}
 
     async def forget(self, memory_id: str) -> bool:
+        """Soft-forget (tombstone). The memory is never erased - see
+        MemoryStore.forget for why this is deliberate."""
         return await self.store.forget(memory_id)
+
+    async def history(self, memory_id: str) -> list[MemoryEntry]:
+        """Every prior version of a memory, oldest first - the
+        append-only answer to 'what did this say ten years ago'."""
+        return await self.store.history(memory_id)
+
+    async def purge(self, memory_id: str) -> bool:
+        """True erasure. Deliberate maintenance only, never wired to the
+        API or voice 'forget'."""
+        return await self.store.purge(memory_id)
 
     async def update(self, memory_id: str, **changes) -> MemoryEntry:
         memory = await self.store.get(memory_id, touch=False)

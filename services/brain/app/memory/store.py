@@ -7,14 +7,50 @@ from app.persistence.database import Database
 
 from .schemas import MemoryEntry, MemoryRelationship, MemoryType, Sensitivity, VerificationState
 
+#: Fields whose change is SUBSTANTIVE: touching one snapshots the outgoing
+#: state into memory_history and bumps the version. Access-time updates
+#: (last_accessed_at) and metadata touches do not - versioning every read
+#: would bury real history in noise.
+_SUBSTANTIVE_FIELDS = (
+    "title", "summary", "content", "entities", "tags",
+    "importance", "confidence", "sensitivity", "verification_state",
+)
+
 
 class MemoryStore:
-    def __init__(self, database: Database):
+    def __init__(self, database: Database, vault=None):
         self.database = database
+        #: Optional MemoryVault - every successful save mirrors to the
+        #: human-readable markdown vault AFTER the commit.
+        self.vault = vault
+
+    def _substantive(self, old: MemoryEntry, new: MemoryEntry) -> bool:
+        return any(getattr(old, field) != getattr(new, field) for field in _SUBSTANTIVE_FIELDS)
 
     async def save(self, memory: MemoryEntry) -> MemoryEntry:
         connection = self.database.require_connection()
+        cursor = await connection.execute(
+            "SELECT memory_json FROM memories WHERE id = ?", (memory.id,)
+        )
+        row = await cursor.fetchone()
+        previous = MemoryEntry.model_validate_json(row["memory_json"]) if row else None
         memory.updated_at = datetime.now(timezone.utc)
+        if previous is not None and self._substantive(previous, memory):
+            # Append-only history: the outgoing state is snapshotted
+            # BEFORE the row changes. Nothing is overwritten, ever.
+            memory.version = max(previous.version, 1) + 1
+            await connection.execute(
+                "INSERT INTO memory_history(memory_id, version, memory_json, saved_at) "
+                "VALUES (?, ?, ?, ?)",
+                (
+                    previous.id,
+                    previous.version,
+                    json.dumps(previous.model_dump(mode="json"), separators=(",", ":")),
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+        elif previous is not None:
+            memory.version = max(previous.version, memory.version, 1)
         payload = json.dumps(memory.model_dump(mode="json"), separators=(",", ":"))
         await connection.execute(
             """
@@ -44,6 +80,8 @@ class MemoryStore:
             ),
         )
         await connection.commit()
+        if self.vault is not None:
+            self.vault.write(memory)
         return memory
 
     async def get(self, memory_id: str, *, touch: bool = True) -> MemoryEntry | None:
@@ -70,6 +108,8 @@ class MemoryStore:
         created_after: datetime | None = None,
         created_before: datetime | None = None,
         include_expired: bool = False,
+        include_deleted: bool = False,
+        ids: list[str] | None = None,
         max_sensitivity: Sensitivity = Sensitivity.HIGHLY_SENSITIVE,
         verification_states: set[VerificationState] | None = None,
         limit: int = 500,
@@ -120,6 +160,16 @@ class MemoryStore:
         if not include_expired:
             clauses.append("(expires_at IS NULL OR expires_at > ?)")
             parameters.append(datetime.now(timezone.utc).isoformat())
+        # Soft-deleted (forgotten) memories stay in the store forever but
+        # leave ordinary retrieval - only an explicit history query sees
+        # them. The tombstone lives inside memory_json, so no migration
+        # was needed to give every existing row this behaviour.
+        if not include_deleted:
+            clauses.append("json_extract(memory_json, '$.deleted_at') IS NULL")
+        if ids:
+            placeholders = ",".join("?" for _ in ids)
+            clauses.append(f"id IN ({placeholders})")
+            parameters.extend(ids)
         if sources:
             placeholders = ",".join("?" for _ in sources)
             clauses.append(
@@ -149,10 +199,86 @@ class MemoryStore:
         ]
 
     async def forget(self, memory_id: str) -> bool:
+        """Soft-forget: tombstone, never erase.
+
+        "Uski memory se kuch erase bhi na ho" - a hard DELETE would make
+        the user's own history unknowable, including by them. The row
+        stays; retrieval skips it; include_deleted=True answers "what was
+        this" ten years later. Returns True when the memory existed and
+        was not already tombstoned."""
+        memory = await self.get(memory_id, touch=False)
+        if memory is None or memory.deleted_at is not None:
+            return False
+        memory.deleted_at = datetime.now(timezone.utc)
+        await self.save(memory)
+        return True
+
+    async def purge(self, memory_id: str) -> bool:
+        """True erasure. NOT exposed through the API or the voice
+        interface - this exists for explicit, deliberate maintenance only
+        (e.g. a legal erasure request), never for ordinary 'forget'."""
+        memory = await self.get(memory_id, touch=False)
         connection = self.database.require_connection()
         cursor = await connection.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
         await connection.commit()
+        if cursor.rowcount > 0 and memory is not None and self.vault is not None:
+            # The vault must not keep what the authority dropped.
+            self.vault.discard(memory)
         return cursor.rowcount > 0
+
+    async def history(self, memory_id: str) -> list[MemoryEntry]:
+        """Every prior version of a memory, oldest first."""
+        connection = self.database.require_connection()
+        cursor = await connection.execute(
+            "SELECT memory_json FROM memory_history WHERE memory_id = ? ORDER BY version ASC",
+            (memory_id,),
+        )
+        return [
+            MemoryEntry.model_validate_json(row["memory_json"])
+            for row in await cursor.fetchall()
+        ]
+
+    async def search_fts(self, text: str, limit: int = 200) -> list[str]:
+        """Full-text search over memory text, best matches first.
+
+        Returns memory ids. Tokens are quoted so user text can never
+        break the FTS query language; when FTS is unavailable (older
+        SQLite) an empty result is returned and the caller falls back to
+        the structured candidate path."""
+        tokens = [token for token in text.lower().split() if token.strip()]
+        if not tokens:
+            return []
+        match = " OR ".join(f'"{token.replace(chr(34), "")}"' for token in tokens)
+        connection = self.database.require_connection()
+        try:
+            cursor = await connection.execute(
+                "SELECT id FROM memories_fts WHERE memories_fts MATCH ? "
+                "ORDER BY rank LIMIT ?",
+                (match, limit),
+            )
+            return [row["id"] for row in await cursor.fetchall()]
+        except Exception:
+            return []
+
+    async def relationship_counts(self, memory_ids: list[str]) -> dict[str, int]:
+        """Relationship counts for many memories in ONE query - the
+        per-candidate lookup was N+1 and would not stay sub-second at
+        ten-year scale."""
+        if not memory_ids:
+            return {}
+        placeholders = ",".join("?" for _ in memory_ids)
+        connection = self.database.require_connection()
+        cursor = await connection.execute(
+            "SELECT memory_id, COUNT(*) AS total FROM ("
+            " SELECT source_id AS memory_id FROM memory_relationships"
+            f" WHERE source_id IN ({placeholders})"
+            " UNION ALL"
+            " SELECT target_id FROM memory_relationships"
+            f" WHERE target_id IN ({placeholders})"
+            ") GROUP BY memory_id",
+            (*memory_ids, *memory_ids),
+        )
+        return {row["memory_id"]: int(row["total"]) for row in await cursor.fetchall()}
 
     async def save_relationship(self, relationship: MemoryRelationship) -> MemoryRelationship:
         connection = self.database.require_connection()

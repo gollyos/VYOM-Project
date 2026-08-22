@@ -87,6 +87,14 @@ class MemoryEntry(BaseModel):
     expires_at: datetime | None = None
     supersedes: str | None = None
     embedding_reference: str | None = None
+    #: Permanent-memory guarantee: "forget" is a TOMBSTONE, not an
+    #: erasure. The row stays, normal retrieval skips it, and an explicit
+    #: history query can still answer "what did I used to believe" a
+    #: decade later. Nothing is ever destroyed.
+    deleted_at: datetime | None = None
+    #: Bumped on every substantive edit; prior versions are appended to
+    #: memory_history. update() never destroys a past state.
+    version: int = 1
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("content", "summary")

@@ -249,7 +249,14 @@ from app.schemas.tasks import TaskCreate
 from app.screen.capture import ScreenCapture
 from app.screen.observer import ScreenObserver
 from app.screen.privacy_filter import PrivacyFilter
-from app.memory.embeddings import DisabledEmbeddingProvider, LocalHashEmbeddingProvider
+from app.memory.embeddings import (
+    CachedEmbeddingProvider,
+    DisabledEmbeddingProvider,
+    EmbeddingProvider,
+    GeminiEmbeddingProvider,
+    LocalHashEmbeddingProvider,
+)
+from app.memory.vault import MemoryVault
 from app.memory.manager import MemoryManager
 from app.memory.retrieval import MemoryRetriever
 from app.memory.store import MemoryStore
@@ -403,13 +410,27 @@ def create_app(
         memory_config = yaml.safe_load(
             selected_settings.memory_config_path.read_text(encoding="utf-8")
         ) or {}
-        memory_store = MemoryStore(database)
-        embedding_config = memory_config.get("embeddings", {})
-        embedding_provider = (
-            LocalHashEmbeddingProvider(int(embedding_config.get("dimensions", 96)))
-            if embedding_config.get("provider", "local_hash") == "local_hash"
-            else DisabledEmbeddingProvider()
+        memory_store = MemoryStore(
+            database,
+            vault=MemoryVault(data_dir / "memory-vault"),
         )
+        embedding_config = memory_config.get("embeddings", {})
+        local_embeddings = LocalHashEmbeddingProvider(int(embedding_config.get("dimensions", 96)))
+        provider_name = embedding_config.get("provider", "local_hash")
+        if provider_name == "gemini" and embedding_config.get("allow_remote", False):
+            import os as _os
+
+            base_provider: EmbeddingProvider | None = GeminiEmbeddingProvider(
+                _os.getenv("GEMINI_API_KEY") or _os.getenv("GOOGLE_API_KEY"),
+                fallback=local_embeddings,
+            )
+        elif provider_name == "local_hash":
+            base_provider = local_embeddings
+        else:
+            base_provider = DisabledEmbeddingProvider()
+        # Cache vectors in SQLite: a decade of memories must not be
+        # re-embedded on every search.
+        embedding_provider = CachedEmbeddingProvider(database, base_provider)
         memory_manager = MemoryManager(
             memory_store,
             MemoryRetriever(memory_store, embedding_provider),

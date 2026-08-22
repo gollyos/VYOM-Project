@@ -91,6 +91,57 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_relationship_target
                 ON memory_relationships(target_id, relation);
 
+            -- Permanent memory: prior versions of a memory, append-only.
+            -- update() snapshots the outgoing state here before the row
+            -- changes, so "what did this say ten years ago" is answerable
+            -- from real data, not reconstruction.
+            CREATE TABLE IF NOT EXISTS memory_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                memory_id TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                memory_json TEXT NOT NULL,
+                saved_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_memory_history_id
+                ON memory_history(memory_id, version);
+
+            -- Cached embedding vectors per memory. Keyed by provider:
+            -- switching embedding providers invalidates nothing silently -
+            -- mismatched vectors are simply never reused.
+            CREATE TABLE IF NOT EXISTS memory_embeddings (
+                memory_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                vector_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (memory_id, provider)
+            );
+
+            -- Full-text index over memory text. External-content FTS5:
+            -- the text stays in `memories` (single authority), the index
+            -- maps onto it by rowid, and the documented trigger pattern
+            -- keeps them in lockstep. The newest-first candidate window
+            -- made a decade-old record unreachable once newer rows
+            -- existed; FTS finds it in milliseconds at any scale.
+            CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+                title, summary, content, id UNINDEXED,
+                content='memories', content_rowid='rowid'
+            );
+            CREATE TRIGGER IF NOT EXISTS memories_fts_ai AFTER INSERT ON memories BEGIN
+                INSERT INTO memories_fts(rowid, title, summary, content, id)
+                VALUES (new.rowid, new.title, new.summary, new.content, new.id);
+            END;
+            CREATE TRIGGER IF NOT EXISTS memories_fts_ad AFTER DELETE ON memories BEGIN
+                INSERT INTO memories_fts(memories_fts, rowid, title, summary, content, id)
+                VALUES ('delete', old.rowid, old.title, old.summary, old.content, old.id);
+            END;
+            CREATE TRIGGER IF NOT EXISTS memories_fts_au AFTER UPDATE ON memories BEGIN
+                INSERT INTO memories_fts(memories_fts, rowid, title, summary, content, id)
+                VALUES ('delete', old.rowid, old.title, old.summary, old.content, old.id);
+                INSERT INTO memories_fts(rowid, title, summary, content, id)
+                VALUES (new.rowid, new.title, new.summary, new.content, new.id);
+            END;
+
             -- Unified VYOM operating graph. These are rebuildable projections
             -- over the authoritative stores plus separately-owned explicit
             -- relationships; they are not a second memory database.
@@ -568,6 +619,24 @@ class Database:
             """
         )
         await self.connection.commit()
+        await self._backfill_fts()
+
+    async def _backfill_fts(self) -> None:
+        """Index memories that predate the FTS table (idempotent)."""
+        assert self.connection is not None
+        try:
+            await self.connection.execute(
+                """
+                INSERT INTO memories_fts(rowid, title, summary, content, id)
+                SELECT m.rowid, m.title, m.summary, m.content, m.id FROM memories m
+                WHERE m.id NOT IN (SELECT id FROM memories_fts)
+                """
+            )
+            await self.connection.commit()
+        except Exception:
+            # An FTS availability problem must not block Brain startup;
+            # retrieval falls back to the structured/keyword path.
+            await self.connection.rollback()
 
     async def close(self) -> None:
         if self.connection is not None:

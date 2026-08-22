@@ -107,7 +107,31 @@ async def forget_memory(memory_id: str, request: Request) -> dict[str, Any]:
     if not forgotten:
         raise HTTPException(status_code=404, detail="Memory not found")
     await request.app.state.event_bus.publish(BrainEvent(task_id="memory-api", type=EventType.MEMORY_FORGOTTEN, human_readable_message="Memory forgotten", structured_payload={"memory_id": memory_id}))
-    return {"forgotten": True, "memory_id": memory_id}
+    # Soft-forget by design: the row is tombstoned, never erased. The
+    # response says so explicitly - "delete" that lies about erasure
+    # would break the ten-year recall guarantee.
+    return {"forgotten": True, "memory_id": memory_id, "erased": False}
+
+
+@router.get("/{memory_id}/history")
+async def memory_history(memory_id: str, request: Request) -> dict[str, Any]:
+    """Every prior version of a memory, oldest first - the append-only
+    answer to 'what did this say ten years ago'."""
+    current = await request.app.state.memory_store.get(memory_id, touch=False)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    versions = await request.app.state.memory_manager.history(memory_id)
+    return {
+        "memory_id": memory_id,
+        "current_version": current.version,
+        "versions": [
+            {
+                "version": entry.version,
+                "saved_state": entry.model_dump(mode="json"),
+            }
+            for entry in versions
+        ],
+    }
 
 
 @router.get("/{memory_id}/graph")

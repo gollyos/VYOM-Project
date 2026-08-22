@@ -1,8 +1,14 @@
 version: 1
 embeddings:
-  provider: local_hash
+  # Real semantic embeddings via the same free Gemini key ("ghar ka
+  # budget" finally matches "household expenses"). Falls back to the
+  # local hash provider whenever the key/network/quota is unavailable.
+  # Privacy note: embedding sends memory text to Google, same as every
+  # Brain model call; HIGHLY_SENSITIVE secrets are already rejected at
+  # write time. Set provider back to local_hash to stay fully offline.
+  provider: gemini
   dimensions: 96
-  allow_remote: false
+  allow_remote: true
 retrieval:
   default_limit: 8
   max_candidates: 500

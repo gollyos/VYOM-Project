@@ -172,14 +172,27 @@ async def test_memory_correction_supersedes_old_fact(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_memory_forget_hard_deletes_content_and_relations(tmp_path: Path):
+async def test_memory_forget_tombstones_but_never_erases(tmp_path: Path):
+    """'Forget' means retrieval stops offering the memory - NOT that the
+    record is destroyed. The user's permanent-memory guarantee: nothing
+    is ever erased, and an explicit history query can still answer 'what
+    was this' ten years later."""
     database, store, manager = await memory_stack(tmp_path / "memory.db")
     first = await manager.remember(memory_entry("First", "Forget this"))
     second = await manager.remember(memory_entry("Second", "Keep this"))
     await manager.relationships.connect(first.id, second.id, RelationType.RELATED_TO)
     assert await manager.forget(first.id)
-    assert await store.get(first.id, touch=False) is None
-    assert await store.relationships(second.id) == []
+    # Retrieval no longer sees it...
+    visible = await store.list()
+    assert all(item.id != first.id for item in visible)
+    # ...but the row survives, tombstoned, content intact.
+    tombstoned = await store.get(first.id, touch=False)
+    assert tombstoned is not None
+    assert tombstoned.content == "Forget this"
+    assert tombstoned.deleted_at is not None
+    # A second forget is a no-op, not a purge.
+    assert await manager.forget(first.id) is False
+    assert await store.get(first.id, touch=False) is not None
     await database.close()
 
 
