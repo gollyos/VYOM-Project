@@ -146,12 +146,54 @@ def test_resolve_never_offers_an_uninstaller_as_something_to_open():
         {"Name": "Node.js", "AppID": r"{GUID}\node.exe"},
         {"Name": "Uninstall Node.js", "AppID": r"{GUID2}\uninstall.exe"},
     ])
-    with patch("subprocess.run") as mock_run:
+    with patch.object(ApplicationRegistry, "_start_apps_native", return_value=None), \
+         patch("subprocess.run") as mock_run:
         mock_run.return_value.stdout = fake_output
         count = registry.discover_installed_apps()
     assert count == 1
     assert registry.resolve("uninstall node.js") == "node-js"
     assert all(name != "Uninstall Node.js" for name, _ in registry._discovered_index)
+
+
+def test_discovery_uses_native_com_and_never_spawns_powershell():
+    """The native `shell:AppsFolder` enumeration is the primary source and
+    filters "Uninstall X" entries exactly like the fallback did - without a
+    single subprocess spawn."""
+    registry = ApplicationRegistry()
+    from unittest.mock import patch
+
+    native_entries = [
+        ("Node.js", r"{GUID}\node.exe"),
+        ("Uninstall Node.js", r"{GUID2}\uninstall.exe"),
+    ]
+    with patch.object(ApplicationRegistry, "_start_apps_native", return_value=native_entries), \
+         patch("subprocess.run") as mock_run:
+        count = registry.discover_installed_apps()
+    mock_run.assert_not_called()
+    assert count == 1
+    assert registry._discovered_index == [("Node.js", r"{GUID}\node.exe")]
+
+
+def test_native_discovery_registers_resolved_paths_as_executables():
+    r"""Native enumeration resolves some Start Menu shortcuts straight to
+    their target exe. `shell:AppsFolder\C:\...\x.exe` is not an
+    activatable token, so such entries must register as executables, and
+    website shortcuts as URIs - not as AUMIDs that would fail to launch."""
+    registry = ApplicationRegistry()
+    from unittest.mock import patch
+
+    python_exe = r"C:\Users\GunjanAdmin\AppData\Local\Programs\Python\Python312\python.exe"
+    with patch("pathlib.Path.is_file", return_value=True), \
+         patch("pathlib.Path.is_absolute", return_value=True):
+        path_record = registry._register_discovered("Python 3.12 (64-bit)", python_exe)
+    assert path_record.executable == python_exe
+    assert path_record.aumid is None and path_record.uri is None
+    web_record = registry._register_discovered("Node.js website", "https://nodejs.org/")
+    assert web_record.uri == "https://nodejs.org/"
+    assert web_record.aumid is None and web_record.executable is None
+    terminal = registry._register_discovered("Terminal", "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App")
+    assert terminal.aumid == "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"
+    assert terminal.executable is None and terminal.uri is None
 
 
 def test_curated_alias_wins_over_a_same_named_discovered_entry():

@@ -121,28 +121,47 @@ class ApplicationRegistry:
         return ranked[0][1], ranked[0][2]
 
     def _register_discovered(self, name: str, start_app_id: str) -> ApplicationRecord:
-        """Turn a Get-StartApps hit into a real, launchable ApplicationRecord
-        the first time it is actually matched - lazily, so a machine with
-        128 installed apps does not pre-build 128 records nobody asked
-        for. Registered as UNKNOWN trust: VYOM found this app itself, no
-        one vetted it the way the curated list in applications.yaml is."""
+        """Turn a Start-apps index hit into a real, launchable
+        ApplicationRecord the first time it is actually matched - lazily, so
+        a machine with 128 installed apps does not pre-build 128 records
+        nobody asked for. Registered as UNKNOWN trust: VYOM found this app
+        itself, no one vetted it the way the curated list in
+        applications.yaml is."""
         app_id = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or f"app-{abs(hash(start_app_id))}"
         existing = self._apps.get(app_id)
         if existing is not None:
             return existing
         process_hint = self._process_name_from_app_id(start_app_id)
+        # The index's AppID is not always a `shell:AppsFolder` activation
+        # token. Native enumeration resolves some Start Menu shortcuts
+        # straight to their target executable and website shortcuts to
+        # their URL; activating those via `shell:AppsFolder\<path>` would
+        # silently fail, so they are registered through the launch route
+        # that actually fits: executable / uri / aumid.
+        candidate = Path(start_app_id)
+        executable = ""
+        uri = ""
+        aumid = ""
+        if start_app_id.startswith(("http://", "https://")):
+            uri = start_app_id
+        elif candidate.is_absolute() and candidate.suffix.lower() == ".exe" and candidate.is_file():
+            executable = str(candidate)
+        else:
+            aumid = start_app_id
         record = ApplicationRecord(
             app_id=app_id, name=name, launch_method="native",
             supported_actions=["open", "focus", "close", "status"],
             integration_type=IntegrationType.ACCESSIBILITY,
             trust=ApplicationTrust.UNKNOWN,
             health=ApplicationHealth.AVAILABLE,
+            executable=executable or None,
+            uri=uri or None,
             # shell:AppsFolder\<AppID> is the same activation route the
             # Start Menu itself uses for both packaged (UWP) apps and the
-            # GUID-keyed shell items Get-StartApps also returns for
-            # ordinary .exe shortcuts - one launch mechanism, no need to
-            # tell the two apart.
-            aumid=start_app_id,
+            # GUID-keyed shell items the index also returns for ordinary
+            # .exe shortcuts - one launch mechanism, no need to tell the
+            # two apart.
+            aumid=aumid or None,
             window_title=name,
             process_names=[process_hint] if process_hint else [],
         )
@@ -161,21 +180,75 @@ class ApplicationRegistry:
         tail = app_id_value.rsplit("\\", 1)[-1]
         return tail.lower() if tail.lower().endswith(".exe") else None
 
-    def discover_installed_apps(self) -> int:
-        """Populate the fuzzy-match index from every app Windows itself
-        lists in Start > All apps (`Get-StartApps`) - ordinary .exe
-        shortcuts and packaged/Store apps alike, since both surface
-        through the same Start Menu resolver Windows uses. Returns how
-        many apps were indexed.
+    @staticmethod
+    def _start_apps_native() -> list[tuple[str, str]] | None:
+        """Enumerate `shell:AppsFolder` through the Shell COM namespace -
+        the exact data source the Start Menu and `Get-StartApps` read.
 
-        This shells out to PowerShell and reliably takes over a second -
-        call it exactly ONCE, at Brain startup, via `asyncio.to_thread`.
-        It must never run on the event loop or be triggered per-request;
-        `resolve()` only ever reads the already-built index synchronously.
-        Safe to call again later to pick up newly-installed apps; each
-        call replaces the index with a fresh read."""
+        This is the last PowerShell call left in the Brain, replaced here:
+        spawning a `powershell.exe -Command Get-StartApps` per discovery
+        cost a process spawn, a console host, and an encoding boundary that
+        localized app names crossed as mojibake. COM enumeration returns
+        the same (display name, AppID/parsing name) pairs with none of
+        that. Returns None when COM is unavailable (non-Windows, broken
+        pywin32) so the caller can fall back; never raises."""
         if os.name != "nt":
-            return 0
+            return None
+        try:
+            import pythoncom
+            from win32com.shell import shell, shellcon
+        except ImportError:  # pragma: no cover - non-Windows / partial pywin32
+            return None
+        # Called via asyncio.to_thread: initialize COM on THIS worker thread.
+        try:
+            pythoncom.CoInitialize()
+        except pythoncom.com_error:
+            return None
+        try:
+            desktop = shell.SHGetDesktopFolder()
+            # ParseDisplayName returns (eaten, pidl, attributes).
+            pidl = desktop.ParseDisplayName(0, None, "shell:AppsFolder")[1]
+            folder = desktop.BindToObject(pidl, None, shell.IID_IShellFolder)
+            enumerator = folder.EnumObjects(0, shellcon.SHCONTF_FOLDERS | shellcon.SHCONTF_NONFOLDERS)
+            entries: list[tuple[str, str]] = []
+            while True:
+                batch = enumerator.Next(25)
+                if not batch:
+                    break
+                for item in batch:
+                    if not item:
+                        continue
+                    try:
+                        # SHGDN_FORPARSING on an apps-folder child yields the
+                        # activation token: an AUMID for packaged apps
+                        # (`Microsoft.WindowsTerminal_8wekyb3d8bbwe!App`), a
+                        # shell item id for classic shortcuts
+                        # (`{GUID}\program.exe`), the resolved target for
+                        # .lnk-only entries, or a URL for website shortcuts.
+                        name = folder.GetDisplayNameOf(item, shellcon.SHGDN_NORMAL)
+                        parsing = folder.GetDisplayNameOf(item, shellcon.SHGDN_FORPARSING)
+                    except pythoncom.com_error:
+                        continue
+                    if name and parsing:
+                        entries.append((str(name), str(parsing)))
+            return entries
+        except pythoncom.com_error:
+            return None
+        finally:
+            try:
+                pythoncom.CoUninitialize()
+            except pythoncom.com_error:
+                pass
+
+    @staticmethod
+    def _start_apps_powershell() -> list[tuple[str, str]] | None:
+        """LAST-RESORT discovery: `Get-StartApps` via a one-shot PowerShell.
+
+        Only reached when the native COM enumeration could not run at all.
+        Kept because a machine with a broken Shell COM registration should
+        still discover apps rather than silently index nothing."""
+        if os.name != "nt":
+            return None
         try:
             completed = subprocess.run(
                 ["powershell", "-NoProfile", "-NonInteractive", "-Command",
@@ -185,16 +258,34 @@ class ApplicationRegistry:
             )
             raw = json.loads(completed.stdout or "[]")
         except (OSError, subprocess.SubprocessError, ValueError):
-            return 0
+            return None
         if isinstance(raw, dict):
             raw = [raw]
+        return [
+            (str(entry.get("Name") or "").strip(), str(entry.get("AppID") or "").strip())
+            for entry in raw
+            if isinstance(entry, dict)
+        ]
+
+    def discover_installed_apps(self) -> int:
+        """Populate the fuzzy-match index with every app Windows itself
+        lists in Start > All apps - ordinary .exe shortcuts and
+        packaged/Store apps alike. Returns how many apps were indexed.
+
+        Native COM enumeration of `shell:AppsFolder` (no PowerShell) is
+        the primary source; PowerShell is a last-resort fallback. Call it
+        exactly ONCE, at Brain startup, via `asyncio.to_thread`: display
+        name resolution for a hundred-plus shortcuts is not free. It must
+        never run on the event loop or be triggered per-request; `resolve()`
+        only ever reads the already-built index synchronously. Safe to call
+        again later to pick up newly-installed apps; each call replaces the
+        index with a fresh read."""
+        entries = self._start_apps_native() or self._start_apps_powershell()
+        if not entries:
+            return 0
         seen: set[str] = set()
         index: list[tuple[str, str]] = []
-        for entry in raw:
-            if not isinstance(entry, dict):
-                continue
-            name = str(entry.get("Name") or "").strip()
-            app_id_value = str(entry.get("AppID") or "").strip()
+        for name, app_id_value in entries:
             if not name or not app_id_value:
                 continue
             if name.lower().startswith(self._UNINSTALL_PREFIX):
