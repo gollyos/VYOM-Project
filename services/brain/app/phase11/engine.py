@@ -160,6 +160,21 @@ class Phase11Engine:
         briefing = self.chief_of_staff.brief(context)
         await emit("daily_plan_created", "Assembled today's plan from real context", {"priority_count": len(briefing.ranked_priorities)})
 
+        # UNFINISHED WORK FIRST. A task that failed or was paused before
+        # the last restart is yesterday's promise; the user must never
+        # have to remember it themselves ("PC dobara khulne pe yaad
+        # rahe"). Real task-store rows only - never reconstructed.
+        pending_notes: list[str] = []
+        interrupted = []
+        for status in (TaskStatus.FAILED, TaskStatus.PAUSED):
+            interrupted.extend(await self.task_store.list_by_status({status}))
+        for item in interrupted[:5]:
+            what = (item.user_request or item.goal or "task")[:80]
+            pending_notes.append(f"{item.id}|{what} ({status.value})")
+        if pending_notes:
+            await emit("pending_work_recalled",
+                       f"{len(pending_notes)} unfinished task(s) from before", {"tasks": pending_notes})
+
         conflict = await self._schedule_conflict_warning()
 
         top_rows = [[score.label, round(score.score, 3), "; ".join(score.reasons)] for score in briefing.ranked_priorities[:6]]
@@ -167,16 +182,22 @@ class Phase11Engine:
             {"id": "priorities", "type": "daily-plan-timeline", "title": "Today's priorities", "eyebrow": f"{len(briefing.ranked_priorities)} item(s)", "tone": "intelligence", "frame": _frame(4, 12, 50), "rows": top_rows},
             {"id": "risks", "type": "priority-stack", "title": "Needs attention", "eyebrow": f"{len(briefing.needs_attention)} item(s)", "tone": "attention" if briefing.needs_attention else "verified", "frame": _frame(58, 12, 38), "items": [r.description for r in briefing.needs_attention] or ["Nothing at risk right now"]},
         ]
+        if pending_notes:
+            objects.insert(0, {"id": "pending-work", "type": "priority-stack", "title": "Unfinished from before", "eyebrow": f"{len(pending_notes)} task(s)", "tone": "attention", "frame": _frame(4, 62, 50), "items": [note.split("|", 1)[1] for note in pending_notes]})
         if briefing.recommendation.primary:
             objects.append({"id": "recommendation", "type": "verified-result", "title": "Recommended next action", "eyebrow": "One strong recommendation", "tone": "verified", "frame": _frame(4, 62, 50), "statement": f"{briefing.recommendation.primary.action}: {briefing.recommendation.primary.reason}", "evidence": [], "timestamp": datetime.now(timezone.utc).isoformat()})
         if conflict:
             objects.append({"id": "conflict", "type": "verified-result", "title": "Schedule note", "eyebrow": "Personal preference", "tone": "attention", "frame": _frame(58, 62, 38), "statement": conflict, "evidence": ["personal_profile:work_cutoff_time"], "timestamp": datetime.now(timezone.utc).isoformat()})
 
         summary = f"Today's plan: {len(briefing.ranked_priorities)} candidate item(s), {len(briefing.needs_attention)} needing attention."
+        if pending_notes:
+            summary = f"{len(pending_notes)} unfinished task(s) carried over. " + summary
         if briefing.recommendation.primary:
             summary += f" Top recommendation: {briefing.recommendation.primary.action}."
         composition = _composition(f"plan-{task.id}", "brain-context", "Today's plan", summary, objects)
-        return ExecutionResult(response=summary, structured_data=briefing.model_dump(mode="json"), ui_composition=composition, evidence=[f"candidate_actions:{len(context.candidate_actions)}"])
+        structured = briefing.model_dump(mode="json")
+        structured["pending_tasks"] = pending_notes
+        return ExecutionResult(response=summary, structured_data=structured, ui_composition=composition, evidence=[f"candidate_actions:{len(context.candidate_actions)}", f"pending_tasks:{len(pending_notes)}"])
 
     async def _what_now(self, task: Task, emit: EventEmitter) -> ExecutionResult:
         context = await self._chief_of_staff_context()

@@ -88,6 +88,7 @@ class TaskRuntime:
         self.cognitive_runtime = cognitive_runtime
         self.mission_loop = mission_loop
         self.general_planner = None  # attached post-construction in main.py, like cognitive_runtime/mission_loop
+        self.llm_triage = None  # attached post-construction; optional LLM intent gate for unrecognised text
         self.memory_retriever = None  # attached post-construction in main.py, same pattern
         self.memory_store = None  # attached post-construction in main.py, same pattern
         self.memory_manager = None  # attached post-construction in main.py, same pattern
@@ -365,11 +366,11 @@ class TaskRuntime:
                 return
 
             if self.business_engine is not None and self.business_engine.supports(profile.intent):
-                task.assigned_model = "local-business-runtime-v1"
+                task.assigned_model = "workflow:business-v1"
                 await self.task_store.save(task)
                 await self._emit(
-                    task, EventType.MODEL_SELECTED, "Selected deterministic local business runtime",
-                    {"routing": {"primary_model": "local-business-runtime-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured integration/CRM/automation workflow; no paid model call required", "estimated_cost_tier": "free"}},
+                    task, EventType.MODEL_SELECTED, "Running deterministic business workflow (no model call)",
+                    {"routing": {"primary_model": "workflow:business-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured integration/CRM/automation workflow; no paid model call required", "estimated_cost_tier": "free"}},
                 )
                 await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a permission-aware operating plan")
                 task.plan = self.planner.create_plan(task, profile)
@@ -391,11 +392,11 @@ class TaskRuntime:
                 return
 
             if self.phase8_engine is not None and self.phase8_engine.supports(profile.intent):
-                task.assigned_model = "local-phase8-runtime-v1"
+                task.assigned_model = "workflow:research-browser-v1"
                 await self.task_store.save(task)
                 await self._emit(
-                    task, EventType.MODEL_SELECTED, "Selected deterministic Phase 8 research/artifact runtime",
-                    {"routing": {"primary_model": "local-phase8-runtime-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured research/browser/discovery/booking/artifact workflow; no paid model call required for orchestration", "estimated_cost_tier": "free"}},
+                    task, EventType.MODEL_SELECTED, "Running deterministic research workflow (no model call)",
+                    {"routing": {"primary_model": "workflow:research-browser-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured research/browser/discovery/booking/artifact workflow; no paid model call required for orchestration", "estimated_cost_tier": "free"}},
                 )
                 await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a bounded research/artifact plan")
                 task.plan = self.planner.create_plan(task, profile)
@@ -417,11 +418,11 @@ class TaskRuntime:
                 return
 
             if self.phase13_engine is not None and self.phase13_engine.supports(profile.intent):
-                task.assigned_model = "local-phase13-runtime-v1"
+                task.assigned_model = "workflow:diagnostics-v1"
                 await self.task_store.save(task)
                 await self._emit(
-                    task, EventType.MODEL_SELECTED, "Selected deterministic Phase 13 production runtime",
-                    {"routing": {"primary_model": "local-phase13-runtime-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Deterministic diagnostics/observability workflow; no paid model call required", "estimated_cost_tier": "free"}},
+                    task, EventType.MODEL_SELECTED, "Running deterministic diagnostics workflow (no model call)",
+                    {"routing": {"primary_model": "workflow:diagnostics-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Deterministic diagnostics/observability workflow; no paid model call required", "estimated_cost_tier": "free"}},
                 )
                 await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Preparing a production diagnostics plan")
                 task.plan = self.planner.create_plan(task, profile)
@@ -443,11 +444,11 @@ class TaskRuntime:
                 return
 
             if self.phase9_engine is not None and self.phase9_engine.supports(profile.intent):
-                task.assigned_model = "local-phase9-runtime-v1"
+                task.assigned_model = "workflow:desktop-v1"
                 await self.task_store.save(task)
                 await self._emit(
-                    task, EventType.MODEL_SELECTED, "Selected deterministic Phase 9 desktop runtime",
-                    {"routing": {"primary_model": "local-phase9-runtime-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Deterministic native desktop workflow; no paid model call required for orchestration", "estimated_cost_tier": "free"}},
+                    task, EventType.MODEL_SELECTED, "Running deterministic desktop workflow (no model call)",
+                    {"routing": {"primary_model": "workflow:desktop-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Deterministic native desktop workflow; no paid model call required for orchestration", "estimated_cost_tier": "free"}},
                 )
                 await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a bounded desktop action plan")
                 task.plan = self.planner.create_plan(task, profile)
@@ -469,11 +470,11 @@ class TaskRuntime:
                 return
 
             if self.phase10_engine is not None and self.phase10_engine.supports(profile.intent):
-                task.assigned_model = "local-phase10-runtime-v1"
+                task.assigned_model = "workflow:finance-v1"
                 await self.task_store.save(task)
                 await self._emit(
-                    task, EventType.MODEL_SELECTED, "Selected deterministic Phase 10 finance/trading runtime",
-                    {"routing": {"primary_model": "local-phase10-runtime-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured market data/analysis/paper-trading/backtest workflow; no paid model call required for orchestration", "estimated_cost_tier": "free"}},
+                    task, EventType.MODEL_SELECTED, "Running deterministic finance workflow (no model call)",
+                    {"routing": {"primary_model": "workflow:finance-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured market data/analysis/paper-trading/backtest workflow; no paid model call required for orchestration", "estimated_cost_tier": "free"}},
                 )
                 await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a bounded market/trading plan")
                 task.plan = self.planner.create_plan(task, profile)
@@ -495,11 +496,11 @@ class TaskRuntime:
                 return
 
             if self.phase11_engine is not None and self.phase11_engine.supports(profile.intent):
-                task.assigned_model = "local-phase11-runtime-v1"
+                task.assigned_model = "workflow:personal-os-v1"
                 await self.task_store.save(task)
                 await self._emit(
                     task, EventType.MODEL_SELECTED, "Selected deterministic Phase 11 personal-OS runtime",
-                    {"routing": {"primary_model": "local-phase11-runtime-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured goal/habit/routine/chief-of-staff workflow; no paid model call required for orchestration", "estimated_cost_tier": "free"}},
+                    {"routing": {"primary_model": "workflow:personal-os-v1", "primary_provider": "local", "fallback_models": [], "reason_selected": "Structured goal/habit/routine/chief-of-staff workflow; no paid model call required for orchestration", "estimated_cost_tier": "free"}},
                 )
                 await self._transition(task, TaskStatus.PLANNING, EventType.TASK_PLANNING, "Creating a bounded personal-OS plan")
                 task.plan = self.planner.create_plan(task, profile)
@@ -636,7 +637,7 @@ class TaskRuntime:
                     from app.schemas.routing import UsageRecord
 
                     task.metadata["stt_noise"] = True
-                    task.assigned_model = "local-gate-v1"
+                    task.assigned_model = "gate:stt-noise"
                     await self.task_store.save(task)
                     result = ExecutionResult(
                         response=(
@@ -651,10 +652,30 @@ class TaskRuntime:
                     await self._finish_result(task, result, None, started, 0, False)
                     return
 
+                # LLM TRIAGE (the soul fix): when both keyword layers
+                # declined, one cheap model call decides ACTION vs
+                # conversation - the word-count heuristic alone declared
+                # "aaj ka kaam sambhalo" small talk and answered it from
+                # memory with no tools. Triage only upgrades toward
+                # ACTION; on any failure it is skipped entirely.
+                triage = None
+                if self.llm_triage is not None:
+                    triage = await self.llm_triage.classify(task, profile, task.user_request)
+                if triage is not None:
+                    task.metadata["triage"] = triage
+                    if triage.get("tone") not in (None, "neutral"):
+                        # Emotion/tone capture: how the user said it is
+                        # part of what they said.
+                        task.metadata["user_tone"] = triage.get("tone")
+                    await self.task_store.save(task)
+
                 # Conversation is not a mission. Routing "good, what about
                 # you?" through the planner made VYOM run a system-status
                 # call and answer with a CPU card. Pure conversation takes
                 # the plain reasoning path: one cheap call, zero tools.
+                if triage is not None and triage.get("actionable"):
+                    await self._run_general_mission(task, profile, started, retries, fallback_used)
+                    return
                 if not is_conversational(task.user_request):
                     await self._run_general_mission(task, profile, started, retries, fallback_used)
                     return

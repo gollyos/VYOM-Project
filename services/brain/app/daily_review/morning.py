@@ -19,6 +19,11 @@ class MorningBriefingInput(BaseModel):
     goal_reminder: str | None = None
     market_alert_notes: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
+    #: Work that was interrupted - failed/paused tasks from before the
+    #: last restart. The user's requirement: "kabhi kuch kaam reh jaye to
+    #: PC dobara khulne pe yaad rahe". These lead the briefing because
+    #: they are yesterday's unfinished promises, not new information.
+    pending_task_notes: list[str] = Field(default_factory=list)
 
 
 class MorningBriefing(BaseModel):
@@ -26,6 +31,9 @@ class MorningBriefing(BaseModel):
     highlights: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
     ask_prepare_plan: bool = True
+    #: Failed/paused tasks worth retrying today (id + what it was), so the
+    #: UI can offer one-tap retry instead of making the user remember.
+    retry_candidates: list[dict] = Field(default_factory=list)
 
 
 class MorningBriefingService:
@@ -38,6 +46,13 @@ class MorningBriefingService:
 
     def build(self, data: MorningBriefingInput) -> MorningBriefing:
         highlights: list[str] = []
+        # Unfinished work leads: it is the thing the user asked for
+        # yesterday and never got. The note arrives as "task_id|what" -
+        # the id is machine structure for retry_candidates, the HUMAN
+        # highlight shows only the what.
+        for note in data.pending_task_notes[:3]:
+            what = note.split("|", 1)[1] if "|" in note else note
+            highlights.append(f"Unfinished: {what}")
         if data.pending_approvals:
             highlights.append(f"{data.pending_approvals} task(s) need your approval")
         if data.calendar_meeting_count:
@@ -56,4 +71,13 @@ class MorningBriefingService:
         highlights = highlights[: self.max_highlights]
 
         summary = "Good morning. " + (" ".join(f"{item}." for item in highlights) if highlights else "Nothing urgent is recorded right now.")
-        return MorningBriefing(summary=summary, highlights=highlights, risks=data.risks, ask_prepare_plan=True)
+        return MorningBriefing(
+            summary=summary, highlights=highlights, risks=data.risks,
+            ask_prepare_plan=True,
+            # Parsed from the notes so the caller can offer retry without
+            # re-querying the task store: [{"task_id": ..., "what": ...}].
+            retry_candidates=[
+                {"task_id": note.split("|", 1)[0], "what": note.split("|", 1)[1]}
+                for note in data.pending_task_notes[:5] if "|" in note
+            ],
+        )

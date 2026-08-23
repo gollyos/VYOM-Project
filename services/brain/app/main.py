@@ -35,6 +35,7 @@ from app.routing.model_router import ModelRouter
 from app.routing.provider_health import ProviderHealth
 from app.routing.quota_budgeter import QuotaBudgeter
 from app.routing.usage_tracker import UsageTracker
+from app.runtime.llm_triage import LLMTriage
 from app.runtime.event_bus import EventBus
 from app.runtime.executor import Executor
 from app.runtime.planner import Planner
@@ -609,6 +610,14 @@ def create_app(
             artifact_engine=artifact_engine,
             delivery_service=client_delivery_service,
             crm_store=crm_store,
+        )
+        # Research synthesis written by the model over the SAME extracted
+        # claims (never from its own knowledge); deterministic template
+        # remains the fallback, so offline research still works.
+        phase8_engine.synthesis_provider = providers.get("google")
+        phase8_engine.synthesis_model = next(
+            (m.model_id for m in model_registry.enabled() if m.provider == "google"),
+            None,
         )
         phase9_engine = Phase9Engine(
             tool_executor=tool_executor,
@@ -1573,6 +1582,10 @@ def create_app(
         # the general planner, so a single 429 stops every caller instead
         # of each discovering the rate limit independently.
         runtime.general_planner = GeneralPlanner(model_router, providers, provider_health=provider_health)
+        # The soul fix: unrecognised natural language gets ONE cheap
+        # structured model call (action vs conversation, tone, urgency)
+        # before any word-count heuristic decides it is small talk.
+        runtime.llm_triage = LLMTriage(model_router, providers)
         runtime.memory_retriever = MemoryRetriever(memory_store, embedding_provider)
         runtime.memory_store = memory_store
         runtime.memory_manager = memory_manager

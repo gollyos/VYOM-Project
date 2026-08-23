@@ -103,6 +103,12 @@ class Phase8Engine:
         self.crm_store = crm_store
         self._last_booking_constraints: dict[str, BookingConstraints] = {}
         self._last_booking_category: dict[str, BookingCategory] = {}
+        # Optional model synthesis for research (attached post-construction
+        # in main.py, like every other optional capability). When unset,
+        # research synthesis stays the deterministic template - the
+        # offline guarantee never depends on a provider.
+        self.synthesis_provider = None
+        self.synthesis_model: str | None = None
 
     def supports(self, intent: str) -> bool:
         return intent in self.INTENTS
@@ -137,7 +143,11 @@ class Phase8Engine:
         async def research_emit(event_type: str, message: str, payload: dict) -> None:
             await emit(event_type, message, payload)
 
-        result = await self.research_task.run(topic, depth=depth, required_facts=required_facts, emit=research_emit)
+        result = await self.research_task.run(
+            topic, depth=depth, required_facts=required_facts, emit=research_emit,
+            synthesis_provider=self.synthesis_provider,
+            synthesis_model=self.synthesis_model,
+        )
 
         source_nodes = [
             {"id": source.source_id, "label": source.title[:40], "type": source.source_type.value, "confidence": source.trust_score}

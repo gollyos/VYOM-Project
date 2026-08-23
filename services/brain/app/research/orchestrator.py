@@ -111,6 +111,8 @@ class DeepResearchTask:
         preferred_sources: list[SourceType] | None = None,
         freshness_requirement: Freshness = Freshness.UNKNOWN,
         emit: EmitFn | None = None,
+        synthesis_provider=None,
+        synthesis_model: str | None = None,
     ) -> ResearchResult:
         emit = emit or _noop_emit
         await emit("research_started", f"Planning research for: {goal}", {"goal": goal})
@@ -156,7 +158,13 @@ class DeepResearchTask:
 
         gaps = self._identify_gaps(plan, claims)
         claims = self.citation_builder.mark_uncertain(claims)
-        synthesis = self.synthesizer.synthesize(plan, claims, contradictions, gaps)
+        # Model-written synthesis over the SAME extracted claims when a
+        # provider is offered; the deterministic template is the fallback
+        # and the only path when none is wired (offline guarantee holds).
+        synthesis = await self.synthesizer.synthesize_async(
+            plan, claims, contradictions, gaps,
+            provider=synthesis_provider, model=synthesis_model,
+        )
         citations = self.citation_builder.build(claims, ranked_sources)
 
         result = ResearchResult(
