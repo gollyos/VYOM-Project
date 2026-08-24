@@ -228,6 +228,48 @@ def is_screen_question(text: str) -> bool:
     return any(phrase in lowered for phrase in _SCREEN_QUESTIONS)
 
 
+#: Phrases that mark a request for EXTERNAL-world knowledge about a subject
+#: only VYOM's knowledge base can answer ('what is X', 'who is X', 'define X',
+#: 'find out about X and remember it'). Such a question is not small talk: it
+#: must reach the knowledge-base-first-then-research flow (ask_or_research),
+#: never be discarded as conversation or answered from a raw memory search
+#: that knows nothing in the world.
+_KNOWLEDGE_QUERY_PHRASES = (
+    "what is ", "what's ", "what are ", "what was ", "who is ", "who was ",
+    "what does ", "define ", "definition", "explain ", "meaning of",
+    "find out about", "learn about", "facts about", "history of",
+    "details about", "wikipedia",
+    "kya hai", "kya hota hai", "kaun hai", "kaun tha",
+    "क्या है", "कौन है", "के बारे में",
+)
+#: Internal-recall phrasing that must NOT trigger a live research call even
+#: when a knowledge cue happens to appear in the same sentence ("what do you
+#: remember about my client"). These are answered by raw memory recall only.
+_INTERNAL_RECALL_PHRASES = (
+    "what do you remember", "what do u remember", "do you remember", "do u remember",
+    "did i tell you", "did i say", "what did i tell you", "what did i say",
+    "what do you know", "what do u know", "about me", "about myself",
+    "about you", "about yourself", "about my", "my client", "my business",
+    "my project", "my crm", "my name", "my website", "yaad hai", "yaad",
+    "recall", "told you", "last time", "previously", "kab mila",
+)
+
+
+def is_general_knowledge_query(text: str) -> bool:
+    """True when the utterance asks about an EXTERNAL-world subject ('what is
+    X', 'who is X', 'define X', 'find out about X and remember it') that only
+    the knowledge base can answer, as opposed to a question about VYOM's own
+    stored memory ('what do you remember about my client'). Only the former
+    should trigger a live research call; the latter is answered by raw memory
+    recall - never by browsing the web."""
+    lowered = (text or "").lower().strip()
+    if not lowered:
+        return False
+    if any(phrase in lowered for phrase in _INTERNAL_RECALL_PHRASES):
+        return False
+    return any(phrase in lowered for phrase in _KNOWLEDGE_QUERY_PHRASES)
+
+
 # ======================================================================
 # Action imperatives — permission to change the outside world
 # ======================================================================

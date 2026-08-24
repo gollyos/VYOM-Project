@@ -427,12 +427,15 @@ TOOL_CONTRACTS: dict[str, dict] = {
     },
     "memory_search": {
         "tool": "__memory__", "description": (
-            "Search VYOM's own stored memory for what it already knows about a person, company, "
-            "project or past event. Use this FIRST for any question about what VYOM remembers. "
-            "Returns an empty result when nothing has been stored - that means VYOM genuinely "
-            "does not know, and you must say so rather than guess."),
+            "Answer a question from what VYOM knows. For a person, company, project or past "
+            "event, search VYOM's stored memories. For a general-knowledge question about the "
+            "world ('what is X', 'who is X', 'find out about X and remember it'), answer from "
+            "VYOM's own knowledge base FIRST and, when a topic is unknown or stale, run web "
+            "research and record what you learn, so the answer is learned for next time. "
+            "Returns an empty result when nothing is known and research could not find "
+            "anything - say so plainly rather than guessing."),
         "parameters": {"type": "object", "required": ["query"], "properties": {
-            "query": {"type": "string", "description": "Person, company, project or topic."}}},
+            "query": {"type": "string", "description": "Person, company, project, event, or a world-knowledge subject."}}},
     },
     "git_status": {
         "tool": "git",
@@ -468,15 +471,7 @@ _CONTRACT_HINTS = {
     "desktop_active_window": ("window", "screen", "active", "foreground", "open hai", "front"),
     "browser_navigate": ("browse", "web", "internet", "site", "url", "search", "research",
                          "latest", "news", "update", "review", "price", "compare", "google",
-                         # General-knowledge "find out / understand X" cues. Without these,
-                         # "what is X" / "who is X" / "define X" only ever offered a memory
-                         # search — which returns nothing for a topic VYOM has not already
-                         # stored — and no real research tool, so the task failed verification
-                         # with "no search was performed". Research cues route to the browser,
-                         # and the research task records what it learns into the knowledge base.
-                         "what is", "what are", "who is", "who was", "define", "definition",
-                         "explain", "meaning", "means", "about X", "tell me about", "learn",
-                         "find out", "fact", "wikipedia", "details", "history"),
+                         "go to", "visit", "open website"),
     "browser_read": ("browse", "web", "research", "extract", "source", "review", "latest"),
     "desktop_launch": ("open", "launch", "start", "kholo", "chalu", "app", "application",
                        "chrome", "calculator", "notepad", "explorer", "vscode"),
@@ -503,7 +498,14 @@ _CONTRACT_HINTS = {
     "git_status": ("git", "repo", "repository", "branch"),
     "memory_search": ("remember", "remembered", "recall", "yaad", "know about", "who is",
                       "kaun hai", "kab mila", "told you", "last time", "previously", "my crm",
-                      "my client", "my project notes"),
+                      "my client", "my project notes",
+                      # General-knowledge cues: the knowledge base answers these first and
+                      # researches + records an unknown world topic, so "what is X / who is
+                      # X / find out about X and remember it" actually learns instead of
+                      # hitting a raw memory search that knows nothing in the world.
+                      "what is", "what are", "what was", "who was", "define", "definition",
+                      "explain", "meaning of", "what does", "find out", "learn about",
+                      "facts about", "history", "wikipedia", "details about"),
     "git_diff": ("diff", "changed", "changes", "git"),
 }
 
@@ -534,6 +536,14 @@ def is_conversational(goal: str) -> bool:
     from app.runtime.task_classifier import is_screen_question
 
     if is_screen_question(goal):
+        return False
+    # A general-knowledge question ('what is X', 'who is X', 'find out about
+    # X and remember it') is not small talk either. It must reach the
+    # knowledge-base-first-then-research flow, not be answered from a model
+    # or a raw memory search that knows nothing in the world.
+    from app.runtime.task_classifier import is_general_knowledge_query
+
+    if is_general_knowledge_query(goal):
         return False
     if any(pattern in lowered for pattern in _CONVERSATIONAL_PATTERNS):
         return True

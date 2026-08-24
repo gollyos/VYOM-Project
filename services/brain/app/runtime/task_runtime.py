@@ -1456,6 +1456,128 @@ class TaskRuntime:
             return "system_query", {"measurement": output}
         return None, {}
 
+    # -- general-knowledge memory/reasoning helpers --------------------------
+
+    @staticmethod
+    def _is_general_knowledge_query(text: str) -> bool:
+        """True when the utterance asks about an EXTERNAL-world subject
+        ('what is X', 'who is X', 'define X', 'find out about X and remember
+        it') that only the knowledge base can answer, as opposed to a question
+        about VYOM's own stored memory ('what do you remember about my client').
+        Only the former should trigger a live research call; the latter is
+        satisfied by raw memory recall."""
+        from app.runtime.task_classifier import is_general_knowledge_query
+
+        return is_general_knowledge_query(text)
+
+    def _knowledge_research_fn(self, subject: str):
+        """Build the async callable that ask_or_research() invokes when the
+        knowledge base does not already know `subject` (or knows it stale):
+        run the REAL research pipeline (DeepResearchTask over the live browser
+        + Defuddle reads), which records what it learns into the same
+        knowledge base, then signal that a re-recall is warranted.
+
+        ask_or_research() only uses the return value as a 'did research run'
+        flag and re-recalls to surface the newly recorded facts - so even a
+        research run that pulled no new claims still returns a truthy marker
+        here, and a run that could not happen (no pipeline wired, or the
+        research errored) returns False to preserve whatever recall already had.
+        """
+        async def _research() -> bool:
+            research_task = getattr(self.phase8_engine, "research_task", None)
+            if research_task is None:
+                return False  # no research pipeline; keep what recall already had
+            try:
+                from app.research.schemas import ResearchDepth
+                result = await research_task.run(subject, depth=ResearchDepth.STANDARD)
+                return result is not None
+            except Exception:
+                return False
+
+        return _research
+
+    async def _answer_memory_query(self, call_name: str, query: str, collected: list,
+                                   general_knowledge: bool | None = None) -> dict:
+        """The memory_search tool body shared by the general mission.
+
+        Knowledge-base-first-then-research for general-knowledge questions
+        ('what is X', 'find out about X and remember it'): recall what VYOM
+        already knows, and when a world subject is unknown or stale, run the
+        real research pipeline (which records the facts) instead of falling
+        through to raw memory. Internal-memory questions ('what do you
+        remember about my client') are answered by raw memory recall only -
+        a research call is never made for them.
+
+        `general_knowledge` is normally derived from the ORIGINAL task request
+        (not just the subject the planner extracted, which often drops the
+        'what is / find out about' framing - e.g. query='solar system'). Callers
+        that already know pass it in; omitting it falls back to checking the
+        query text itself."""
+        if general_knowledge is None:
+            general_knowledge = self._is_general_knowledge_query(query)
+
+        def _found_from_facts(facts) -> list[dict]:
+            return [{
+                "title": f"{fact.subject} — {fact.predicate}",
+                "summary": fact.as_sentence(),
+                "source_url": fact.source_url,
+                "confidence": fact.confidence,
+                "created_at": str(fact.last_confirmed_at),
+                "knowledge": True,
+            } for fact in facts]
+
+        if self.knowledge_service is not None:
+            try:
+                if general_knowledge:
+                    # Ask the KB first; when unknown or stale, research + record.
+                    knowledge = await self.knowledge_service.ask_or_research(
+                        query, self._knowledge_research_fn(query))
+                else:
+                    knowledge = await self.knowledge_service.recall(query)
+            except Exception as error:
+                knowledge = None
+                self.knowledge_recall_error = str(error)[:300]
+            if knowledge is not None and knowledge.facts:
+                found = _found_from_facts(knowledge.facts)
+                collected.append({"call": call_name, "inputs": {"query": query},
+                                  "ok": True, "output": found, "error": None})
+                return {"ok": True, "output": found,
+                        "stale": knowledge.stale,
+                        "note": "answered from VYOM's knowledge base" if not knowledge.stale
+                                else "facts known but stale; a refresh is recommended"}
+            # A world-knowledge question with nothing stored AND no research
+            # result. Raw memory stores nothing about the world and would answer
+            # "no stored memory" - never fall through to it for a GK query.
+            if general_knowledge:
+                collected.append({"call": call_name, "inputs": {"query": query},
+                                  "ok": True, "output": [], "error": None})
+                return {"ok": True, "output":
+                        f"VYOM could not find reliable information about '{query}'. No "
+                        "knowledge is stored and research was unavailable or came back empty. "
+                        "Say so plainly; do not guess."}
+
+        if self.memory_retriever is None:
+            return {"ok": False, "error": "memory retrieval is not available in this runtime"}
+        from app.memory.schemas import MemoryQuery
+
+        try:
+            hits = await self.memory_retriever.search(MemoryQuery(text=query, limit=8))
+        except Exception as error:
+            return {"ok": False, "error": f"memory search failed: {error}"[:300]}
+        found = [{
+            "title": hit.memory.title,
+            "summary": hit.memory.summary or hit.memory.content[:300],
+            "created_at": str(hit.memory.created_at),
+            "confidence": hit.memory.confidence,
+        } for hit in hits]
+        collected.append({"call": call_name, "inputs": {"query": query},
+                          "ok": True, "output": found, "error": None})
+        if not found:
+            return {"ok": True, "output":
+                    f"VYOM has no stored memory matching '{query}'. Nothing has been "
+                    "recorded about this. Say so plainly; do not guess."}
+        return {"ok": True, "output": found}
+
     # -- general tool-calling mission --------------------------------------
 
     async def _run_general_mission(
@@ -1497,55 +1619,22 @@ class TaskRuntime:
             # answer ("nothing is stored"), never grounds for guessing.
             if contract["tool"] == "__memory__":
                 query = str(call.arguments.get("query", "")).strip()
-                # If the persistent knowledge base ("khud ka Wikipedia")
-                # is wired in and this is a general-knowledge "what is /
-                # who is / find out about X" style question, ask it FIRST
-                # — recall what VYOM already knows, and when it is stale or
-                # unknown, perform RESEARCH and record the facts, so "find
-                # out and remember it" actually learns and persists instead
-                # of only ever reading old raw memory.
-                if self.knowledge_service is not None:
-                    try:
-                        knowledge = await self.knowledge_service.recall(query)
-                    except Exception as error:
-                        knowledge = None
-                        self.knowledge_recall_error = str(error)[:300]
-                    if knowledge is not None and knowledge.facts:
-                        found = [{
-                            "title": f"{fact.subject} — {fact.predicate}",
-                            "summary": fact.as_sentence(),
-                            "source_url": fact.source_url,
-                            "confidence": fact.confidence,
-                            "created_at": str(fact.last_confirmed_at),
-                            "knowledge": True,
-                        } for fact in knowledge.facts]
-                        collected.append({"call": call.name, "inputs": {"query": query},
-                                          "ok": True, "output": found, "error": None})
-                        return {"ok": True, "output": found,
-                                "stale": knowledge.stale,
-                                "note": "answered from VYOM's knowledge base" if not knowledge.stale
-                                        else "facts known but stale; a refresh is recommended"}
-                if self.memory_retriever is None:
-                    return {"ok": False, "error": "memory retrieval is not available in this runtime"}
-                from app.memory.schemas import MemoryQuery
-
-                try:
-                    hits = await self.memory_retriever.search(MemoryQuery(text=query, limit=8))
-                except Exception as error:
-                    return {"ok": False, "error": f"memory search failed: {error}"[:300]}
-                found = [{
-                    "title": hit.memory.title,
-                    "summary": hit.memory.summary or hit.memory.content[:300],
-                    "created_at": str(hit.memory.created_at),
-                    "confidence": hit.memory.confidence,
-                } for hit in hits]
-                collected.append({"call": call.name, "inputs": {"query": query},
-                                  "ok": True, "output": found, "error": None})
-                if not found:
-                    return {"ok": True, "output":
-                            f"VYOM has no stored memory matching '{query}'. Nothing has been "
-                            "recorded about this. Say so plainly; do not guess."}
-                return {"ok": True, "output": found}
+                # VYOM's own memory is not a Tool Registry tool; it is answered
+                # by the knowledge base first. A general-knowledge question
+                # ('what is X', 'find out about X and remember it') recalls what
+                # the KB already knows and, when a world subject is unknown or
+                # stale, performs real research and records the facts; an
+                # internal-memory question ('what do you remember about my
+                # client') is answered by raw memory recall only. The GK decision
+                # comes from the ORIGINAL task request, because the planner
+                # often hands over just the subject (e.g. 'solar system') with
+                # the 'what is / find out' framing dropped.
+                general_knowledge = (
+                    self._is_general_knowledge_query(task.user_request)
+                    or self._is_general_knowledge_query(query)
+                )
+                return await self._answer_memory_query(
+                    call.name, query, collected, general_knowledge=general_knowledge)
             inputs = {**contract.get("fixed", {}), **dict(call.arguments)}
             # Sensible, safe defaults so a partially specified call still
             # targets the user's own project rather than failing.
