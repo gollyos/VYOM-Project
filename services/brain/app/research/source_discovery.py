@@ -97,7 +97,15 @@ class BrowserSearchProvider(SearchProvider):
         url = self.url_template.format(query=quote(query))
         search_host = urlparse(url).netloc
         await self.browser_actions.perform("open", {"url": url})
-        extracted = await self.browser_actions.perform("extract", {"selector": "a[href^='http']"})
+        # DuckDuckGo's HTML results are protocol-relative (`//duckduckgo.com/
+        # l/?uddg=<target>`), NOT absolute-http — a selector of only
+        # `a[href^='http']` matched just the handful of absolute external
+        # links and silently dropped every real result, so a research task
+        # that should have found sources discovered ZERO. Match both forms;
+        # the browser resolves each to an absolute href via `.href`, and
+        # `_resolve_result_url` decodes the uddg redirect.
+        extracted = await self.browser_actions.perform(
+            "extract", {"selector": "a[href^='http'], a[href^='//']"})
         texts = extracted.get("items", [])
         hrefs = extracted.get("hrefs", [])
         seen: set[str] = set()
