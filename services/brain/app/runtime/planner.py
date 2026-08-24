@@ -101,9 +101,24 @@ class ModelAssistedPlanner:
     def deterministic_plan(goal: str) -> list[str]:
         import re
 
-        parts = [part.strip() for part in re.split(r",\s+|\s+and\s+", goal) if part.strip()]
+        # Split on commas/" and " (original) PLUS sentence boundaries and
+        # explicit fallback/alternative connectors ("if that fails",
+        # "instead", "otherwise", "if not") — a goal like "Try X. If that
+        # fails, instead do Y." has NO comma-before-and-list structure but
+        # is very much two real steps; without these markers the whole
+        # sentence became one unsplittable clause and a genuine fallback
+        # instruction from the user was silently dropped from the plan.
+        normalized = re.sub(
+            r"\s*(?:if that fails|if it fails|if unsuccessful|if not|otherwise)\s*,?\s*(?:instead\s+)?",
+            ". ", goal, flags=re.IGNORECASE,
+        )
+        parts = [
+            part.strip()
+            for part in re.split(r",\s+|\s+and\s+|(?<=[.!?])\s+", normalized)
+            if part.strip()
+        ]
         actionable = [part for part in parts if len(part) > 3]
-        if len(actionable) >= 3:
+        if len(actionable) >= 2:
             return [part[0].upper() + part[1:] for part in actionable][: ModelAssistedPlanner.MAX_MODEL_STEPS]
         return [
             "Understand the task and constraints",
@@ -125,7 +140,18 @@ class ModelAssistedPlanner:
         if not self._needs_model(goal, context):
             return deterministic
         plan = await self._model_plan(goal)
-        return plan or deterministic
+        if not plan:
+            return deterministic
+        # Plan-quality guard: a model plan with FEWER real steps than the
+        # goal's own deterministic decomposition is a worse plan, not a
+        # better one — it means the model merged clauses the user
+        # explicitly separated (e.g. collapsing "do X. If that fails,
+        # instead do Y." into one step), silently dropping a fallback
+        # instruction the user gave on purpose. Prefer whichever plan
+        # actually covers more of the goal's distinct clauses.
+        if len(deterministic) > len(plan) and len(deterministic) >= 2:
+            return deterministic
+        return plan
 
     async def _model_plan(self, goal: str) -> list[str] | None:
         if self.model_router is None or self.providers is None:

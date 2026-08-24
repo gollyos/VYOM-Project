@@ -173,13 +173,26 @@ class MissionLoop:
                     mission.current_step += 1
                     await self._checkpoint(mission)
                 elif result.status == "failed":
-                    mission.status = "failed"
+                    # A failed step no longer aborts the WHOLE mission.
+                    # "Read file X. If that fails, instead list the
+                    # directory." is TWO independent steps precisely
+                    # because the user wrote a fallback — aborting here
+                    # meant step 2 (the fallback they explicitly asked
+                    # for) never even ran, and the mission failed even
+                    # though its actual intent ("show me something useful
+                    # either way") was fully satisfiable. Record the
+                    # failure and continue; the mission's overall
+                    # success is judged at the end from whether ANY step
+                    # was verified (see `final_ok` below), matching how
+                    # run_adaptive() already treats individual tool-call
+                    # failures as recoverable observations, not
+                    # mission-ending events.
                     await self._checkpoint(mission)
                     await self._emit(mission.mission_id, EventType.TASK_PROGRESS,
-                                     f"Mission step '{title}' failed after adaptation attempts: {result.error}",
-                                     {"mission_outcome": "failed"})
-                    await self._learn(mission, success=False)
-                    return mission
+                                     f"Mission step '{title}' failed after adaptation attempts: {result.error}; "
+                                     "continuing to any remaining steps",
+                                     {"mission_outcome": "step_failed"})
+                    mission.current_step += 1
                 else:
                     mission.current_step += 1
                 self._check_runtime(mission)
@@ -195,7 +208,13 @@ class MissionLoop:
             # verifier had run. The outcome travels as a progress event;
             # the caller turns the returned MissionState into the one
             # authoritative terminal.
-            final_ok = bool(mission.completed) and all(step.status == "completed" for step in mission.completed)
+            # Success now means "at least one step was verified", not
+            # "every step succeeded" — with the fallback-continue change
+            # above, a mission like "Read X. If that fails, instead list
+            # the directory." legitimately has ONE failed step (X) and
+            # ONE verified step (the fallback), and that IS the user's
+            # goal being satisfied, not a partial failure.
+            final_ok = any(step.status == "completed" and step.verified for step in mission.completed)
             mission.status = "completed" if final_ok else "failed"
             await self._checkpoint(mission)
             await self._learn(mission, success=final_ok)

@@ -1821,9 +1821,24 @@ class TaskRuntime:
 
         if self.action_engine is None:
             return []
+        # A fallback-instruction connector ("if that fails, instead ...",
+        # "otherwise ...") separates two REAL steps just as much as "and"
+        # or "then" does, but was not recognised here — "Try X. If that
+        # fails, instead do Y." never split, so the whole sentence stayed
+        # one clause, degraded to a single-intent execution with no
+        # fallback path, and a request that raised an exception on X had
+        # no chance to ever attempt Y. Normalize these connectors to a
+        # sentence boundary before the existing clause split.
+        normalized = re.sub(
+            r"\s*(?:if that fails|if it fails|if unsuccessful|if not|otherwise)\s*,?\s*(?:instead\s+)?",
+            ". ", request, flags=re.IGNORECASE,
+        )
         parts = [
             part.strip(" .")
-            for part in re.split(r",\s*(?:and\s+)?|\s+and\s+then\s+|\s+then\s+|\s+and\s+|;\s*", request)
+            for part in re.split(
+                r",\s*(?:and\s+)?|\s+and\s+then\s+|\s+then\s+|\s+and\s+|;\s*|(?<=[.!?])\s+",
+                normalized,
+            )
             if part.strip(" .")
         ]
         # A leading wake word is address, not a step.
@@ -1914,7 +1929,23 @@ class TaskRuntime:
                 return {"ok": False,
                         "error": f"'{title}' requires {step_level.value} approval, which this mission does not hold."}
             step_task = task.model_copy(update={"user_request": title, "permission_level": step_level})
-            result = await self.action_engine.execute(step_task, step_profile, emit_step)
+            try:
+                result = await self.action_engine.execute(step_task, step_profile, emit_step)
+            except Exception as error:
+                # A step handler that RAISES (a missing file, an
+                # unreachable host, a bad selector, ...) must become a
+                # {"ok": False, "error": ...} observation, not an
+                # uncaught exception that crashes the whole mission past
+                # every remaining clause. MissionLoop._execute_step already
+                # retries a failed step with an adaptation hint pulled from
+                # prior experience (see its "inspecting and adapting"
+                # branch) — that logic never ran before this fix because a
+                # raised exception here propagated straight out of run(),
+                # so a single failing clause (e.g. "read this nonexistent
+                # file") could abort a compound goal before its OWN later
+                # clause ("...then list the directory instead") ever
+                # executed.
+                return {"ok": False, "error": str(error)[:300]}
             collected.append(result)
             return {"ok": True, "output": result.response, "evidence": result.evidence}
 
