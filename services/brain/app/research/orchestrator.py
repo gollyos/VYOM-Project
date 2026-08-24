@@ -44,6 +44,7 @@ class DeepResearchTask:
         citation_builder: CitationBuilder,
         verifier: ResearchVerifier,
         defuddle_extractor: Any = None,
+        knowledge_service: Any = None,
     ):
         self.query_planner = query_planner
         self.source_discovery = source_discovery
@@ -61,6 +62,14 @@ class DeepResearchTask:
         # Absent by default - behavior is unchanged for callers that never
         # wire it in.
         self.defuddle_extractor = defuddle_extractor
+        # Optional: app/knowledge.KnowledgeService. When set, every
+        # source actually read (real extraction, non-fixture) has
+        # candidate facts pulled from its clean text and persisted to
+        # the knowledge base with the real source_url as evidence -
+        # deepening research into VYOM's own permanent, queryable
+        # general-knowledge store. Absent by default - unchanged
+        # behavior for callers that never wire it in.
+        self.knowledge_service = knowledge_service
 
     @classmethod
     def from_config(
@@ -69,6 +78,7 @@ class DeepResearchTask:
         *,
         browser_actions: Any = None,
         defuddle_extractor: Any = None,
+        knowledge_service: Any = None,
     ) -> "DeepResearchTask":
         query_planner = QueryPlanner.from_config(config)
         source_ranker = SourceRanker.from_config(config)
@@ -96,6 +106,7 @@ class DeepResearchTask:
             citation_builder=CitationBuilder(),
             verifier=ResearchVerifier(),
             defuddle_extractor=defuddle_extractor,
+            knowledge_service=knowledge_service,
         )
 
     @staticmethod
@@ -146,6 +157,23 @@ class DeepResearchTask:
                     extraction = None
                 if extraction is not None and extraction.success and extraction.content:
                     source.excerpt = extraction.content[:2000]
+                    # Deepen research into VYOM's permanent knowledge base:
+                    # candidate facts are extracted from the SAME clean
+                    # text just read and persisted with this source's real
+                    # url as evidence. Never blocks/fails the research run.
+                    if self.knowledge_service is not None:
+                        try:
+                            recorded = await self.knowledge_service.record_facts_from_text(
+                                text=extraction.content, source_url=source.url,
+                                source_title=source.title, subject_hint=plan.goal,
+                            )
+                            if recorded:
+                                await emit(
+                                    "claim_extracted", f"Learned {len(recorded)} fact(s) from {source.title}",
+                                    {"source_id": source.source_id, "fact_count": len(recorded)},
+                                )
+                        except Exception:
+                            pass
             await emit("source_read", f"Read source: {source.title}", {"source_id": source.source_id, "trust_score": source.trust_score})
 
         claims = self.extractor.extract(ranked_sources, plan)

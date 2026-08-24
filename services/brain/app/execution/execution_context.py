@@ -11,6 +11,12 @@ class ExecutionContextFactory:
     def __init__(self, allowed_roots: list[Path]):
         self.allowed_roots = tuple(path.resolve() for path in allowed_roots)
         self._cancellations: dict[str, asyncio.Event] = {}
+        # Live per-task tool sequence, populated by ToolExecutor.invoke via
+        # the SAME ToolContext.metadata every handler in ActionEngine
+        # already shares. This is how a real, observed tool sequence
+        # (not a guess) reaches the self-improvement loop for skill
+        # auto-promotion — see TaskRuntime._finish_result.
+        self._contexts: dict[str, ToolContext] = {}
 
     def create(
         self,
@@ -19,16 +25,23 @@ class ExecutionContextFactory:
         emit: EventEmitter,
     ) -> ToolContext:
         cancellation = self._cancellations.setdefault(task_id, asyncio.Event())
-        return ToolContext(
+        context = ToolContext(
             task_id=task_id,
             permission_level=permission_level,
             allowed_roots=self.allowed_roots,
             cancellation_event=cancellation,
             emit=emit,
         )
+        self._contexts[task_id] = context
+        return context
+
+    def tools_used(self, task_id: str) -> list[str]:
+        context = self._contexts.get(task_id)
+        return list(context.metadata.get("tools_used", [])) if context else []
 
     def cancel(self, task_id: str) -> None:
         self._cancellations.setdefault(task_id, asyncio.Event()).set()
 
     def release(self, task_id: str) -> None:
         self._cancellations.pop(task_id, None)
+        self._contexts.pop(task_id, None)

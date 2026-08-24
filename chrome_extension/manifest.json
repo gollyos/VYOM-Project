@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "VYOM Browser Bridge",
+  "version": "1.0.0",
+  "description": "Lets VYOM read, search, and act on the page you're actually looking at in Chrome - your real tabs, your real signed-in session.",
+  "minimum_chrome_version": "116",
+  "permissions": ["tabs", "activeTab", "scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "VYOM Browser Bridge"
+  }
+}

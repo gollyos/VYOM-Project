@@ -192,12 +192,22 @@ class AdaptiveLearningBridge:
     """Event-driven learning triggers (rule 14): subscribes to the Brain
     event bus and records experiences after task completion/failure.
     Bounded and failure-safe — learning never takes the runtime down and
-    never runs a continuous self-thinking loop."""
+    never runs a continuous self-thinking loop.
 
-    def __init__(self, event_bus, learner: AdaptiveLearner, task_store):
+    This is also the ONE place a real task outcome closes the loop into
+    automatic skill promotion: every TASK_COMPLETED experience is
+    checked against the auto-promoter (optional; None keeps every
+    existing construction path unchanged), and a new taught skill is
+    recorded — never auto-activated — the moment the SAME deterministic
+    tool sequence for the SAME kind of goal has proven itself enough
+    times. SKILL_CREATED is only ever emitted from a REAL SkillSpec the
+    registry actually persisted, never from a log line alone."""
+
+    def __init__(self, event_bus, learner: AdaptiveLearner, task_store, *, auto_promoter=None):
         self.event_bus = event_bus
         self.learner = learner
         self.task_store = task_store
+        self.auto_promoter = auto_promoter  # SkillAutoPromoter | None, attached post-construction like learned_router
         self._task = None
 
     def start(self) -> None:
@@ -228,14 +238,38 @@ class AdaptiveLearningBridge:
                     task = await self.task_store.get(event.task_id)
                     if task is None:
                         continue
-                    await self.learner.learn_from_task(
+                    experience = await self.learner.learn_from_task(
                         task,
                         environment=task.metadata.get("environment") or {},
                         conditions=task.metadata.get("conditions") or {},
                     )
+                    if self.auto_promoter is not None and experience.success:
+                        await self._consider_auto_promotion(task, experience)
                 except asyncio.CancelledError:
                     raise
                 except Exception:
                     continue  # learning failures are logged nowhere sensitive and never propagate
         except asyncio.CancelledError:
             raise
+
+    async def _consider_auto_promotion(self, task, experience) -> None:
+        """Closes ExperienceStore -> SkillBuilder into a real event. Every
+        failure here is swallowed by the caller's except — this can never
+        take a completed task down."""
+        from app.schemas.events import BrainEvent, EventType
+
+        skill = await self.auto_promoter.consider(
+            task_type=experience.task_type,
+            domain=experience.domain,
+            tools_used=experience.tools_used,
+        )
+        if skill is None:
+            return
+        await self.event_bus.publish(BrainEvent(
+            task_id=task.id,
+            type=EventType.SKILL_CREATED,
+            human_readable_message=(
+                f"Auto-taught a new skill '{skill.name}' after repeated verified successes"
+            ),
+            structured_payload={"skill_id": skill.id, "version": skill.version, "category": skill.category},
+        ))

@@ -585,6 +585,22 @@ def test_a_plain_browser_launch_is_not_a_profile_open(utterance):
     assert TaskClassifier().classify(utterance).intent != "browser_profile_open"
 
 
+@pytest.mark.parametrize("utterance", [
+    "show me my browser profiles",
+    "open my work profile",
+    "switch browser profile",
+    "show me the chrome profile settings",
+])
+def test_profile_request_is_not_misread_as_a_filesystem_request(utterance):
+    """"profile" contains the literal substring "file" ("pro-FILE"), so a
+    plain substring check for "file" in _mentions_file_target lit up on
+    every profile request and misrouted it to fs_list - VYOM tried to list
+    project files instead of touching the browser profile the user meant."""
+    from app.runtime.task_classifier import TaskClassifier
+
+    assert TaskClassifier().classify(utterance).intent != "fs_list"
+
+
 def test_an_unrelated_sentence_resolves_to_no_profile():
     """Generic Chrome requests must not be pulled into a profile."""
     from app.desktop.app_launcher import ApplicationRegistry

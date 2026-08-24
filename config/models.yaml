@@ -1,22 +1,16 @@
 version: 1
 
 schema_version: 1
-# NOTE: there is deliberately no `local-rules-v1` / `local` provider entry
-# here. That model was backed by DeterministicProvider, which always
-# reports itself configured and answers every unmatched request with the
-# canned string "The request was processed by VYOM's limited local rules
-# provider." Because it also carried the highest priority (100), it won
-# routing for every natural-language request and made the real
-# application behave like a chatbot. It remains available to the test
-# suite (tests construct it directly), never to the running product.
+# Custom model configuration for VYOM project
+# Enabled: ONLY poolside/laguna-xs-2.1:free (fast, free-tier, OpenRouter)
+#   All other models disabled to avoid rate limits - swithc to this when ready
 models:
+  # ENABLED as a working fallback: gemini is the only provider with a
+  # configured key (GEMINI_API_KEY), so the router can actually satisfy
+  # LLM tasks. poolside stays enabled as the preferred model, but it is
+  # skipped by the router until an OPENROUTER_API_KEY is set.
   - provider: google
-    # gemini-2.5-flash / gemini-2.0-flash are 404 "no longer available to
-    # new users" on this key. A tool-calling mission makes several model
-    # calls per goal, so the primary can exhaust its per-day free-tier
-    # quota; the second entry below is a real fallback the router uses
-    # automatically rather than failing the mission.
-    model_id: ${GOOGLE_BRAIN_MODEL_ID:-gemini-3.1-flash-lite}
+    model_id: gemini-3.1-flash-lite
     enabled: true
     capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
     quality_tier: balanced
@@ -30,8 +24,8 @@ models:
     priority: 80
 
   - provider: google
-    model_id: ${GOOGLE_BRAIN_FALLBACK_MODEL_ID:-gemini-flash-lite-latest}
-    enabled: true
+    model_id: gemini-flash-lite-latest
+    enabled: false
     capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
     quality_tier: balanced
     speed_tier: fast
@@ -43,14 +37,9 @@ models:
     privacy_policy: cloud_standard
     priority: 75
 
-  # THIRD Google free-tier model: Google meters the free allowance PER
-  # MODEL PER DAY, so three registered models are three separate daily
-  # budgets. The quota budgeter spreads traffic across them and skips
-  # whichever is exhausted - one key now carries a whole day instead of
-  # a busy morning.
   - provider: google
-    model_id: ${GOOGLE_BRAIN_TERTIARY_MODEL_ID:-gemini-flash-latest}
-    enabled: true
+    model_id: gemini-flash-latest
+    enabled: false
     capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
     quality_tier: balanced
     speed_tier: fast
@@ -62,9 +51,10 @@ models:
     privacy_policy: cloud_standard
     priority: 72
 
+  # DISABLED: OpenAI - rate limits on free tier
   - provider: openai
-    model_id: ${OPENAI_MODEL_ID}
-    enabled: true
+    model_id: gpt-4o-mini
+    enabled: false
     capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
     quality_tier: high
     speed_tier: balanced
@@ -76,9 +66,10 @@ models:
     privacy_policy: cloud_standard
     priority: 70
 
+  # DISABLED: Anthropic - rate limits on free tier
   - provider: anthropic
-    model_id: ${ANTHROPIC_MODEL_ID}
-    enabled: true
+    model_id: claude-3-5-sonnet-20241022
+    enabled: false
     capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
     quality_tier: high
     speed_tier: balanced
@@ -90,8 +81,9 @@ models:
     privacy_policy: cloud_standard
     priority: 70
 
+  # ENABLED: OpenRouter poolside free/fast model
   - provider: openrouter
-    model_id: ${OPENROUTER_MODEL_ID}
+    model_id: poolside/laguna-xs-2.1:free
     enabled: true
     capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
     quality_tier: configurable
@@ -104,9 +96,10 @@ models:
     privacy_policy: cloud_routed
     priority: 60
 
+  # DISABLED: DeepSeek - rate limits
   - provider: deepseek
-    model_id: ${DEEPSEEK_MODEL_ID}
-    enabled: true
+    model_id: deepseek-chat
+    enabled: false
     capabilities: [reasoning, coding, structured_output, general, planning]
     quality_tier: balanced
     speed_tier: balanced
@@ -118,9 +111,10 @@ models:
     privacy_policy: cloud_standard
     priority: 60
 
+  # DISABLED: Kimi - rate limits
   - provider: kimi
-    model_id: ${KIMI_MODEL_ID}
-    enabled: true
+    model_id: kimi-k2-latest
+    enabled: false
     capabilities: [reasoning, coding, research, structured_output, tool_use, general, planning]
     quality_tier: balanced
     speed_tier: balanced
@@ -131,4 +125,3 @@ models:
     supports_vision: false
     privacy_policy: cloud_standard
     priority: 60
-

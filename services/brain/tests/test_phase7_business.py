@@ -416,8 +416,27 @@ async def test_business_daily_status_composes_source_health(tmp_path):
     task = Task.from_create(TaskCreate(user_request="What is my status today?"))
     result = await engine.execute(task, TaskClassifier().classify(task.user_request), emit)
     types = {item["type"] for item in result.ui_composition["objects"]}
-    assert "status-summary" in types and "verified-result" in types
+    # With an empty store the summary card is OMITTED, not shown with
+    # fake zeros - only honest source health remains.
+    assert "verified-result" in types
+    assert "status-summary" not in types
     assert events[0][0] == "briefing_generated"
+    await database.close()
+
+
+async def test_business_daily_status_shows_real_numbers_when_they_exist(tmp_path):
+    database, registry, crm, email, calendar, automations, tasks, agency, briefing, engine = await build_services(tmp_path)
+    from app.crm.models import Lead, LeadState
+
+    await crm.upsert(Lead(name="Acme", company="Acme", domain="acme.com", state=LeadState.QUALIFIED))
+    async def emit(*_): pass
+    task = Task.from_create(TaskCreate(user_request="What is my status today?"))
+    result = await engine.execute(task, TaskClassifier().classify(task.user_request), emit)
+    objects = {item["id"]: item for item in result.ui_composition["objects"]}
+    assert "briefing" in objects
+    labels = {stat["label"] for stat in objects["briefing"]["stats"]}
+    assert "Leads" in labels  # real number exists -> real stat shown
+    assert "Meetings" not in labels  # disconnected calendar -> no fake stat
     await database.close()
 
 

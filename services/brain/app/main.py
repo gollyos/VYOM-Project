@@ -9,7 +9,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agency, agents, alerts as alerts_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discovery as discovery_api, email as email_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, markets as markets_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, skills, sync_api, tasks, tools, websocket
+from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discovery as discovery_api, email as email_api, extension as extension_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, skills, sync_api, tasks, tools, websocket
 from app.agency.service import AgencyService, DisconnectedLeadResearchProvider
 from app.agents.evaluator import AgentEvaluator
 from app.agents.factory import AgentFactory
@@ -20,6 +20,8 @@ from app.browser.browser_actions import BrowserActions
 from app.browser.browser_session import BrowserSession
 from app.browser.browser_verifier import BrowserVerifier
 from app.browser.playwright_manager import PlaywrightManager
+from app.browser_extension.bridge import ExtensionBridge
+from app.browser_extension.pairing import PairingStore
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.capabilities.discovery import CapabilityDiscovery
@@ -47,6 +49,11 @@ from app.execution.evidence_collector import EvidenceCollector
 from app.execution.execution_context import ExecutionContextFactory
 from app.execution.process_manager import ProcessManager
 from app.mcp.registry import MCPRegistry
+from app.mcp.server_config import MCPConnectionManager, load_mcp_server_configs
+from app.agents.autonomous_worker import AutonomousAgentWorker
+from app.adaptive.auto_promotion import SkillAutoPromoter
+from app.knowledge.store import KnowledgeStore
+from app.knowledge.service import KnowledgeService
 from app.artifacts.engine import ArtifactEngine
 from app.artifacts.export_manager import ArtifactStore
 from app.booking.reservation import BookingReservationService
@@ -312,6 +319,13 @@ def create_app(
         # Attached the same way learned_router is - optional attribute, so
         # every existing construction path (tests, tools) keeps working.
         data_dir = selected_settings.database_path.parent
+        # The Chrome extension bridge: real-browser access (real DOM, real
+        # signed-in profile) alongside the isolated Playwright browser and
+        # the UI-Automation desktop path. Built here (not lazily) so its
+        # pairing token is stable and its bridge is a singleton every
+        # ActionEngine call and every /api/extension/* request shares.
+        extension_pairing = PairingStore(data_dir / "extension-pairing.json")
+        extension_bridge = ExtensionBridge()
         quota_budgeter = QuotaBudgeter(data_dir / "quota-usage.json")
         response_cache = ResponseCache(data_dir / "response-cache")
         for provider in providers.providers.values():
@@ -407,6 +421,7 @@ def create_app(
             project_root=selected_settings.allowed_roots[0],
             application_registry=application_registry,
             task_store=task_store,
+            extension_bridge=extension_bridge,
         )
         memory_config = yaml.safe_load(
             selected_settings.memory_config_path.read_text(encoding="utf-8")
@@ -436,6 +451,17 @@ def create_app(
             memory_store,
             MemoryRetriever(memory_store, embedding_provider),
         )
+
+        # VYOM's own persistent, queryable knowledge base ("khud ka
+        # Wikipedia"): a structured facts table (KnowledgeStore) plus a
+        # mirror into the SAME durable memory/FTS5/embedding search every
+        # other recall already uses (KnowledgeService). ask_or_research()
+        # is the reusable "ask first, browse only if stale/missing" entry
+        # point. Constructed here (not later) because the research task
+        # built below needs it to record what it learns, and MemoryManager
+        # + Database are already in scope.
+        knowledge_store = KnowledgeStore(database)
+        knowledge_service = KnowledgeService(knowledge_store, memory_manager)
 
         try:
             secret_vault = WindowsDPAPISecretVault(selected_settings.secret_store_path)
@@ -585,8 +611,17 @@ def create_app(
         )
 
         mcp_registry = MCPRegistry()
+        # Auto-connect: every server declared in config/tools.yaml's
+        # mcp_servers list is spawned and its tools registered into the
+        # SAME tool_registry every other capability uses, so the planner,
+        # agents, and skills can call an MCP tool exactly like a built-in
+        # one — no per-server wiring anywhere else in the app. A server
+        # that fails to start is recorded as errored and never blocks
+        # boot; VYOM degrades gracefully rather than refusing to start.
+        mcp_manager = MCPConnectionManager(mcp_registry, tool_registry, project_root)
+        configured_mcp_servers = load_mcp_server_configs(selected_settings.tool_registry_path)
         research_config = DeepResearchTask.load_config(selected_settings.research_config_path)
-        research_task = DeepResearchTask.from_config(research_config, browser_actions=browser_actions)
+        research_task = DeepResearchTask.from_config(research_config, browser_actions=browser_actions, knowledge_service=knowledge_service)
         subscription_registry = SubscriptionRegistry()
         discovery_engine = DiscoveryEngine(capability_registry, research_task, subscription_registry, mcp_registry)
 
@@ -928,6 +963,21 @@ def create_app(
             provider_health,
         )
         model_router.budgeter = quota_budgeter
+        # Give the free-form autonomous agent path (AgentRuntime.delegate
+        # for a skill-less agent) a real ReAct worker, wired to the SAME
+        # tool_registry/tool_executor/model_router/providers/provider_health
+        # every other execution path already uses — attached post-hoc,
+        # exactly like model_router.learned_router below, so it never
+        # disturbs agent_runtime's earlier construction order.
+        autonomous_worker = AutonomousAgentWorker(
+            tool_registry=tool_registry,
+            tool_executor=tool_executor,
+            model_router=model_router,
+            providers=providers,
+            provider_health=provider_health,
+            default_allowed_roots=tuple(selected_settings.allowed_roots),
+        )
+        agent_runtime.autonomous_worker = autonomous_worker
         runtime = TaskRuntime(
             task_store=task_store,
             performance_store=performance_store,
@@ -1247,7 +1297,10 @@ def create_app(
             adaptive_experience_store, task_store=task_store, goal_store=goal_store,
             automation_store=automation_store, device_registry=device_registry,
         )
-        adaptive_learning_bridge = AdaptiveLearningBridge(event_bus, adaptive_learner, task_store)
+        adaptive_learning_bridge = AdaptiveLearningBridge(
+            event_bus, adaptive_learner, task_store,
+            auto_promoter=SkillAutoPromoter(adaptive_experience_store, teachable_skills),
+        )
 
         # -- Phase 15 structured-intelligence stack -------------------------
         namespace_router = NamespaceMemoryRouter(memory_manager)
@@ -1392,7 +1445,11 @@ def create_app(
         application.state.tool_executor = tool_executor
         application.state.evidence_collector = evidence_collector
         application.state.mcp_registry = mcp_registry
+        application.state.mcp_manager = mcp_manager
+        application.state.knowledge_service = knowledge_service
         application.state.action_engine = action_engine
+        application.state.extension_bridge = extension_bridge
+        application.state.extension_pairing = extension_pairing
         application.state.memory_store = memory_store
         application.state.memory_manager = memory_manager
         application.state.brain_graph = brain_graph
@@ -1589,6 +1646,7 @@ def create_app(
         runtime.memory_retriever = MemoryRetriever(memory_store, embedding_provider)
         runtime.memory_store = memory_store
         runtime.memory_manager = memory_manager
+        runtime.knowledge_service = knowledge_service
         runtime.automation_store = automation_store
         # Phase 12 crash recovery runs BEFORE any task is restarted: a
         # consequential task with evidence of a partial external action
@@ -1610,6 +1668,17 @@ def create_app(
         # Phase 13 production startup validation: configuration, database,
         # migrations, secret store, directories. Degraded mode is allowed
         # when the failures are optional; hard failures mark not-ready.
+        # Connect every configured MCP server now, after every built-in
+        # tool/skill/capability is already wired, so a slow or failing
+        # server can never delay them and its tools land in the registry
+        # before the readiness check runs.
+        mcp_connect_results = await mcp_manager.connect_all(configured_mcp_servers)
+        for outcome in mcp_connect_results:
+            if outcome.get("status") != "connected":
+                startup_warnings = getattr(application.state, "mcp_startup_warnings", [])
+                startup_warnings.append(outcome)
+                application.state.mcp_startup_warnings = startup_warnings
+
         startup_report = await startup_checks.run()
         application.state.startup_report = startup_report
         if startup_report.ready:
@@ -1636,6 +1705,8 @@ def create_app(
         if runtime.active:
             await asyncio.gather(*runtime.active.values(), return_exceptions=True)
         await action_engine.shutdown()
+        for server_id in list(mcp_registry.servers):
+            await mcp_manager.disconnect(server_id)
         await browser_session.shutdown()
         # Release pooled provider HTTP connections cleanly.
         for provider in tuple(providers.providers.values()):
@@ -1670,6 +1741,9 @@ def create_app(
     application.include_router(approvals.router)
     application.include_router(models.router)
     application.include_router(tools.router)
+    application.include_router(mcp_api.router)
+    application.include_router(knowledge_api.router)
+    application.include_router(adaptive_api.router)
     application.include_router(memory.router)
     application.include_router(brain_graph_api.router)
     application.include_router(skills.router)
@@ -1679,6 +1753,7 @@ def create_app(
     application.include_router(email_api.router)
     application.include_router(calendar_api.router)
     application.include_router(contacts.router)
+    application.include_router(extension_api.router)
     application.include_router(crm.router)
     application.include_router(agency.router)
     application.include_router(meetings.router)

@@ -1,8 +1,10 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ArrowUp, Mic, MicOff, RotateCw } from "lucide-react";
+import { BrandMark } from "./brand-mark";
 import { NeuralBiome } from "./neural-biome";
 import { OnboardingOverlay } from "./onboarding-overlay";
 import { UIComposer } from "@/composer/ui-composer";
+import { AgentStackPanel } from "./agent-stack-panel";
 import { newCorrelationId, trace } from "@/core/trace";
 import { STATE_VISUALS } from "@/core/vyom-state";
 import { useVyomRuntime } from "@/core/use-vyom-runtime";
@@ -234,7 +236,7 @@ export function VyomExperience() {
 
       <header className="topbar" data-tauri-drag-region>
         <div className="identity">
-          <span className="identity-mark" aria-hidden="true"><span /></span>
+          <BrandMark state={state} />
           <span className="wordmark">VYOM</span>
           {/* Build identity, so a running window can be matched to the
               exact frontend + Brain it is actually using. Hover for the
@@ -309,6 +311,8 @@ export function VyomExperience() {
           {operationalMessage ?? "\u00A0"}
         </p>
       </section>
+
+      <AgentStackPanel />
 
       <section className="interaction-dock">
         {approval && (

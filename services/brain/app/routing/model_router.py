@@ -67,7 +67,16 @@ class ModelRouter:
             if learned_performance is not None:
                 bias, bias_reason = self.learned_router.model_bias(
                     model.model_id, profile.domain.value, learned_performance)
-                score += bias
+                # LearnedRouter.model_bias returns POSITIVE for a
+                # historically strong model+domain pair and NEGATIVE for a
+                # failure-prone one (see its docstring). This score is a
+                # "badness" score where LOWER wins (RoutingPolicy.base_score
+                # above), so a good bias must SUBTRACT and a bad bias must
+                # ADD — `score += bias` had this inverted, silently
+                # rewarding failure-prone models and penalising proven
+                # ones, which made the learned-evidence layer actively
+                # harmful instead of merely inert.
+                score -= bias
                 if bias_reason:
                     learned_reasons.append(bias_reason)
             candidates.append((score, model))

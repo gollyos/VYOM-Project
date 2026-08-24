@@ -467,7 +467,16 @@ _CONTRACT_HINTS = {
     "desktop_close": ("close", "band", "quit", "exit", "shut"),
     "desktop_active_window": ("window", "screen", "active", "foreground", "open hai", "front"),
     "browser_navigate": ("browse", "web", "internet", "site", "url", "search", "research",
-                         "latest", "news", "update", "review", "price", "compare", "google"),
+                         "latest", "news", "update", "review", "price", "compare", "google",
+                         # General-knowledge "find out / understand X" cues. Without these,
+                         # "what is X" / "who is X" / "define X" only ever offered a memory
+                         # search — which returns nothing for a topic VYOM has not already
+                         # stored — and no real research tool, so the task failed verification
+                         # with "no search was performed". Research cues route to the browser,
+                         # and the research task records what it learns into the knowledge base.
+                         "what is", "what are", "who is", "who was", "define", "definition",
+                         "explain", "meaning", "means", "about X", "tell me about", "learn",
+                         "find out", "fact", "wikipedia", "details", "history"),
     "browser_read": ("browse", "web", "research", "extract", "source", "review", "latest"),
     "desktop_launch": ("open", "launch", "start", "kholo", "chalu", "app", "application",
                        "chrome", "calculator", "notepad", "explorer", "vscode"),

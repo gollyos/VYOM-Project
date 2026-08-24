@@ -629,6 +629,23 @@ export function useVoiceRuntime({ onCommand }: VoiceRuntimeOptions): VoiceRuntim
     else void start();
   }, [start, stop]);
 
+  // ALWAYS-ON VOICE. The user's requirement: "muje click na karna pade
+  // bolne ke liye, vo automatically on hi rahe". The session starts by
+  // itself the moment the app launches (native runtime + configured
+  // provider) and stays on for the whole session. This runs exactly ONCE
+  // per mount: if the user deliberately stops voice afterwards, it stays
+  // stopped until they start it again - auto-start must never fight the
+  // user's own hands. A permission failure surfaces the normal
+  // recoverable notice instead of silently retrying in a loop.
+  const autoStartedRef = useRef(false);
+  useEffect(() => {
+    if (!isTauriRuntime() || autoStartedRef.current) return;
+    if (sessionActiveRef.current || connectionRef.current !== "inactive") return;
+    if (!providerInfo?.configured) return;
+    autoStartedRef.current = true;
+    void start();
+  }, [providerInfo, start]);
+
   const retry = useCallback(() => {
     void stop().then(start);
   }, [start, stop]);

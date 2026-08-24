@@ -96,9 +96,26 @@ class MigrationManager:
         validation_expected=(1,),
     )
 
+    KNOWLEDGE_BASE = Migration(
+        version=5,
+        name="knowledge_base_v1",
+        statements=(
+            """CREATE TABLE IF NOT EXISTS knowledge_facts (
+                id TEXT PRIMARY KEY, subject TEXT NOT NULL, subject_key TEXT NOT NULL,
+                predicate TEXT NOT NULL, value TEXT NOT NULL, source_url TEXT, source_title TEXT,
+                confidence REAL NOT NULL, first_learned_at TEXT NOT NULL, last_confirmed_at TEXT NOT NULL,
+                confirmations INTEGER NOT NULL, task_id TEXT, memory_id TEXT, fact_json TEXT NOT NULL)""",
+            "CREATE INDEX IF NOT EXISTS idx_knowledge_subject_key ON knowledge_facts(subject_key)",
+            "CREATE INDEX IF NOT EXISTS idx_knowledge_confirmed ON knowledge_facts(last_confirmed_at)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_subject_predicate ON knowledge_facts(subject_key, predicate)",
+        ),
+        validation_query="SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='knowledge_facts'",
+        validation_expected=(1,),
+    )
+
     def __init__(self, database, migrations: list[Migration] | None = None):
         self.database = database
-        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY], key=lambda item: item.version)
+        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY, self.KNOWLEDGE_BASE], key=lambda item: item.version)
         self.last_error: str | None = None
 
     async def ensure_table(self) -> None:

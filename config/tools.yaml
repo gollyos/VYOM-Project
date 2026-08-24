@@ -20,4 +20,18 @@ tools:
   system:
     enabled: true
     risk: medium
-mcp_servers: []
+mcp_servers:
+  # Real MCP servers VYOM connects to automatically on boot. Add an entry
+  # here (or POST /api/mcp/servers at runtime) to grant a new capability —
+  # VYOM never invents a server or command on its own. Each server's
+  # tools land in the same registry as every built-in tool, so the
+  # planner/agents/skills call them uniformly.
+  #
+  # Example (verified working — real filesystem MCP server, 14 tools):
+  # - id: fs-temp
+  #   name: "Filesystem (Temp scratch space)"
+  #   command: npx
+  #   args: ["-y", "@modelcontextprotocol/server-filesystem", "${TEMP}"]
+  #   trust_level: restricted
+  #   timeout_seconds: 45
+  []

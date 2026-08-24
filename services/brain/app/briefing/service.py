@@ -36,6 +36,9 @@ class BriefingService:
         drafts = await self.email.list_drafts()
         automations = await self.automations.list()
         approvals = await self.tasks.list_by_status({TaskStatus.NEEDS_APPROVAL})
+        # Unfinished work carried over from before (failed/paused). This
+        # leads the briefing: it is yesterday's promise, not new data.
+        pending_tasks = await self.tasks.list_by_status({TaskStatus.FAILED, TaskStatus.PAUSED})
         sources: list[SourceSnapshot] = [
             SourceSnapshot(source="crm", status="available", detail=f"{len(leads)} locally stored leads", observed_at=now),
             SourceSnapshot(source="automations", status="available", detail=f"{len(automations)} durable definitions", observed_at=now),
@@ -51,6 +54,8 @@ class BriefingService:
             except RuntimeError:
                 meetings = None
         priorities = []
+        if pending_tasks:
+            priorities.append(f"Resume {len(pending_tasks)} unfinished task(s) from before")
         if approvals:
             priorities.append(f"Review {len(approvals)} pending approval(s)")
         if drafts:
@@ -70,6 +75,7 @@ class BriefingService:
             metrics={
                 "leads": len(leads), "qualified_leads": qualified, "drafts": len(drafts),
                 "meetings": meetings, "pending_approvals": len(approvals), "automations": len(automations),
+                "pending_tasks": len(pending_tasks),
             },
             priorities=priorities,
             approvals=[{"task_id": item.id, "action": item.user_request, "level": item.permission_level.value} for item in approvals],

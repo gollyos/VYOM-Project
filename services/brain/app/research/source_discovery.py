@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from .schemas import ResearchPlan, Source, SourceType
 
@@ -72,21 +72,58 @@ class BrowserSearchProvider(SearchProvider):
     async def health(self) -> tuple[bool, str | None]:
         return True, None
 
+    @staticmethod
+    def _resolve_result_url(href: str, search_host: str) -> str | None:
+        """The real target of one search-result link, or None if `href`
+        is not an actual result (an internal nav link on the search
+        engine's own page - about/privacy/settings - or not http(s)).
+
+        DuckDuckGo's HTML results wrap every real result through its own
+        redirector (`//duckduckgo.com/l/?uddg=<encoded target>&rut=...`),
+        so a same-host href is not automatically noise - it must be
+        decoded first, and only treated as noise if decoding finds
+        nothing to decode."""
+        if not href:
+            return None
+        parsed = urlparse(href)
+        if parsed.scheme not in ("http", "https"):
+            return None
+        if parsed.netloc != search_host:
+            return href
+        target = parse_qs(parsed.query).get("uddg", [None])[0]
+        return unquote(target) if target else None
+
     async def search(self, query: str, *, limit: int = 5) -> list[dict[str, Any]]:
         url = self.url_template.format(query=quote(query))
+        search_host = urlparse(url).netloc
         await self.browser_actions.perform("open", {"url": url})
         extracted = await self.browser_actions.perform("extract", {"selector": "a[href^='http']"})
-        items = [str(item) for item in extracted.get("items", [])][:limit]
-        return [
-            {
-                "url": url,
-                "title": text or query,
+        texts = extracted.get("items", [])
+        hrefs = extracted.get("hrefs", [])
+        seen: set[str] = set()
+        results: list[dict[str, Any]] = []
+        for text, href in zip(texts, hrefs):
+            # BEFORE this fix, every result reused the SEARCH PAGE's own
+            # url here - so SourceDiscovery's dedup-by-url silently
+            # collapsed an entire search down to at most one usable
+            # source, and the one source it kept pointed at the results
+            # page itself, not any real result. Each result now carries
+            # its OWN resolved target url.
+            resolved = self._resolve_result_url(href or "", search_host)
+            label = (text or "").strip()
+            if not resolved or not label or resolved in seen:
+                continue
+            seen.add(resolved)
+            results.append({
+                "url": resolved,
+                "title": label[:200],
                 "publisher": "web-search",
                 "source_type": SourceType.UNKNOWN.value,
-                "excerpt": text,
-            }
-            for text in items
-        ]
+                "excerpt": label[:300],
+            })
+            if len(results) >= limit:
+                break
+        return results
 
 
 class SourceDiscovery:

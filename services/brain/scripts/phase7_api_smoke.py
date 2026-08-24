@@ -39,7 +39,7 @@ def main() -> None:
             status_task = wait_for(client, status_task["id"], {"completed", "failed"})
             assert status_task["status"] == "completed"
             assert status_task["result"]["structured_data"]["incomplete"] is True
-            assert status_task["assigned_model"] == "local-business-runtime-v1"
+            assert status_task["assigned_model"] == "workflow:business-v1"
 
             agency_task = client.post("/api/tasks", json={"user_request": "Show agency"}).json()
             agency_task = wait_for(client, agency_task["id"], {"completed", "failed"})

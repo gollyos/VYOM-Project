@@ -11,6 +11,7 @@ type NetworkData = {
   points: Float32Array;
   brightPoints: Float32Array;
   edges: Float32Array;
+  edgePairs: Array<[THREE.Vector3, THREE.Vector3]>;
 };
 
 function seededRandom(seed: number) {
@@ -35,6 +36,7 @@ function buildNetwork(): NetworkData {
   });
 
   const edgeValues: number[] = [];
+  const edgePairs: Array<[THREE.Vector3, THREE.Vector3]> = [];
   nodes.forEach((node, index) => {
     nodes
       .map((candidate, candidateIndex) => ({
@@ -47,6 +49,7 @@ function buildNetwork(): NetworkData {
       .slice(0, 3)
       .forEach(({ candidate }) => {
         edgeValues.push(node.x, node.y, node.z, candidate.x, candidate.y, candidate.z);
+        edgePairs.push([node, candidate]);
       });
   });
 
@@ -56,7 +59,111 @@ function buildNetwork(): NetworkData {
       nodes.filter((_, index) => index % 8 === 0).flatMap((node) => [node.x, node.y, node.z]),
     ),
     edges: new Float32Array(edgeValues),
+    edgePairs,
   };
+}
+
+/**
+ * NEURONS FIRE. Static topology reads as a screensaver; a living brain
+ * shows signals TRAVELLING between nodes. Each pulse drifts along one
+ * edge with its own speed and phase, brightening as it travels and
+ * fading at the ends (an envelope, not a hard on/off), and pulses spawn
+ * faster the busier VYOM's state is - Thinking/Executing lights the
+ * network up, Idle keeps a slow resting rhythm. Per-pulse brightness
+ * rides on vertex colors with additive blending: a black vertex is
+ * invisible, so no per-point opacity is needed.
+ */
+type Pulse = {
+  edge: number;
+  t: number;
+  speed: number;
+  phase: number;
+  cycle: number;
+};
+
+const PULSE_COUNT = 54;
+
+function SignalPulses({ state, edgePairs }: { state: VyomState; edgePairs: Array<[THREE.Vector3, THREE.Vector3]> }) {
+  const geometryRef = useRef<THREE.BufferGeometry>(null);
+  const materialRef = useRef<THREE.PointsMaterial>(null);
+  const visual = STATE_VISUALS[state];
+  const targetColor = useMemo(() => new THREE.Color(visual.color), [visual.color]);
+  const positions = useMemo(() => new Float32Array(PULSE_COUNT * 3), []);
+  const colors = useMemo(() => new Float32Array(PULSE_COUNT * 3), []);
+  const pulses = useMemo(() => {
+    const random = seededRandom(77123);
+    return Array.from({ length: PULSE_COUNT }, () => ({
+      edge: Math.floor(random() * edgePairs.length),
+      t: random(),
+      speed: 0.22 + random() * 0.5,
+      phase: random() * Math.PI * 2,
+      cycle: 1.6 + random() * 3.4,
+    }));
+  }, [edgePairs]);
+  const scratchColor = useMemo(() => new THREE.Color(), []);
+
+  useFrame(({ clock }, delta) => {
+    const geometry = geometryRef.current;
+    if (!geometry) return;
+    const elapsed = clock.elapsedTime;
+    // How alive the network is: resting rhythm in Idle, fast firing
+    // while Thinking/Executing/Speaking.
+    const activity = 0.18 + visual.energy * 0.82;
+
+    for (let index = 0; index < pulses.length; index += 1) {
+      const pulse = pulses[index];
+      pulse.t += delta * pulse.speed * (0.55 + activity);
+      if (pulse.t >= 1) {
+        pulse.t = 0;
+        // Jump to a connected-feeling edge: nearby index keeps the flow
+        // local instead of teleporting across the brain.
+        pulse.edge = (pulse.edge + 1 + Math.floor(Math.random() * 7)) % edgePairs.length;
+      }
+      const [start, end] = edgePairs[pulse.edge];
+      const eased = pulse.t;
+      positions[index * 3] = start.x + (end.x - start.x) * eased;
+      positions[index * 3 + 1] = start.y + (end.y - start.y) * eased;
+      positions[index * 3 + 2] = start.z + (end.z - start.z) * eased;
+
+      // Envelope: dark at the synapse ends, bright mid-travel; each pulse
+      // also breathes on its own cycle so the network never looks
+      // mechanical. Pulses beyond the activity budget fade to nothing.
+      const travel = Math.sin(pulse.t * Math.PI);
+      const breathe = 0.5 + 0.5 * Math.sin(elapsed / pulse.cycle + pulse.phase);
+      const gate = index / pulses.length < activity ? 1 : 0.06;
+      const brightness = travel * (0.25 + breathe * 0.75) * gate;
+      scratchColor.copy(targetColor).multiplyScalar(Math.max(0, brightness));
+      colors[index * 3] = scratchColor.r;
+      colors[index * 3 + 1] = scratchColor.g;
+      colors[index * 3 + 2] = scratchColor.b;
+    }
+
+    geometry.attributes.position.needsUpdate = true;
+    geometry.attributes.color.needsUpdate = true;
+    if (materialRef.current) {
+      materialRef.current.color.lerp(targetColor, 0.02);
+    }
+  });
+
+  return (
+    <points>
+      <bufferGeometry ref={geometryRef}>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        ref={materialRef}
+        color="#ffffff"
+        size={0.085}
+        sizeAttenuation
+        transparent
+        opacity={0.95}
+        vertexColors
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+      />
+    </points>
+  );
 }
 
 function NeuralNetwork({ state }: NeuralBiomeProps) {
@@ -148,6 +255,7 @@ function NeuralNetwork({ state }: NeuralBiomeProps) {
           depthWrite={false}
         />
       </points>
+      <SignalPulses state={state} edgePairs={data.edgePairs} />
     </group>
   );
 }

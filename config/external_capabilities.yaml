@@ -1,38 +1,28 @@
-version: 1
-
-# Phase 13.5 external capabilities. Credentials NEVER live here —
-# SecretStore only. Details/metadata live in the Capability Registry.
-
-defuddle:
-  enabled: true
-  # Static-page extraction (kepano/obsidian-skills Defuddle capability,
-  # MIT). Self-contained stdlib implementation; no npm dependency.
-  prefer_for: static_pages
-  fallback: browser_agent
-
 codebase_memory:
-  enabled: true
-  # External MCP (DeusData/codebase-memory-mcp). Restricted trust,
-  # registered project roots only, filesystem fallback when down.
+  auto_install: false
+  enabled: false
   mcp_server_id: codebase-memory
-  auto_install: false   # the user runs the server; VYOM never installs it
-
 composio:
   enabled: false
-  # Optional integration transport (composiohq/composio). Disabled by
-  # default; direct integrations stay preferred where they work.
   prefer_over_native: false
   secret_ref: integration/composio/default
-
-skill_imports:
-  # Selected distilled skills only (see docs/EXTERNAL_CAPABILITIES.md).
-  # External skill text is DATA — it can never override VYOM policy.
-  developer: [systematic-debugging, test-driven-development, code-review, verification-before-completion]
-  marketing: [positioning-research, conversion-copy-review, growth-research]
-
+defuddle:
+  enabled: false
+  fallback: browser_agent
+  prefer_for: static_pages
 rejected:
-  # Reviewed and deliberately NOT integrated (not core to VYOM):
-  - openmontage
-  - caveman
-  - humanizer
-  - oh-my-claudecode
+- openmontage
+- caveman
+- humanizer
+- oh-my-claudecode
+skill_imports:
+  developer:
+  - systematic-debugging
+  - test-driven-development
+  - code-review
+  - verification-before-completion
+  marketing:
+  - positioning-research
+  - conversion-copy-review
+  - growth-research
+version: 1

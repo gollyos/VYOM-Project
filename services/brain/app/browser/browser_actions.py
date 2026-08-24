@@ -29,7 +29,16 @@ class BrowserActions:
             return {"url": page.url, "title": await page.title(), "text": (await locator.inner_text())[:100_000]}
         if action == "extract":
             locator = page.locator(selector)
-            return {"items": await locator.all_text_contents(), "url": page.url}
+            texts = await locator.all_text_contents()
+            # href is NOT text content - a caller needing the actual link
+            # target (BrowserSearchProvider, matching each result to its
+            # own URL rather than the search page itself) needs it
+            # alongside the visible label, not instead of it. `.href` (the
+            # resolved property, not getAttribute) so a relative or
+            # protocol-relative markup href still comes back as a full
+            # absolute URL the caller can actually use.
+            hrefs = await locator.evaluate_all("(els) => els.map((el) => el.href || null)")
+            return {"items": texts, "hrefs": hrefs, "url": page.url}
         if action == "click":
             await page.locator(selector).click()
         elif action == "type":

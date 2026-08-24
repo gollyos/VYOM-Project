@@ -589,7 +589,7 @@ def derive_goal_frame(request: str) -> GoalFrame:
     # produced no search effect at all, so opening Chrome alone verified
     # as the whole goal.
     search_match = _re.search(
-        r"\b(?:search|google|find|dhundo|khojo)\b\s*(?:for\s+|the\s+)?(?P<target>.{2,80})"
+        r"\b(?:search|google|find|dhundo|khojo)\b\s*(?:for\s+|the\s+|about\s+|out\s*about\s+|out\s+|up\s+|more\s*about\s+)?(?P<target>.{2,80})"
         r"|(?:सर्च|खोज|ढूंढो|ढूँढो)\s*(?:करो|कर\s*दो|कीजिए)?\s*(?P<target2>.{2,80})",
         text, _re.IGNORECASE)
     if not search_match:
@@ -600,7 +600,49 @@ def derive_goal_frame(request: str) -> GoalFrame:
         query = (search_match.group("target") or search_match.group("target2") or "").strip(" .,!?।")
         query = _re.sub(r"\b(karo|kar do|kijiye|please|now|करो|कर दो)\b\s*$", "", query,
                         flags=_re.IGNORECASE).strip(" .,!?।")
-        if query:
+        # "find" is ambiguous: "find restaurants" is a web search, but
+        # "find all python files" is a LOCAL filesystem find served by the
+        # filesystem tool (which reports "found N matches") - never the
+        # browser. Requiring `search_performed` for the latter made a
+        # successful local `find *.py` fail verification with the
+        # nonsensical "browser was opened but no search observed". Detect
+        # the filesystem case from the SEARCH TARGET alone (a file noun or
+        # a file extension). Devanagari "फाइल"/"फोल्डर" are deliberately
+        # omitted: "फाइल" is a substring of "प्रोफाइल" (profile) and the
+        # regex \b does not split Devanagari compound words.
+        filesystem_find = _re.search(
+            r"\bfiles?\b|\bfilename\b|\bfolder\b|\bdirectory\b|\.[a-z]{1,5}\b",
+            query, _re.IGNORECASE,
+        )
+        # "what is X" / "who is X" / "define X" / "explain X" questions name
+        # the REAL search subject. A trailing phrasal verb ("find out and
+        # remember it", "tell me about", "learn") is NOT the subject — it is
+        # the follow-up instruction about an already-named topic. Prefer the
+        # knowledge-question subject (e.g. "Model Context Protocol") over the
+        # fragment after "find out" / "learn" / "tell me about", so the
+        # verifier demands a search of the actual topic and not of the
+        # instruction words themselves.
+        subject_match = _re.search(
+            r"(?:what is|what are|who is|who was|what's|define|definition of|explain|about)\s+(?P<subject>[\w\-.() ]{2,60}?)"
+            r"(?:\?|\.|,|,?\s*and\s*remember|,?\s*and\s*learn|$)",
+            text, _re.IGNORECASE,
+        )
+        if subject_match and not filesystem_find:
+            real_subject = subject_match.group("subject").strip(" .,!?।")
+            real_subject = _re.sub(r"^(?:the|a|an)\s+", "", real_subject, flags=_re.IGNORECASE).strip()
+            if len(real_subject.split()) <= 6:  # a topic, not a full sentence
+                query = real_subject
+        # "find out about X" / "learn about X" / "find out X": strip any
+        # leading phrasal-verb connector that the optional group above
+        # failed to consume, so the SEARCH TARGET becomes "X" and not
+        # "out about X" / "up X".
+        query = _re.sub(r"^(?:out\s*about\s+|out\s+|about\s+|up\s+|more\s*about\s+|more\s+)",
+                        "", query, flags=_re.IGNORECASE).strip(" .,!?।")
+        # A trailing "and remember it"/"and learn X" clause is the follow-up
+        # instruction, not the subject — drop it so the target is the topic.
+        query = _re.sub(r"(?:^|\s),(?:\s*and\s*remember it|,?\s*and\s*learn)\s*$", "",
+                        query, flags=_re.IGNORECASE).strip(" .,!?।")
+        if query and not filesystem_find:
             frame.require("search_performed", query=query)
             frame.targets.append(query)
 

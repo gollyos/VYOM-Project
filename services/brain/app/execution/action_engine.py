@@ -9,6 +9,7 @@ from urllib.parse import quote_plus, urlparse
 
 import httpx
 
+from app.browser_extension.bridge import ExtensionCallError, ExtensionUnavailableError
 from app.coding.coding_worker import CodingWorker
 from app.schemas.results import ExecutionResult
 from app.schemas.routing import UsageRecord
@@ -96,6 +97,7 @@ class ActionEngine:
         capability_registry=None,
         application_registry=None,
         task_store=None,
+        extension_bridge=None,
     ):
         self.executor = executor
         self.context_factory = context_factory
@@ -108,6 +110,11 @@ class ActionEngine:
         self.capability_registry = capability_registry
         self.application_registry = application_registry
         self.task_store = task_store
+        # Real-browser channel (paired Chrome extension). Optional, same
+        # pattern as above: None in every existing test/construction path,
+        # so every browser handler below falls back to the pre-existing
+        # UI-Automation behaviour unchanged when it is absent.
+        self.extension_bridge = extension_bridge
 
     def supports(self, intent: str) -> bool:
         return intent in TOOL_INTENTS
@@ -305,6 +312,11 @@ class ActionEngine:
                 return await self._open_local_app(task, context)
             raise RuntimeError(f"Unsupported action intent: {profile.intent}")
         finally:
+            # Record the REAL observed tool sequence on the task before the
+            # per-task ToolContext is released — this is what
+            # AdaptiveLearner.learn_from_task turns into Experience.tools_used
+            # for the self-improvement loop's skill auto-promotion.
+            task.metadata["tools_used"] = self.context_factory.tools_used(task.id)
             self.context_factory.release(task.id)
 
     async def cancel(self, task_id: str) -> None:
@@ -861,6 +873,11 @@ class ActionEngine:
         )
 
     async def _browser_tab_list(self, task: Task, context) -> ExecutionResult:
+        if self.extension_bridge is not None and self.extension_bridge.connected:
+            try:
+                return await self._browser_tab_list_via_extension()
+            except (ExtensionUnavailableError, ExtensionCallError):
+                pass  # extension present but this call failed; fall back below
         result = await self.executor.invoke("desktop", {"action": "browser_tabs"}, context)
         tabs = (result.structured_output or {}).get("tabs", [])
         if not tabs:
@@ -873,6 +890,24 @@ class ActionEngine:
                 objects=[{"id": "tabs", "type": "comparison-table", "title": "Open tabs",
                           "eyebrow": "Live browser state", "headers": ["Tab", "Window"],
                           "rows": [[tab["title"][:60], tab["window"][:40]] for tab in tabs[:10]],
+                          "frame": {"x": 6, "y": 8, "width": 58}}]),
+            evidence=[summary], usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
+
+    async def _browser_tab_list_via_extension(self) -> ExecutionResult:
+        tabs = await self.extension_bridge.call("list_tabs") or []
+        if not tabs:
+            raise RuntimeError("No tabs are open in the paired browser right now.")
+        summary = f"{len(tabs)} tab(s) open: " + ", ".join(
+            (tab.get("title") or tab.get("url") or "")[:40] for tab in tabs[:6])
+        return ExecutionResult(
+            response=summary, structured_data={"tabs": tabs, "source": "chrome_extension"},
+            ui_composition=self._base_composition(
+                identifier="tab-list", summary=summary,
+                objects=[{"id": "tabs", "type": "comparison-table", "title": "Open tabs",
+                          "eyebrow": "Live browser state (extension)", "headers": ["Tab", "URL"],
+                          "rows": [[(tab.get("title") or "")[:60], (tab.get("url") or "")[:60]]
+                                   for tab in tabs[:10]],
                           "frame": {"x": 6, "y": 8, "width": 58}}]),
             evidence=[summary], usage=UsageRecord(total_tokens=0, estimated_cost=0),
         )
@@ -956,6 +991,12 @@ class ActionEngine:
         if not url:
             raise RuntimeError("No page was named for the new tab.")
 
+        if self.extension_bridge is not None and self.extension_bridge.connected:
+            try:
+                return await self._browser_tab_open_via_extension(str(url))
+            except (ExtensionUnavailableError, ExtensionCallError):
+                pass  # extension present but this call failed; fall back below
+
         result = await self.executor.invoke(
             "desktop", {"action": "browser_open_tab", "url": str(url)}, context)
         if not result.success:
@@ -1007,6 +1048,28 @@ class ActionEngine:
             evidence=[summary], usage=UsageRecord(total_tokens=0, estimated_cost=0),
         )
 
+    async def _browser_tab_open_via_extension(self, url: str) -> ExecutionResult:
+        tab = await self.extension_bridge.call("open_tab", {"url": url}) or {}
+        target = tab.get("url") or url
+        tidy = re.sub(r"^https?://(www\.)?", "", target).split("?")[0].rstrip("/")
+        summary = f"{tidy} is open in a new tab."
+        return ExecutionResult(
+            response=summary,
+            structured_data={"url": target, "tab_id": tab.get("id"),
+                              "tab_title": tab.get("title") or "", "source": "chrome_extension"},
+            ui_composition=self._base_composition(
+                identifier="browser-tab", summary=summary,
+                objects=[{
+                    "id": "verified", "type": "verified-result", "title": "New tab opened",
+                    "eyebrow": "Chrome extension · real browser", "tone": "verified",
+                    "statement": summary,
+                    "evidence": [f"tab id: {tab.get('id')}",
+                                 "opened via the paired Chrome extension"],
+                    "timestamp": generated_at(), "frame": {"x": 28, "y": 28, "width": 40},
+                }]),
+            evidence=[summary], usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
+
     # -- page-level operation of the visible browser (Gate B) -----------
     #
     # Every handler drives the page the user can SEE through Windows UI
@@ -1015,7 +1078,8 @@ class ActionEngine:
     # goal verifier reads what actually changed.
 
     def _page_result(self, task: Task, summary: str, data: dict, *, tone: str = "verified",
-                      evidence: list[str] | None = None) -> ExecutionResult:
+                      evidence: list[str] | None = None,
+                      eyebrow: str = "Windows UI Automation · visible page") -> ExecutionResult:
         return ExecutionResult(
             response=summary,
             structured_data=data,
@@ -1023,7 +1087,7 @@ class ActionEngine:
                 identifier="browser-page", summary=summary,
                 objects=[{
                     "id": "verified", "type": "verified-result", "title": "Page operation",
-                    "eyebrow": "Windows UI Automation · visible page", "tone": tone,
+                    "eyebrow": eyebrow, "tone": tone,
                     "statement": summary,
                     "evidence": evidence or [summary[:160]],
                     "timestamp": generated_at(), "frame": {"x": 28, "y": 26, "width": 40},
@@ -1031,8 +1095,25 @@ class ActionEngine:
             evidence=[summary], usage=UsageRecord(total_tokens=0, estimated_cost=0),
         )
 
+    #: A request phrased as a search on the current page ("find X on this
+    #: page", "is Y mentioned here") gets the extension's precise
+    #: substring/DOM search instead of a full-text dump - the difference
+    #: between "yes, found it, here's the context" and making the user
+    #: read a page-length excerpt themselves.
+    _FIND_ON_PAGE_RE = re.compile(
+        r"(?:find|search for)\s+[\"']?([\w \-'.]{2,60}?)[\"']?\s*(?:on (?:this|the) page)?\s*$"
+        r"|is\s+[\"']?([\w \-'.]{2,60}?)[\"']?\s+mentioned"
+        r"(?:\s+(?:here|on (?:this|the) page|anywhere))?\s*$",
+        re.I,
+    )
+
     async def _browser_page_read(self, task: Task, context) -> ExecutionResult:
         """What is on the page right now - a real reading, not a guess."""
+        if self.extension_bridge is not None and self.extension_bridge.connected:
+            try:
+                return await self._browser_page_read_via_extension(task)
+            except (ExtensionUnavailableError, ExtensionCallError):
+                pass  # extension present but this call failed; fall back below
         result = await self.executor.invoke("desktop", {"action": "browser_page_read"}, context)
         if not result.success:
             raise RuntimeError(result.error or "The page could not be read")
@@ -1049,15 +1130,58 @@ class ActionEngine:
         }, evidence=[f"page title: {(data.get('title') or '')[:80]}",
                      f"{len(links)} named element(s) read via UI Automation"])
 
+    async def _browser_page_read_via_extension(self, task: Task) -> ExecutionResult:
+        find_match = self._FIND_ON_PAGE_RE.search(task.user_request.strip())
+        if find_match:
+            query = (find_match.group(1) or find_match.group(2)).strip(" .,!?।")
+            found = await self.extension_bridge.call("find_on_page", {"query": query}) or {}
+            matches = found.get("matches") or []
+            if not matches:
+                summary = f"'{query}' was not found on this page."
+                return self._page_result(
+                    task, summary, {"query": query, "matches": [], "source": "chrome_extension"},
+                    tone="attention", evidence=[summary],
+                    eyebrow="Chrome extension · real DOM search")
+            summary = f"Found '{query}' on this page: " + " … ".join(m[:120] for m in matches[:3])
+            return self._page_result(
+                task, summary,
+                {"query": query, "matches": matches[:10], "source": "chrome_extension"},
+                evidence=[f"{len(matches)} match(es) found via the paired extension's DOM search"],
+                eyebrow="Chrome extension · real DOM search")
+
+        data = await self.extension_bridge.call("read_page") or {}
+        text = (data.get("text") or "").strip()
+        if not text:
+            raise RuntimeError("The paired browser tab has no readable content right now.")
+        headings = data.get("headings") or []
+        links = data.get("links") or []
+        excerpt = text[:400]
+        title = data.get("title") or "This page"
+        summary = f"{title}: {excerpt}" + ("..." if len(text) > 400 else "")
+        return self._page_result(task, summary, {
+            "title": data.get("title"), "url": data.get("url"),
+            "text": text[:4000], "headings": headings[:20], "links": links[:30],
+            "source": "chrome_extension",
+        }, evidence=[
+            f"page title: {(data.get('title') or '')[:80]}",
+            f"{len(text)} char(s) of real DOM text read via the paired extension",
+            f"{len(links)} link(s), {len(headings)} heading(s)",
+        ], eyebrow="Chrome extension · real DOM")
+
     async def _browser_page_click(self, task: Task, context) -> ExecutionResult:
         target = self._extract_control_target(task.user_request)
         if not target:
             # "click <name>" with the bare name, no 'button' suffix.
-            match = re.search(r"(?:click|dabao|daba)\s+(?:on\s+|the\s+|pe\s+|par\s+)?[\"']?([\w \-']{2,50})", 
+            match = re.search(r"(?:click|dabao|daba)\s+(?:on\s+|the\s+|pe\s+|par\s+)?[\"']?([\w \-']{2,50})",
                               task.user_request, re.I)
             target = match.group(1).strip() if match else None
         if not target:
             raise RuntimeError("Nothing was named to click.")
+        if self.extension_bridge is not None and self.extension_bridge.connected:
+            try:
+                return await self._browser_page_click_via_extension(task, target)
+            except (ExtensionUnavailableError, ExtensionCallError):
+                pass  # extension present but this call failed; fall back below
         result = await self.executor.invoke(
             "desktop", {"action": "browser_page_click", "target": target}, context)
         data = result.structured_output or {}
@@ -1065,6 +1189,15 @@ class ActionEngine:
             raise RuntimeError(data.get("summary") or f"Nothing called '{target}' could be clicked")
         summary = data.get("summary") or f"Clicked '{target}'."
         return self._page_result(task, summary, data)
+
+    async def _browser_page_click_via_extension(self, task: Task, target: str) -> ExecutionResult:
+        result = await self.extension_bridge.call("click", {"text": target}) or {}
+        if not result.get("success"):
+            raise RuntimeError(result.get("error") or f"Nothing called '{target}' could be clicked")
+        summary = result.get("summary") or f"Clicked '{target}'."
+        return self._page_result(
+            task, summary, {**result, "source": "chrome_extension"},
+            eyebrow="Chrome extension · real DOM click")
 
     async def _browser_first_result(self, task: Task, context) -> ExecutionResult:
         result = await self.executor.invoke("desktop", {"action": "browser_first_result"}, context)
@@ -1992,17 +2125,39 @@ class ActionEngine:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         return data.get("shopping", {}) or {}
 
-    def _parse_shopping_request(self, request: str) -> tuple[str, str | None, int | None]:
-        """Return (query, colour, budget). The query is the user's own
-        product words - VYOM does not invent a product it was not asked for."""
+    #: "shoes size 12", "12 no chahiye", "UK 9 size" - a size number next to
+    #: one of these markers. Checked BEFORE the generic word filter below
+    #: strips every bare digit (a stray budget/quantity number, correctly
+    #: dropped) - otherwise the one number that actually matters for a
+    #: shoe/clothing search was thrown away along with the rest, and the
+    #: retailer search ran with no size in it at all.
+    _SIZE_RE = re.compile(
+        r"\b(?:size|no\.?|number|uk|us|eu|eur)\s*[:#]?\s*(\d{1,2}(?:\.\d)?)\b"
+        r"|\b(\d{1,2}(?:\.\d)?)\s*(?:no\.?|number|size)\b",
+        re.I,
+    )
+
+    def _parse_shopping_request(self, request: str) -> tuple[str, str | None, int | None, str | None]:
+        """Return (query, colour, budget, size). The query is the user's
+        own product words - VYOM does not invent a product it was not
+        asked for."""
         lowered = request.lower()
         colour = next((c for c in self._COLOURS if re.search(rf"\b{c}\b", lowered)), None)
         budget = None
         budget_match = re.search(r"(?:under|below|less than|upto|up to|max)\s*(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*)", lowered)
         if budget_match:
             budget = int(budget_match.group(1).replace(",", ""))
+        size_match = self._SIZE_RE.search(lowered)
+        size = None
+        remainder = lowered
+        if size_match:
+            size = size_match.group(1) or size_match.group(2)
+            # Remove only the MATCHED SPAN ("uk 9", "12 no"), not every
+            # occurrence of the marker word - a blanket stop-word for "us"
+            # would also eat the brand in "US Polo shirt".
+            remainder = lowered[:size_match.start()] + " " + lowered[size_match.end():]
         words = [
-            word for word in re.findall(r"[a-z0-9\-]+", lowered)
+            word for word in re.findall(r"[a-z0-9\-]+", remainder)
             if word not in self._STOP_WORDS and not word.isdigit()
         ]
         query = " ".join(dict.fromkeys(words))[:80].strip()
@@ -2010,7 +2165,13 @@ class ActionEngine:
             raise RuntimeError(
                 "No product could be identified in the request; VYOM will not guess what to shop for."
             )
-        return query, colour, budget
+        if size:
+            # Kept IN the search query text (not used to filter scraped
+            # listings) - VYOM cannot reliably read exact size off a
+            # retailer's product card from the search-results page, so it
+            # never claims a size-filtered result it hasn't verified.
+            query = f"{query} size {size}"[:80]
+        return query, colour, budget, size
 
     async def _shop_compare(self, task: Task, context) -> ExecutionResult:
         """Visit every ENABLED retailer, extract real product cards, and
@@ -2028,7 +2189,7 @@ class ActionEngine:
             )
         limit = int(config.get("max_results_per_retailer", 8))
         settle_ms = int(config.get("page_settle_ms", 3500))
-        query, colour, budget = self._parse_shopping_request(task.user_request)
+        query, colour, budget, size = self._parse_shopping_request(task.user_request)
 
         products: list[dict[str, Any]] = []
         site_status: list[dict[str, str]] = []
@@ -2089,6 +2250,12 @@ class ActionEngine:
                 + ", ".join(f"{item['retailer']} ({item['state']})" for item in skipped)
                 + "."
             )
+        if size:
+            # Honest, not a claim of verification: the size was included in
+            # each retailer's own search, but a scraped listing card cannot
+            # be reliably confirmed to stock that exact size - VYOM never
+            # states a size match it has not actually checked.
+            summary += f" Size {size} was requested; confirm exact size on the retailer's page before ordering."
 
         rows = [
             [
@@ -2118,9 +2285,12 @@ class ActionEngine:
                 "id": "verified", "type": "verified-result", "title": "Comparison verified",
                 "eyebrow": "Evidence", "tone": "verified", "statement": summary,
                 "evidence": [
-                    f"Query: {query}" + (f" | colour: {colour}" if colour else "") + (f" | budget: Rs {budget}" if budget else ""),
+                    f"Query: {query}" + (f" | colour: {colour}" if colour else "")
+                    + (f" | budget: Rs {budget}" if budget else "") + (f" | size: {size}" if size else ""),
                     *[f"{item['retailer']}: {item['state']} ({item['detail'][:60]})" for item in site_status],
                     f"Best: {best['url'][:100]}" if best.get("url") else "Best: link unavailable",
+                    *([f"Size {size} was included in the search; not independently verified per listing."]
+                      if size else []),
                     "No purchase was made. Ordering requires explicit approval.",
                 ],
                 "timestamp": generated_at(), "frame": {"x": 30, "y": 74, "width": 40, "layer": 2},
@@ -2129,7 +2299,7 @@ class ActionEngine:
         return ExecutionResult(
             response=summary,
             structured_data={
-                "query": query, "colour": colour, "budget": budget,
+                "query": query, "colour": colour, "budget": budget, "size": size,
                 "products": products, "retailer_status": site_status,
                 "purchased": False,
                 # A retailer the user NAMED must actually have been

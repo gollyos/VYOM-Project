@@ -579,9 +579,15 @@ def _mentions_file_target(text: str) -> bool:
     is an application launch with a folder target - reading it as a
     directory listing answered a completely different question."""
     without_app_names = text.replace("file explorer", " ").replace("windows explorer", " ")
+    # Word-boundary match for "file"/"files": a plain substring check also
+    # lit up on "profile"/"profiles" ("pro-FILE"), so "show me my browser
+    # profiles" was read as a filesystem listing request instead of the
+    # browser-profile request it actually is.
+    if re.search(r"\bfiles?\b", without_app_names):
+        return True
     return any(
         word in without_app_names
-        for word in ("file", "files", "folder", "directory", "dir", "contents of", "what's in", "whats in")
+        for word in ("folder", "directory", "dir", "contents of", "what's in", "whats in")
     )
 
 
@@ -606,7 +612,7 @@ _HINGLISH_VERBS = (
     ("बता दो", "tell me"), ("बताओ", "tell me"), ("बता", "tell me"),
     ("बना दो", "create"), ("बनाओ", "create"),
     ("पढ़ो", "read"), ("पढ़", "read"),
-    ("ढूंढो", "find"), ("ढूँढो", "find"), ("खोजो", "find"),
+    ("ढूंढो", "find"), ("ढूँढो", "find"), ("खोजो", "find"), ("फाइंड", "find"),
     ("टाइप करो", "type"), ("क्लिक करो", "click"), ("दबाओ", "click"),
     ("हटाओ", "delete"),
     # Romanised Hinglish.
@@ -745,7 +751,7 @@ class TaskClassifier:
             return TaskProfile(domain=TaskDomain.COMMUNICATION, complexity=1, deterministic=True, intent="email_inbox", needs={"business"})
         if "schedule" in text and ("meeting" in text or "calendar" in text):
             return TaskProfile(domain=TaskDomain.COMMUNICATION, complexity=2, deterministic=True, intent="schedule_meeting", needs={"business"})
-        if "prepare me for" in text and "meeting" in text:
+        if "prepare me for" in text and "meeting" in text and "market briefing" not in text:
             return TaskProfile(domain=TaskDomain.COMMUNICATION, complexity=2, deterministic=True, intent="meeting_briefing", needs={"business"})
         if "calendar" in text and ("today" in text or "status" in text or "availability" in text):
             return TaskProfile(domain=TaskDomain.COMMUNICATION, complexity=1, deterministic=True, intent="calendar_status", needs={"business"})
@@ -1042,6 +1048,21 @@ class TaskClassifier:
                 "buy", "book me", "book a pair", "order", "shop for", "shopping for",
                 "price of", "cheapest", "best deal", "compare price", "find me the best",
                 "looking for a", "want to buy",
+                # Plain "find <product>" ("blue shoes size 12 find karo",
+                # "find blue shoes size 12") is ordinary Hinglish shopping
+                # phrasing, not just the "find me the best ..." form above -
+                # it was falling through to the general reasoning path
+                # (a paid model call with no real multi-retailer search)
+                # instead of the free, deterministic shop_compare workflow.
+                "find",
+                # "chahiye" ("pots chahiye blue colour ke hone chahiye") is
+                # the ordinary Hindi way to want a product - not a request
+                # verb like "buy"/"find" at all, so it was never recognised
+                # as shopping language no matter how plainly a product was
+                # named. Combined with product_noun below it is exactly as
+                # safely scoped as "buy"/"find" already are: "help chahiye"
+                # never matches because "help" is not a product noun.
+                "chahiye", "चाहिए",
             )
         )
         product_noun = any(
@@ -1050,6 +1071,14 @@ class TaskClassifier:
                 "shoes", "sneakers", "shirt", "tshirt", "t-shirt", "jeans", "watch",
                 "headphone", "earphone", "earbuds", "laptop", "phone", "mobile", "bag",
                 "jacket", "dress", "kurta", "saree", "sandals", "slippers", "trousers",
+                "pot", "pots",
+                # Devanagari-script product words. normalise_hinglish only
+                # rewrites known ACTION VERBS to English - a noun like
+                # "शूज" (shoes) reaches this check completely unchanged, so
+                # "मेरे लिए ब्लू कलर के शूज तुम फाइंड कर सकती हो?" fell
+                # through to the general reasoning path despite naming a
+                # real product just as plainly as its English spelling.
+                "शूज", "जूते", "जूता", "गमला", "गमले",
             )
         )
         retailer_named = any(

@@ -41,7 +41,7 @@ search_providers:
   local_fixture:
     enabled: true
   browser_search:
-    enabled: false
+    enabled: true
     search_url_template: "https://duckduckgo.com/html/?q={query}"
 
 # Source trust policy weights by source_type. See docs/SOURCE_TRUST_POLICY.md.

@@ -38,7 +38,7 @@ def main() -> None:
             research_task = client.post("/api/tasks", json={"user_request": "Research the top competitors for our SaaS and tell me where we can win"}).json()
             research_task = wait_for(client, research_task["id"], {"completed", "failed"})
             assert research_task["status"] == "completed", research_task
-            assert research_task["assigned_model"] == "local-phase8-runtime-v1"
+            assert research_task["assigned_model"] == "workflow:research-browser-v1"
             assert research_task["result"]["ui_composition"]["objects"]
             assert any(obj["type"] == "research-map" for obj in research_task["result"]["ui_composition"]["objects"])
             print("research: OK, sources=", len(research_task["result"]["structured_data"]["sources"]))

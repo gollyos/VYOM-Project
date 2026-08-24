@@ -23,6 +23,7 @@ class CognitiveNamespace(str, Enum):
     PROJECTS = "projects"
     SYSTEM = "system"
     PREFERENCES = "preferences"
+    KNOWLEDGE = "knowledge"
 
 
 # Deterministic routing signals: task domain -> namespace, plus keyword
@@ -48,6 +49,7 @@ KEYWORD_NAMESPACES = (
     (CognitiveNamespace.PROJECTS, ("project", "workspace", "repository", "milestone")),
     (CognitiveNamespace.PREFERENCES, ("prefer", "i like", "i want", "always use", "never use", "don't use", "do not use")),
     (CognitiveNamespace.FINANCE, ("price", "trade", "portfolio", "market", "stock", "position")),
+    (CognitiveNamespace.KNOWLEDGE, ("fact", "wikipedia", "who is", "what is", "define", "definition")),
 )
 
 NAMESPACED_MEMORY_TYPES = {

@@ -27,6 +27,18 @@ class ToolRegistry:
         if configured.get("enabled", True):
             self._tools[tool.metadata.name] = tool
 
+    def unregister(self, name: str) -> bool:
+        return self._tools.pop(name, None) is not None
+
+    def unregister_prefix(self, prefix: str) -> list[str]:
+        """Remove every registered tool whose name starts with `prefix`.
+        Used when an MCP server disconnects: its adapters (`mcp.<id>.*`)
+        must stop being offered to the planner immediately."""
+        removed = [name for name in self._tools if name.startswith(prefix)]
+        for name in removed:
+            self._tools.pop(name, None)
+        return removed
+
     def get(self, name: str) -> BaseTool:
         tool = self._tools.get(name)
         if tool is None:

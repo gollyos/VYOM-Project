@@ -13,12 +13,17 @@ from .schemas import AgentMission, AgentStatus
 
 
 class AgentRuntime:
-    def __init__(self, registry: AgentRegistry, lifecycle: AgentLifecycle, skills: SkillExecutor):
+    def __init__(self, registry: AgentRegistry, lifecycle: AgentLifecycle, skills: SkillExecutor, autonomous_worker=None):
         self.registry = registry
         self.lifecycle = lifecycle
         self.skills = skills
+        # Optional: an AutonomousAgentWorker. Only required for agents with
+        # no bound skill (free-form mode); bound-skill delegation keeps
+        # working unchanged when this is None, exactly as before this was
+        # added.
+        self.autonomous_worker = autonomous_worker
 
-    async def delegate(self, parent: Task, agent_id: str, goal: str, emit, *, depth: int = 1):
+    async def delegate(self, parent: Task, agent_id: str, goal: str, emit, *, depth: int = 1, freeform: bool = False, allowed_roots: tuple | None = None):
         agent = self.registry.get(agent_id)
         if not agent:
             raise KeyError(agent_id)
@@ -33,9 +38,27 @@ class AgentRuntime:
         await emit("agent_started", f"{agent.name} started a bounded mission", {"agent": agent.model_dump(mode="json"), "mission": mission.model_dump(mode="json")})
         started = time.perf_counter()
         try:
-            if not agent.skills:
-                raise RuntimeError("Agent has no executable skill")
-            result = await self.skills.execute(agent.skills[0], parent, emit)
+            # Free-form autonomous mode: an agent with no bound skill (or a
+            # caller that explicitly asks for it) is run through the
+            # bounded ReAct loop instead of a single deterministic skill.
+            # This is the Claude-Code-style path: the agent itself plans
+            # multi-step tool use rather than executing one pre-picked
+            # skill.
+            if freeform or not agent.skills:
+                if self.autonomous_worker is None:
+                    raise RuntimeError(
+                        "Agent has no executable skill and no autonomous worker is configured"
+                    )
+                result = await self.autonomous_worker.run(
+                    goal,
+                    parent,
+                    emit,
+                    permission_level=agent.permissions,
+                    allowed_roots=allowed_roots,
+                    allowed_tools=agent.tools or None,
+                )
+            else:
+                result = await self.skills.execute(agent.skills[0], parent, emit)
             passed = bool(result.structured_data.get("verification", {}).get("passed", True))
             if not passed:
                 raise RuntimeError("Delegated mission verification failed")
@@ -61,3 +84,9 @@ class AgentRuntime:
             agent.performance.success_rate = agent.performance.successes / agent.performance.missions
             self.registry.save(agent)
             raise
+
+    async def delegate_freeform(self, parent: Task, agent_id: str, goal: str, emit, *, depth: int = 1, allowed_roots: tuple | None = None):
+        """Convenience wrapper: always runs the free-form autonomous loop,
+        even for an agent that happens to have a bound skill. Bound-skill
+        callers keep using `delegate` unchanged."""
+        return await self.delegate(parent, agent_id, goal, emit, depth=depth, freeform=True, allowed_roots=allowed_roots)

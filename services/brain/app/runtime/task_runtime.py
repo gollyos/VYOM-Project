@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from collections import OrderedDict
 from datetime import datetime, timezone
@@ -34,6 +35,21 @@ from .verifier import Verifier
 
 class TaskCancelled(Exception):
     pass
+
+
+#: GoalVerifier.verify_goal() prefixes each clause with its internal check
+#: name for task.metadata (diagnostic, machine-groupable - "search_performed:
+#: the browser was opened but no search or navigation was observed"). That
+#: prefix is jargon no user asked for; VYOM spoke/showed it verbatim because
+#: nothing stripped it before it reached the response the user actually
+#: reads or hears. This strips it for user-facing text only - the raw,
+#: prefixed evidence still goes into task.metadata untouched.
+_GOAL_EVIDENCE_PREFIX = re.compile(r"^[a-z][a-z0-9_]*:\s*")
+
+
+def _humanize_goal_evidence(evidence: str) -> str:
+    parts = [part.strip() for part in evidence.split(";") if part.strip()]
+    return "; ".join(_GOAL_EVIDENCE_PREFIX.sub("", part) for part in parts)
 
 
 class TaskRuntime:
@@ -92,6 +108,7 @@ class TaskRuntime:
         self.memory_retriever = None  # attached post-construction in main.py, same pattern
         self.memory_store = None  # attached post-construction in main.py, same pattern
         self.memory_manager = None  # attached post-construction in main.py, same pattern
+        self.knowledge_service = None  # attached post-construction; the "khud ka Wikipedia" recall-first service
         self.automation_store = None  # attached post-construction; one durable scheduler/store
         from .verifier import GoalVerifier, PostconditionVerifier
         self.postconditions = PostconditionVerifier()
@@ -1479,11 +1496,39 @@ class TaskRuntime:
             # from the existing MemoryRetriever. An empty result is a REAL
             # answer ("nothing is stored"), never grounds for guessing.
             if contract["tool"] == "__memory__":
+                query = str(call.arguments.get("query", "")).strip()
+                # If the persistent knowledge base ("khud ka Wikipedia")
+                # is wired in and this is a general-knowledge "what is /
+                # who is / find out about X" style question, ask it FIRST
+                # — recall what VYOM already knows, and when it is stale or
+                # unknown, perform RESEARCH and record the facts, so "find
+                # out and remember it" actually learns and persists instead
+                # of only ever reading old raw memory.
+                if self.knowledge_service is not None:
+                    try:
+                        knowledge = await self.knowledge_service.recall(query)
+                    except Exception as error:
+                        knowledge = None
+                        self.knowledge_recall_error = str(error)[:300]
+                    if knowledge is not None and knowledge.facts:
+                        found = [{
+                            "title": f"{fact.subject} — {fact.predicate}",
+                            "summary": fact.as_sentence(),
+                            "source_url": fact.source_url,
+                            "confidence": fact.confidence,
+                            "created_at": str(fact.last_confirmed_at),
+                            "knowledge": True,
+                        } for fact in knowledge.facts]
+                        collected.append({"call": call.name, "inputs": {"query": query},
+                                          "ok": True, "output": found, "error": None})
+                        return {"ok": True, "output": found,
+                                "stale": knowledge.stale,
+                                "note": "answered from VYOM's knowledge base" if not knowledge.stale
+                                        else "facts known but stale; a refresh is recommended"}
                 if self.memory_retriever is None:
                     return {"ok": False, "error": "memory retrieval is not available in this runtime"}
                 from app.memory.schemas import MemoryQuery
 
-                query = str(call.arguments.get("query", "")).strip()
                 try:
                     hits = await self.memory_retriever.search(MemoryQuery(text=query, limit=8))
                 except Exception as error:
@@ -1959,29 +2004,34 @@ class TaskRuntime:
             elif frame_status == "VERIFIED_COMPLETE" and goal_status == "NOT_APPLICABLE":
                 goal_status, goal_evidence = frame_status, frame_evidence
 
+        # The metadata record keeps the raw, check-name-prefixed evidence
+        # (diagnostic, machine-groupable); every string the user actually
+        # reads or hears below uses the stripped version instead.
         task.metadata["goal_verification"] = {"status": goal_status, "evidence": goal_evidence}
         await self.task_store.save(task)
         if goal_status in {"FAILED", "PARTIAL"}:
+            readable_evidence = _humanize_goal_evidence(goal_evidence)
             await self._emit(
                 task,
                 EventType.VERIFICATION_FAILED,
-                f"The goal was not achieved: {goal_evidence}",
+                f"The goal was not achieved: {readable_evidence}",
                 {"goal_verification": task.metadata["goal_verification"]},
             )
             raise RuntimeError(
                 f"{result.response.strip()[:200]} "
-                f"However, this was NOT verified in the real world: {goal_evidence}"
+                f"However, this was NOT verified in the real world: {readable_evidence}"
                 if goal_status == "PARTIAL"
-                else f"The goal was not achieved: {goal_evidence}"
+                else f"The goal was not achieved: {readable_evidence}"
             )
         if goal_status == "VERIFIED_COMPLETE":
+            readable_evidence = _humanize_goal_evidence(goal_evidence)
             await self._emit(
                 task,
                 EventType.VERIFICATION_EVIDENCE,
-                f"Goal verified: {goal_evidence}",
+                f"Goal verified: {readable_evidence}",
                 {"goal_verification": task.metadata["goal_verification"]},
             )
-            verification.evidence.append(f"goal postcondition: {goal_evidence}")
+            verification.evidence.append(f"goal postcondition: {readable_evidence}")
 
         await self._emit(
             task,

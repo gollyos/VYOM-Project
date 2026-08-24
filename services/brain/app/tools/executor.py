@@ -47,6 +47,12 @@ class ToolExecutor:
             if not dry_run and tool.metadata.supports_verification:
                 result = await tool.verify(inputs, result, context)
             result.duration_ms = (time.perf_counter() - started) * 1000
+            if not dry_run and result.success:
+                # Real, observed tool sequence for THIS task — feeds the
+                # self-improvement loop's automatic skill promotion
+                # (ExecutionContextFactory.tools_used / SkillAutoPromoter).
+                used = context.metadata.setdefault("tools_used", [])
+                used.append(name)
             for evidence in result.evidence:
                 await self.evidence_collector.record(context.task_id, evidence)
                 await context.emit(

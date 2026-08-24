@@ -69,14 +69,39 @@ class BusinessEngine:
             await emit("briefing_generated", "Aggregating only available briefing sources", {})
             briefing = await self.briefing.generate()
             source_evidence = [f"{item.source}: {item.status}" for item in briefing.sources]
-            objects = [
-                {"id": "briefing", "type": "status-summary", "title": "Today", "eyebrow": "Verified briefing", "tone": "intelligence", "frame": _frame(6, 14, 27), "focus": briefing.priorities[0], "stats": [
-                    {"label": "Leads", "value": str(briefing.metrics["leads"])},
-                    {"label": "Approvals", "value": str(briefing.metrics["pending_approvals"]), "tone": "attention"},
-                    {"label": "Meetings", "value": "Unavailable" if briefing.metrics["meetings"] is None else str(briefing.metrics["meetings"])},
-                ]},
-                {"id": "sources", "type": "verified-result", "title": "Source health", "eyebrow": "Completeness", "tone": "verified" if not briefing.incomplete else "attention", "frame": _frame(67, 15, 27), "statement": briefing.summary, "evidence": source_evidence, "timestamp": briefing.generated_at.isoformat()},
-            ]
+            # ADAPTIVE STATS — a number is only shown when it EXISTS. The
+            # user's complaint: the status screen displayed a permanent
+            # agency dashboard (Leads: 0, Meetings: Unavailable) even when
+            # no agency data has ever been recorded. Empty counters are
+            # noise pretending to be information; they are omitted, and
+            # the card itself disappears when nothing real exists.
+            metrics = briefing.metrics
+            stats: list[dict] = []
+            if metrics.get("pending_tasks"):
+                stats.append({"label": "Unfinished", "value": str(metrics["pending_tasks"]), "tone": "attention"})
+            if metrics.get("pending_approvals"):
+                stats.append({"label": "Approvals", "value": str(metrics["pending_approvals"]), "tone": "attention"})
+            if metrics.get("meetings") is not None:
+                stats.append({"label": "Meetings", "value": str(metrics["meetings"])})
+            if metrics.get("leads"):
+                stats.append({"label": "Leads", "value": str(metrics["leads"])})
+            if metrics.get("drafts"):
+                stats.append({"label": "Drafts", "value": str(metrics["drafts"])})
+            objects: list[dict] = []
+            if stats:
+                objects.append({
+                    "id": "briefing", "type": "status-summary", "title": "Today",
+                    "eyebrow": "Verified briefing", "tone": "intelligence",
+                    "frame": _frame(6, 14, 27), "focus": briefing.priorities[0],
+                    "stats": stats,
+                })
+            objects.append({
+                "id": "sources", "type": "verified-result", "title": "Source health",
+                "eyebrow": "Completeness",
+                "tone": "verified" if not briefing.incomplete else "attention",
+                "frame": _frame(67, 15, 27), "statement": briefing.summary,
+                "evidence": source_evidence, "timestamp": briefing.generated_at.isoformat(),
+            })
             if briefing.approvals:
                 first = briefing.approvals[0]
                 objects.append({"id": "approval", "type": "approval-action", "title": "Needs decision", "eyebrow": "Scoped approval", "tone": "attention", "frame": _frame(7, 63, 28), "request": first["action"], "context": f"{first['level']} · task {first['task_id']}", "actionLabel": "Review in context", "urgency": "important"})

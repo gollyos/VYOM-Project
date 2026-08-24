@@ -38,7 +38,7 @@ def main() -> None:
             status_task = client.post("/api/tasks", json={"user_request": "Why is my PC slow?"}).json()
             status_task = wait_for(client, status_task["id"], {"completed", "failed"})
             assert status_task["status"] == "completed", status_task
-            assert status_task["assigned_model"] == "local-phase9-runtime-v1"
+            assert status_task["assigned_model"] == "workflow:desktop-v1"
             print("system_status_explain: OK ->", status_task["result"]["response"][:80])
 
             # Startup status -- read only, no OS mutation.

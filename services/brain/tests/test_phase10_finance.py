@@ -553,6 +553,22 @@ def test_analyze_market_classifies_as_finance_with_no_model_needed():
     assert "phase10" in profile.needs
 
 
+def test_market_briefing_phrase_is_not_stolen_by_business_meeting_briefing():
+    # "prepare me for ... meeting" is the meeting_briefing (business/CRM)
+    # trigger and used to fire first regardless of content, so a request
+    # naming the market briefing by its own exact phrase was routed to the
+    # wrong engine entirely (business, not phase10) before this had any
+    # exclusion for it.
+    profile = TaskClassifier().classify("prepare me for the market briefing meeting")
+    assert profile.intent == "market_briefing"
+    assert "phase10" in profile.needs
+
+    # The original business case must still route correctly.
+    profile = TaskClassifier().classify("prepare me for the client meeting")
+    assert profile.intent == "meeting_briefing"
+    assert "business" in profile.needs
+
+
 def test_paper_trade_setup_is_never_misclassified_as_l3_real_trading():
     engine = PermissionEngine()
     assert engine.classify("create a paper trade setup for BTC") == PermissionLevel.L1

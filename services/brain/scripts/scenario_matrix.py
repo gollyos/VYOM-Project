@@ -37,10 +37,15 @@ WS = "ws://127.0.0.1:7788/ws/events"
 REPORT_PATH = Path("data/logs/scenario-matrix.json")
 
 #: Models that run entirely on local deterministic code - no API call.
+#   Kept in sync with the labels assigned in app/runtime/task_runtime.py;
+#   the old `local-phaseN-runtime-v1` pseudo-labels were renamed to
+#   honest `workflow:*` / `local-*` / `gate:*` labels.
 LOCAL_MODELS = {
-    "local-tool-planner-v1", "local-business-runtime-v1", "local-phase8-runtime-v1",
-    "local-phase9-runtime-v1", "local-phase10-runtime-v1", "local-phase11-runtime-v1",
-    "local-phase13-runtime-v1", "local-intelligence-v1", "local-mission-loop-v1",
+    "local-tool-planner-v1", "local-intelligence-v1", "local-mission-loop-v1",
+    "local-history-v1", "local-memory-v1", "local-scheduler-v1",
+    "gate:stt-noise", "vyom-general-planner",
+    "workflow:business-v1", "workflow:desktop-v1", "workflow:diagnostics-v1",
+    "workflow:finance-v1", "workflow:personal-os-v1", "workflow:research-browser-v1",
 }
 
 TERMINAL_EVENTS = {"task_completed", "task_failed", "task_cancelled"}
