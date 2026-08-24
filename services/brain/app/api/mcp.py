@@ -135,7 +135,7 @@ async def connect_service(payload: ConnectServiceRequest, request: Request) -> d
         args = [arg.format(path=payload.path or "") for arg in match.args_template]
     config = MCPServerConfig(
         id=server_id, name=match.display_name, command=match.command, args=args,
-        env=payload.env, trust_level=match.trust_level,
+        env=payload.env, trust_level=match.trust_level, timeout_seconds=match.startup_timeout_seconds,
     )
     result = await request.app.state.mcp_manager.connect(config)
     return {"status": result.get("status", "error"), "matched_catalog_id": match.catalog_id, **result}
@@ -176,7 +176,7 @@ async def add_server_from_catalog(payload: CatalogConnectRequest, request: Reque
     server_id = payload.server_id or entry.catalog_id
     config = MCPServerConfig(
         id=server_id, name=entry.display_name, command=entry.command, args=args,
-        env=payload.env, trust_level=entry.trust_level,
+        env=payload.env, trust_level=entry.trust_level, timeout_seconds=entry.startup_timeout_seconds,
     )
     manager = request.app.state.mcp_manager
     if server_id in request.app.state.mcp_registry.servers:

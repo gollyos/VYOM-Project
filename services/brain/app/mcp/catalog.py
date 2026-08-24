@@ -27,6 +27,11 @@ class MCPCatalogEntry(BaseModel):
     #: stores a credential on the user's behalf. An entry with entries
     #: here is unusable until the caller provides them.
     required_env: list[str] = Field(default_factory=list)
+    #: Override for the MCP handshake timeout, for servers whose first run
+    #: needs to download a large runtime (e.g. wweb-mcp bundles a Chromium
+    #: via whatsapp-web.js/puppeteer — verified empirically to take longer
+    #: than the default 30s connect window on a first, uncached run).
+    startup_timeout_seconds: float = 30.0
     trust_level: str = "restricted"
     homepage: str = ""
 
@@ -124,6 +129,28 @@ CATALOG: list[MCPCatalogEntry] = [
         command="npx",
         args_template=["-y", "@modelcontextprotocol/server-puppeteer"],
         homepage="https://github.com/modelcontextprotocol/servers-archived/tree/main/src/puppeteer",
+    ),
+    MCPCatalogEntry(
+        catalog_id="whatsapp",
+        display_name="WhatsApp (unofficial, via WhatsApp Web)",
+        description=(
+            "Send/read WhatsApp messages by driving a real WhatsApp Web session "
+            "(whatsapp-web.js under the hood) — scan a QR code with your phone's "
+            "WhatsApp once to link the session, same as opening web.whatsapp.com. "
+            "Unofficial: no Meta Business API approval needed, but it is NOT "
+            "Meta's official API and carries the same terms-of-service exposure "
+            "as any WhatsApp Web automation. Prefer this only when the official "
+            "Cloud API (business-verified, paid at volume) is not what the user "
+            "wants."
+        ),
+        command="npx",
+        args_template=["-y", "wweb-mcp", "--mode", "mcp", "--transport", "command"],
+        # Verified live: first run downloads whatsapp-web.js's bundled
+        # Chromium and spins up a real WhatsApp Web client before it can
+        # answer MCP's 'initialize' — took ~2-3 minutes on a cold cache in
+        # manual testing, well past the default 30s.
+        startup_timeout_seconds=240.0,
+        homepage="https://github.com/pnizer/wweb-mcp",
     ),
 ]
 

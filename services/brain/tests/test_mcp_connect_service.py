@@ -26,7 +26,19 @@ def test_catalog_has_required_env_declared_for_credentialed_services():
 
 def test_catalog_describe_includes_new_entries():
     ids = {entry["catalog_id"] for entry in mcp_catalog.describe()}
-    assert {"notion", "slack", "github", "postgres", "brave-search", "puppeteer"}.issubset(ids)
+    assert {"notion", "slack", "github", "postgres", "brave-search", "puppeteer", "whatsapp"}.issubset(ids)
+
+
+def test_whatsapp_catalog_entry_has_extended_startup_timeout():
+    # Verified live: wweb-mcp's first run downloads whatsapp-web.js's
+    # bundled Chromium and spins up a real WhatsApp Web client before
+    # answering MCP's 'initialize' — took well past the generic 30s
+    # default on a cold cache in manual testing.
+    entry = mcp_catalog.find("whatsapp")
+    assert entry is not None
+    assert entry.startup_timeout_seconds > 30.0
+    assert entry.command == "npx"
+    assert "wweb-mcp" in entry.args_template
 
 
 def _fuzzy_match(service: str):
@@ -61,8 +73,9 @@ def test_fuzzy_match_finds_service_from_natural_language():
     assert _fuzzy_match("connect my slack workspace").catalog_id == "slack"
     assert _fuzzy_match("github").catalog_id == "github"
     assert _fuzzy_match("give me brave search").catalog_id == "brave-search"
+    assert _fuzzy_match("connect my whatsapp").catalog_id == "whatsapp"
 
 
 def test_fuzzy_match_returns_none_for_unknown_service():
-    assert _fuzzy_match("connect my whatsapp") is None
-    assert _fuzzy_match("instagram automation") is None
+    assert _fuzzy_match("connect my instagram") is None
+    assert _fuzzy_match("connect my facebook ads") is None
