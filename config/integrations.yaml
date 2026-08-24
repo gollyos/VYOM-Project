@@ -4,7 +4,7 @@ integrations:
     name: Gmail
     provider: google
     category: email
-    enabled: false
+    enabled: true
     status: disconnected
     capabilities: [email.search, email.read, email.draft, email.send, email.thread]
     metadata:
@@ -27,6 +27,16 @@ integrations:
     enabled: false
     status: disconnected
     capabilities: [contacts.read, contacts.resolve]
+    metadata:
+      oauth: required
+      secret_storage: windows-dpapi
+  - id: google-sheets
+    name: Google Sheets
+    provider: google
+    category: productivity
+    enabled: true
+    status: disconnected
+    capabilities: [sheets.create, sheets.read, sheets.write, sheets.append]
     metadata:
       oauth: required
       secret_storage: windows-dpapi

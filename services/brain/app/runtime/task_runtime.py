@@ -1470,6 +1470,41 @@ class TaskRuntime:
 
         return is_general_knowledge_query(text)
 
+    @staticmethod
+    def _normalize_knowledge_subject(query: str) -> str:
+        """Strip the question framing off a general-knowledge query so the
+        knowledge base is queried/researched on the REAL topic, not the whole
+        sentence the planner happened to hand over.
+
+        'What is Python programming language?' -> 'Python programming language'
+        'find out about the solar system and remember it' -> 'the solar system'
+        'Who is Guido van Rossum?' -> 'Guido van Rossum'
+        """
+        leadings = (
+            "what is ", "what's ", "what are ", "what was ", "who is ", "who was ",
+            "what does ", "define ", "definition of ", "explain ", "tell me about ",
+            "find out about ", "learn about ", "meaning of ",
+        )
+        trailings = ("and remember it", "in detail", "please")
+        s = (query or "").strip().strip("?.!").strip()
+        low = s.lower()
+        for lead in leadings:
+            if low.startswith(lead):
+                s = s[len(lead):].strip()
+                low = low[len(lead):].strip()
+                break
+        for trail in trailings:
+            if low.endswith(trail):
+                s = s[: -len(trail)].strip()
+                low = low[: -len(trail)].strip()
+        # Hinglish/Devanagari "kya hai / kaun hai" style: "python kya hai" -> "python".
+        for marker in (" kya hai", " kya hota hai", " kaun hai", " kaun tha", " क्या है", " कौन है"):
+            idx = low.find(marker)
+            if idx > 0:
+                s = s[:idx].strip()
+                break
+        return s or (query or "").strip()
+
     def _knowledge_research_fn(self, subject: str):
         """Build the async callable that ask_or_research() invokes when the
         knowledge base does not already know `subject` (or knows it stale):
@@ -1530,10 +1565,14 @@ class TaskRuntime:
             try:
                 if general_knowledge:
                     # Ask the KB first; when unknown or stale, research + record.
+                    # Use a normalized subject so 'What is X' researches 'X', not
+                    # the whole sentence the planner handed over.
+                    subject = self._normalize_knowledge_subject(query)
                     knowledge = await self.knowledge_service.ask_or_research(
-                        query, self._knowledge_research_fn(query))
+                        subject, self._knowledge_research_fn(subject))
                 else:
-                    knowledge = await self.knowledge_service.recall(query)
+                    subject = query
+                    knowledge = await self.knowledge_service.recall(subject)
             except Exception as error:
                 knowledge = None
                 self.knowledge_recall_error = str(error)[:300]

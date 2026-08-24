@@ -136,6 +136,17 @@ def test_general_knowledge_questions_are_not_conversation():
     assert is_conversational("thank you") is True
 
 
+def test_normalize_knowledge_subject_strips_question_framing():
+    assert TaskRuntime._normalize_knowledge_subject("What is Python?") == "Python"
+    assert TaskRuntime._normalize_knowledge_subject("What is Python programming language?") == "Python programming language"
+    assert TaskRuntime._normalize_knowledge_subject("Who is Guido van Rossum?") == "Guido van Rossum"
+    assert TaskRuntime._normalize_knowledge_subject("find out about the solar system and remember it") == "the solar system"
+    assert TaskRuntime._normalize_knowledge_subject("define Eiffel Tower") == "Eiffel Tower"
+    assert TaskRuntime._normalize_knowledge_subject("python kya hai") == "python"
+    # A naked subject is left untouched.
+    assert TaskRuntime._normalize_knowledge_subject("solar system") == "solar system"
+
+
 # -- general-knowledge wiring through the real execution path ----------------
 
 
@@ -158,10 +169,10 @@ async def test_general_knowledge_query_uses_ask_or_research_and_records():
 
     # Knowledge-first: the runtime called ask_or_research, not recall.
     assert knowledge.ask_or_research_calls == 1
-    # Research actually ran on the subject and recorded the fact.
+    # Research actually ran on the (normalized) subject and recorded the fact.
     assert knowledge.research_fn_invocations == 1
     assert len(research_task.runs) == 1
-    assert research_task.runs[0][0] == "What is Python?"
+    assert research_task.runs[0][0] == "Python"  # framing stripped from the query
     # The freshly recorded fact is answered, with knowledge provenance.
     output = result["output"]
     assert result["ok"] is True

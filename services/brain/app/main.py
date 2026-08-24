@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -9,7 +10,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discovery as discovery_api, email as email_api, extension as extension_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, skills, sync_api, tasks, tools, websocket
+from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discovery as discovery_api, email as email_api, extension as extension_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, tools, websocket
 from app.agency.service import AgencyService, DisconnectedLeadResearchProvider
 from app.agents.evaluator import AgentEvaluator
 from app.agents.factory import AgentFactory
@@ -276,10 +277,13 @@ from app.automation.store import AutomationStore
 from app.briefing.engine import BusinessEngine
 from app.briefing.service import BriefingService
 from app.calendar.provider import DisconnectedCalendarProvider
+from app.integrations.google_oauth import GoogleOAuthClient
+from app.sheets.provider import DisconnectedSheetsProvider, GoogleSheetsProvider, SHEETS_SCOPES
+from app.sheets.service import SheetsService
 from app.calendar.service import CalendarService
 from app.contacts.resolver import ContactResolver
 from app.crm.store import CRMStore
-from app.email.provider import GmailProvider
+from app.email.provider import DisconnectedEmailProvider, GmailProvider, GMAIL_SCOPES
 from app.email.service import EmailService
 from app.integrations.registry import IntegrationRegistry
 from app.integrations.secrets import UnavailableSecretVault, WindowsDPAPISecretVault
@@ -289,7 +293,7 @@ from app.security.command_policy import CommandPolicy
 from app.security.permission_engine import PermissionEngine
 from app.tools.executor import ToolExecutor
 from app.tools.registry import ToolRegistry
-from app.tools_builtin import BrowserTool, DesktopTool, FilesystemTool, GitTool, InputControlTool, ScreenObserveTool, ScreenshotTool, SystemTool, TerminalTool
+from app.tools_builtin import BrowserTool, DesktopTool, EmailTool, FilesystemTool, GitTool, InputControlTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TerminalTool
 from app.skills.builder import SkillBuilder
 from app.skills.executor import SkillExecutor
 from app.skills.teachable import TeachableSkillService
@@ -470,15 +474,40 @@ def create_app(
         integration_registry = await IntegrationRegistry.from_yaml(
             selected_settings.integration_config_path, database, secret_vault
         )
-        email_provider = GmailProvider()
+        # Gmail and Sheets each get their OWN GoogleOAuthClient instance so
+        # a user connecting one is never asked to also grant the other's
+        # scopes (each is a separate consent screen against the SAME
+        # Desktop-app OAuth client — one Cloud Console project, narrower
+        # per-integration scopes). Real network/OAuth activates once
+        # GOOGLE_OAUTH_CLIENT_ID/_SECRET are set; until then both behave
+        # exactly like the disconnected stubs they replace.
+        google_client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
+        google_client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
+        if google_client_id and google_client_secret:
+            gmail_oauth = GoogleOAuthClient(google_client_id, google_client_secret, GMAIL_SCOPES)
+            sheets_oauth = GoogleOAuthClient(google_client_id, google_client_secret, SHEETS_SCOPES)
+            email_provider = GmailProvider(gmail_oauth, secret_vault)
+            sheets_provider = GoogleSheetsProvider(sheets_oauth, secret_vault)
+        else:
+            email_provider = DisconnectedEmailProvider()
+            sheets_provider = DisconnectedSheetsProvider()
         calendar_provider = DisconnectedCalendarProvider()
         if "gmail" in integration_registry.records:
             integration_registry.register_provider("gmail", email_provider)
         if "google-calendar" in integration_registry.records:
             integration_registry.register_provider("google-calendar", calendar_provider)
+        if "google-sheets" in integration_registry.records:
+            integration_registry.register_provider("google-sheets", sheets_provider)
         crm_store = CRMStore(database)
         email_service = EmailService(database, email_provider)
         calendar_service = CalendarService(calendar_provider)
+        sheets_service = SheetsService(sheets_provider)
+        # Registered here (not with the other built-in tools above) because
+        # they depend on email_service/sheets_service, which depend on the
+        # OAuth-aware providers constructed just above — registering earlier
+        # would mean registering against the disconnected stubs unconditionally.
+        tool_registry.register(EmailTool(email_service))
+        tool_registry.register(SheetsTool(sheets_service))
         contact_resolver = ContactResolver()
         agency_service = AgencyService(crm_store, email_service, DisconnectedLeadResearchProvider())
         meeting_service = MeetingService(calendar_service, crm_store, contact_resolver, database)
@@ -1471,6 +1500,7 @@ def create_app(
         application.state.crm_store = crm_store
         application.state.email_service = email_service
         application.state.calendar_service = calendar_service
+        application.state.sheets_service = sheets_service
         application.state.contact_resolver = contact_resolver
         application.state.agency_service = agency_service
         application.state.meeting_service = meeting_service
@@ -1744,6 +1774,7 @@ def create_app(
     application.include_router(mcp_api.router)
     application.include_router(knowledge_api.router)
     application.include_router(adaptive_api.router)
+    application.include_router(sheets_api.router)
     application.include_router(memory.router)
     application.include_router(brain_graph_api.router)
     application.include_router(skills.router)
