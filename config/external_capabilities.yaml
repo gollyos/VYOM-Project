@@ -7,7 +7,7 @@ composio:
   prefer_over_native: false
   secret_ref: integration/composio/default
 defuddle:
-  enabled: false
+  enabled: true
   fallback: browser_agent
   prefer_for: static_pages
 rejected:

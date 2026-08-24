@@ -11,14 +11,22 @@ from .schemas import KnowledgeFact
 # store is "recall instantly without re-researching".
 _PATTERNS = [
     # "X is/was/are/were a/an/the Y"  -> predicate "is"
-    (re.compile(r"^(?P<subject>[A-Z][\w \-'.,]{1,80}?)\s+(?:is|was)\s+(?:a|an|the)\s+(?P<value>.{3,300})$"), "is a"),
-    (re.compile(r"^(?P<subject>[A-Z][\w \-'.,]{1,80}?)\s+(?:are|were)\s+(?P<value>.{3,300})$"), "are"),
+    # Subject character class includes ( ) so acronyms/abbreviations in
+    # parens — "The Model Context Protocol (MCP) is ...", "The API (v2)" —
+    # still match. Without it, a fact whose subject carries a parenthetical
+    # abbreviation silently produced ZERO facts from real research text.
+    (re.compile(r"^(?P<subject>[A-Z][\w \-'.,()]{1,80}?)\s+(?:is|was)\s+(?:a|an|the)\s+(?P<value>.{3,300})$"), "is a"),
+    (re.compile(r"^(?P<subject>[A-Z][\w \-'.,()]{1,80}?)\s+(?:are|were)\s+(?P<value>.{3,300})$"), "are"),
     # "X was created/founded/invented/developed by Y"
-    (re.compile(r"^(?P<subject>[A-Z][\w \-'.,]{1,80}?)\s+(?:was|is)\s+(?:created|founded|invented|developed|designed|written)\s+by\s+(?P<value>.{2,200})$", re.IGNORECASE), "created by"),
+    (re.compile(r"^(?P<subject>[A-Z][\w \-'.,()]{1,80}?)\s+(?:was|is)\s+(?:created|founded|invented|developed|designed|written)\s+by\s+(?P<value>.{2,200})$", re.IGNORECASE), "created by"),
     # "X was released/founded/established in Y" (dates/years/places)
-    (re.compile(r"^(?P<subject>[A-Z][\w \-'.,]{1,80}?)\s+(?:was|is)\s+(?:released|founded|established|launched)\s+in\s+(?P<value>.{2,100})$", re.IGNORECASE), "founded in"),
+    (re.compile(r"^(?P<subject>[A-Z][\w \-'.,()]{1,80}?)\s+(?:was|is)\s+(?:released|founded|established|launched)\s+in\s+(?P<value>.{2,100})$", re.IGNORECASE), "founded in"),
     # "X has/had Y"
-    (re.compile(r"^(?P<subject>[A-Z][\w \-'.,]{1,80}?)\s+(?:has|had)\s+(?P<value>.{3,300})$"), "has"),
+    (re.compile(r"^(?P<subject>[A-Z][\w \-'.,()]{1,80}?)\s+(?:has|had)\s+(?P<value>.{3,300})$"), "has"),
+    # "X created/founded/developed/introduced/released Y" (active voice) —
+    # research text says "Anthropic created MCP", "Google released Gemini",
+    # which the passive "was created by" forms above don't match.
+    (re.compile(r"^(?P<subject>[A-Z][\w \-'.,()]{1,80}?)\s+(?:created|founded|developed|introduced|released|launched|built|wrote)\s+(?P<value>[\w \-'.,()]{3,200})$", re.IGNORECASE), "created"),
 ]
 
 _MAX_SENTENCE_LEN = 400

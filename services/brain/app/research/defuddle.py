@@ -129,11 +129,34 @@ class DefuddleExtractor:
     def classify(html: str) -> PageClassification:
         lowered = html.lower()
         reasons: list[str] = []
-        if any(marker in lowered for marker in DefuddleExtractor.JS_MARKERS):
-            reasons.append("page shell looks JavaScript-rendered")
+        # A JS framework marker (`#__next`, `reactroot`, ...) on its own is
+        # NOT proof the page is client-rendered: Docusaurus/Next docs sites
+        # ship those markers AND substantial server-rendered prose that
+        # Defuddle reads fine (verified: modelcontextprotocol.io, 2130 chars
+        # extracted). The real signal is how much text is actually present.
+        # So a page is only pushed to the browser fallback when it really
+        # has almost no server-rendered text; a JS marker merely lowers but
+        # does not decide. Without this, a JS-marker docs page was sent down
+        # the browser path, extraction returned empty, and every fact it
+        # contained was silently lost from the knowledge base.
+        if any(marker in lowered for marker in DefuddleExtractor.JS_MARKERS) \
+                and len(re.sub(r"<[^>]+>", "", html).strip()) < 400:
+            reasons.append("page shell looks JavaScript-rendered with too little server text")
         if len(re.sub(r"<[^>]+>", "", html).strip()) < 200:
             reasons.append("very little server-rendered text (dynamic content likely)")
-        if "window.location" in lowered and "login" in lowered:
+        # A real login page has a password input / sign-in form, or an
+        # explicit redirect-to-login assignment. Merely containing the
+        # substrings "window.location" and "login" ANYWHERE is not evidence —
+        # Next.js/Docusaurus docs pages serialize a "LoginButtonProvider"
+        # component name and ship window.location scripts, which this loose
+        # check previously misread as a login redirect, so plain docs fell
+        # to the browser path and their facts were lost. Be specific.
+        if "<input" in lowered and "type=\"password\"" in lowered:
+            reasons.append("login form detected (password field)")
+        elif ("window.location" in lowered and "login" in lowered
+              and (("sign in" in lowered and "enter" in lowered)
+                   or "auth0" in lowered or "clerk" in lowered
+                   or "redirect_uri" in lowered)):
             reasons.append("login redirect detected")
         return PageClassification(static_readable=not reasons, reasons=reasons)
 
