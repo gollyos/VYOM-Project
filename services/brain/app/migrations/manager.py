@@ -113,9 +113,22 @@ class MigrationManager:
         validation_expected=(1,),
     )
 
+    MESSAGING = Migration(
+        version=6,
+        name="messaging_v1",
+        statements=(
+            """CREATE TABLE IF NOT EXISTS telegram_chats (
+                chat_id TEXT PRIMARY KEY, title TEXT, updated_at TEXT NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS telegram_state (
+                key TEXT PRIMARY KEY, value TEXT NOT NULL)""",
+        ),
+        validation_query="SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='telegram_chats'",
+        validation_expected=(1,),
+    )
+
     def __init__(self, database, migrations: list[Migration] | None = None):
         self.database = database
-        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY, self.KNOWLEDGE_BASE], key=lambda item: item.version)
+        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY, self.KNOWLEDGE_BASE, self.MESSAGING], key=lambda item: item.version)
         self.last_error: str | None = None
 
     async def ensure_table(self) -> None:

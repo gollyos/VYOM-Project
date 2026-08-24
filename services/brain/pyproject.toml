@@ -30,7 +30,11 @@ dependencies = [
   "pywinauto>=0.6.9,<0.7; sys_platform == 'win32'",
   "pygetwindow>=0.0.9,<1; sys_platform == 'win32'",
   "pywin32>=306; sys_platform == 'win32'",
-  "screeninfo>=0.8,<1"
+  "screeninfo>=0.8,<1",
+  # QR code generation for the Telegram bot connect flow (app/api/telegram.py)
+  # — VYOM renders a scannable t.me/<bot> link the same way Hermes does for
+  # its own connect UX, instead of asking the user to type a chat_id.
+  "qrcode[pil]>=7.4,<8"
 ]
 
 [project.optional-dependencies]

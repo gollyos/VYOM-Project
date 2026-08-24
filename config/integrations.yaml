@@ -40,6 +40,16 @@ integrations:
     metadata:
       oauth: required
       secret_storage: windows-dpapi
+  - id: telegram
+    name: Telegram
+    provider: telegram
+    category: messaging
+    enabled: true
+    status: disconnected
+    capabilities: [telegram.send, telegram.poll, telegram.list_chats]
+    metadata:
+      auth: bot_token
+      secret_storage: windows-dpapi
   - id: lead-research
     name: Lead Research Provider
     provider: unconfigured
