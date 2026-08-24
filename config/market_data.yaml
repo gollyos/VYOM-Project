@@ -17,16 +17,19 @@ providers:
     cost_policy: free
     rate_limits: { requests_per_minute: 1000 }
   live_market_data:
-    enabled: false
-    provider_id: live-market-data
-    capabilities: [quotes, candles, historical_prices, fundamentals, company_metadata, indices, crypto, forex, market_status]
-    markets_supported: [US_EQUITY, CRYPTO, FOREX, INDEX]
-    cost_policy: subscription
+    enabled: true
+    provider_id: yahoo-finance
+    capabilities: [quotes, candles, historical_prices, fundamentals, company_metadata, market_status]
+    markets_supported: [US_EQUITY, INDEX, CRYPTO]
+    cost_policy: free
     rate_limits: { requests_per_minute: 60 }
-    # No credentials are configured in this repository. Enabling this entry
-    # without a real adapter/credentials must not be treated as a live
-    # source; ProviderRegistry only reports a provider "available" when a
-    # working adapter is actually registered.
+    # Real, free, unauthenticated Yahoo Finance public endpoints (see
+    # app/market_data/yahoo_provider.py) — no API key required. This is
+    # the SAME exchange-delayed data yahoo.com's own retail UI shows, so
+    # every value is labeled freshness=DELAYED, never LIVE, per
+    # docs/MARKET_DATA_POLICY.md. default_provider stays local-fixture so
+    # existing offline tests/demos are unaffected; callers that want real
+    # data ask ProviderRegistry for provider_id="yahoo-finance" explicitly.
 
 default_provider: local-fixture
 

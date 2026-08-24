@@ -6,6 +6,7 @@ import yaml
 
 from .provider import DisconnectedMarketDataProvider, LocalFixtureMarketDataProvider, MarketDataProvider
 from .schemas import MarketDataCapability, ProviderCapabilityInfo
+from .yahoo_provider import YahooFinanceProvider
 
 
 class ProviderRegistry:
@@ -24,8 +25,11 @@ class ProviderRegistry:
         provider_config = config.get("providers", {})
         if provider_config.get("local_fixture", {}).get("enabled", True):
             providers["local-fixture"] = LocalFixtureMarketDataProvider()
-        # `live_market_data` intentionally has no real adapter in this
-        # repository; enabling it in config alone never makes it available.
+        # Real, free, unauthenticated Yahoo Finance adapter — see
+        # app/market_data/yahoo_provider.py's docstring for the freshness
+        # discipline (DELAYED, never LIVE) this provider maintains.
+        if provider_config.get("live_market_data", {}).get("enabled", False):
+            providers["yahoo-finance"] = YahooFinanceProvider()
         default_id = config.get("default_provider", "local-fixture")
         return cls(providers, default_provider_id=default_id)
 
@@ -49,8 +53,16 @@ class ProviderRegistry:
         provider that cannot actually serve the requested capability type."""
         if capability is None:
             return self.default()
+        default = self.default()
+        # Prefer the configured default when it exists and can plausibly
+        # serve every capability this repo defines (both current providers
+        # can) — this keeps existing default-provider behaviour unchanged
+        # now that a second provider exists, rather than picking whichever
+        # provider `dict` iteration happens to yield first.
+        if default is not None and not isinstance(default, DisconnectedMarketDataProvider):
+            return default
         for provider in self.providers.values():
-            return provider  # local-fixture supports every capability today
+            return provider
         return DisconnectedMarketDataProvider()
 
     async def list_capabilities(self) -> list[ProviderCapabilityInfo]:
