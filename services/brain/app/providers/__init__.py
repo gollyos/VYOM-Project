@@ -7,6 +7,7 @@ from .base import ProviderRegistry
 from .deepseek import DeepSeekProvider
 from .google import GoogleProvider
 from .kimi import KimiProvider
+from .opencode_free import OpenCodeFreeProvider
 from .openai import OpenAIProvider
 from .openrouter import OpenRouterProvider
 
@@ -27,6 +28,9 @@ def create_provider_registry(settings: Settings) -> ProviderRegistry:
             OpenRouterProvider(settings.provider_timeout_seconds),
             DeepSeekProvider(settings.provider_timeout_seconds),
             KimiProvider(settings.provider_timeout_seconds),
+            # Keyless free-tier fallback (OpenCode Zen relay) - always
+            # `configured`, so it stays usable even with zero API keys set.
+            OpenCodeFreeProvider(settings.provider_timeout_seconds),
         ]
     )
 

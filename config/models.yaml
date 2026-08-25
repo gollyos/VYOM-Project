@@ -125,3 +125,23 @@ models:
     supports_vision: false
     privacy_policy: cloud_standard
     priority: 60
+
+  # ENABLED: keyless free model via the OpenCode Zen relay (no signup, no
+  # API key - the relay serves its "-free" model family anonymously).
+  # Same mechanism used to connect Hermes Agent to "Ox Alpha" for free.
+  # Kept BELOW gemini in priority: gemini is the confirmed-stable primary,
+  # this is a genuinely free second opinion / fallback when gemini's
+  # quota is exhausted, not a replacement.
+  - provider: opencode-free
+    model_id: hy3-free
+    enabled: true
+    capabilities: [reasoning, coding, research, structured_output, tool_use, general, planning]
+    quality_tier: balanced
+    speed_tier: fast
+    cost_tier: free
+    context_tier: large
+    supports_streaming: false
+    supports_tools: false
+    supports_vision: false
+    privacy_policy: cloud_standard
+    priority: 65
