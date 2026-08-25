@@ -2722,6 +2722,11 @@ button {
 .conn-icon-youtube { color: #e08a80; border-color: rgba(224, 138, 128, 0.25); }
 .conn-icon-whatsapp { color: #8fc7a8; border-color: rgba(143, 199, 168, 0.25); }
 .conn-icon-serpapi { color: #d0a86c; border-color: rgba(208, 168, 108, 0.25); }
+.conn-icon-discord { color: #8e9be8; border-color: rgba(142, 155, 232, 0.25); }
+.conn-icon-twitter { color: #9ad; border-color: rgba(153, 170, 221, 0.25); }
+.conn-icon-linkedin { color: #7ab8e8; border-color: rgba(122, 184, 232, 0.25); }
+.conn-icon-facebook { color: #6f9be8; border-color: rgba(111, 155, 232, 0.25); }
+.conn-icon-instagram { color: #d88fc7; border-color: rgba(216, 143, 199, 0.25); }
 
 .conn-card .cap-card-header { position: relative; }
 .conn-card .cap-card-header > .cap-status-dot {

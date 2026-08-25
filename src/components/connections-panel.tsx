@@ -528,8 +528,286 @@ function SerpApiCard() {
 }
 
 /* ------------------------------------------------------------------ *
- * Panel — the toggle + drawer shell, matches AgentStackPanel's pattern
+ * Social token cards — Discord / Twitter / LinkedIn / Facebook
+ * All four connect the same way: paste a token, VYOM verifies it with a
+ * real health() call before saving. Generic one component for all four.
  * ------------------------------------------------------------------ */
+
+type SocialSpec = {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  tokenLabel: string;
+  tokenPlaceholder: string;
+  guideHref: string;
+  guideText: string;
+  description: string;
+};
+
+function SocialTokenCard({ spec }: { spec: SocialSpec }) {
+  const [connected, setConnected] = useState<boolean | null>(null);
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const checkStatus = useCallback(async () => {
+    try {
+      const status = await getJson<{ connected: boolean }>(`/api/${spec.id}/status`);
+      setConnected(status.connected);
+    } catch {
+      setConnected(false);
+    }
+  }, [spec.id]);
+
+  useEffect(() => {
+    void checkStatus();
+  }, [checkStatus]);
+
+  async function connect(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const endpoint =
+        spec.id === "twitter"
+          ? "/api/twitter/connect"
+          : spec.id === "linkedin"
+            ? "/api/linkedin/connect"
+            : spec.id === "facebook"
+              ? "/api/facebook/connect"
+              : "/api/discord/connect";
+      const body =
+        spec.id === "twitter" || spec.id === "linkedin"
+          ? { access_token: token }
+          : spec.id === "facebook"
+            ? { page_id: "100000000000000", access_token: token } // page_id overridden below
+            : { bot_token: token };
+      // Facebook needs a real page_id, not a placeholder; prompt for it.
+      let payload = body;
+      if (spec.id === "facebook") {
+        const pageId = window.prompt("Your Facebook PAGE id (a number):");
+        if (!pageId) {
+          setError("Page id is required to connect Facebook.");
+          setBusy(false);
+          return;
+        }
+        payload = { page_id: pageId, access_token: token };
+      }
+      await postJson(endpoint, payload);
+      setToken("");
+      await checkStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Could not connect ${spec.label}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    setBusy(true);
+    setError(null);
+    try {
+      await postJson(`/api/${spec.id}/disconnect`);
+      await checkStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Could not disconnect ${spec.label}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="cap-card conn-card" aria-label={`${spec.label} connection`}>
+      <header className="cap-card-header">
+        <span className={`cap-card-icon conn-icon-${spec.id}`}>{spec.icon}</span>
+        <div>
+          <h4>{spec.label}</h4>
+          <p>{spec.description}</p>
+        </div>
+        <span className={`cap-status-dot ${connected ? "cap-status-connected" : "cap-status-disconnected"}`} />
+      </header>
+
+      {error && (
+        <p className="cap-error">
+          <AlertCircle size={11} /> {error}
+        </p>
+      )}
+
+      {connected ? (
+        <div className="conn-connected-row">
+          <CheckCircle2 size={13} />
+          <span>Connected</span>
+          <button type="button" className="cap-mini cap-mini-danger" onClick={() => void disconnect()} disabled={busy}>
+            Disconnect
+          </button>
+        </div>
+      ) : (
+        <form className="conn-form" onSubmit={connect}>
+          <div className="cap-input-wrap">
+            <input
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              placeholder={spec.tokenPlaceholder}
+              type="password"
+              required
+              aria-label={`${spec.label} ${spec.tokenLabel}`}
+            />
+          </div>
+          <a className="conn-guide-link" href={spec.guideHref} target="_blank" rel="noreferrer">
+            <Link2 size={11} /> {spec.guideText}
+          </a>
+          <button className="cap-primary" type="submit" disabled={busy || !token.trim()}>
+            {busy ? <Loader2 size={12} className="cap-spin" /> : `Connect ${spec.label}`}
+          </button>
+        </form>
+      )}
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Instagram — token connect + a post action (image/reel/story)
+ * ------------------------------------------------------------------ */
+
+function InstagramCard() {
+  const [connected, setConnected] = useState<boolean | null>(null);
+  const [accountId, setAccountId] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [postInfo, setPostInfo] = useState<string | null>(null);
+
+  const checkStatus = useCallback(async () => {
+    try {
+      const status = await getJson<{ connected: boolean }>("/api/instagram/status");
+      setConnected(status.connected);
+    } catch {
+      setConnected(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void checkStatus();
+  }, [checkStatus]);
+
+  async function connect(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await postJson("/api/instagram/connect", {
+        instagram_business_account_id: accountId,
+        access_token: accessToken,
+      });
+      setAccessToken("");
+      await checkStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not connect Instagram");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    setBusy(true);
+    setError(null);
+    try {
+      await postJson("/api/instagram/disconnect");
+      await checkStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not disconnect Instagram");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function testPost() {
+    setBusy(true);
+    setError(null);
+    setPostInfo(null);
+    try {
+      const mediaUrl = window.prompt("Public https media URL (Instagram fetches it itself):");
+      if (!mediaUrl) return;
+      const caption = window.prompt("Caption:") ?? "";
+      await postJson("/api/instagram/post", { media_url: mediaUrl, media_type: "IMAGE", caption });
+      setPostInfo("Test post published — check your Instagram account.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not post to Instagram");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="cap-card conn-card" aria-label="Instagram connection">
+      <header className="cap-card-header">
+        <span className="cap-card-icon conn-icon-instagram">
+          <InstagramIcon />
+        </span>
+        <div>
+          <h4>Instagram</h4>
+          <p>Post images/reels/stories and send DMs — connect your IG Business account.</p>
+        </div>
+        <span className={`cap-status-dot ${connected ? "cap-status-connected" : "cap-status-disconnected"}`} />
+      </header>
+
+      {error && (
+        <p className="cap-error">
+          <AlertCircle size={11} /> {error}
+        </p>
+      )}
+
+      {connected ? (
+        <div className="conn-connected-row">
+          <CheckCircle2 size={13} />
+          <span>Connected</span>
+          <button type="button" className="cap-mini" onClick={() => void testPost()} disabled={busy}>
+            Test Post
+          </button>
+          <button type="button" className="cap-mini cap-mini-danger" onClick={() => void disconnect()} disabled={busy}>
+            Disconnect
+          </button>
+        </div>
+      ) : (
+        <form className="conn-form" onSubmit={connect}>
+          <div className="cap-input-wrap">
+            <input
+              value={accountId}
+              onChange={(event) => setAccountId(event.target.value)}
+              placeholder="IG Business Account ID"
+              required
+              aria-label="Instagram Business Account ID"
+            />
+          </div>
+          <div className="cap-input-wrap">
+            <input
+              value={accessToken}
+              onChange={(event) => setAccessToken(event.target.value)}
+              placeholder="Long-lived Page access token"
+              type="password"
+              required
+              aria-label="Instagram access token"
+            />
+          </div>
+          <button className="cap-primary" type="submit" disabled={busy || !accountId.trim() || !accessToken.trim()}>
+            {busy ? <Loader2 size={12} className="cap-spin" /> : "Connect Instagram"}
+          </button>
+        </form>
+      )}
+    </section>
+  );
+}
+
+function InstagramIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
+
 
 export function ConnectionsPanel() {
   const [open, setOpen] = useState(false);
@@ -568,9 +846,58 @@ export function ConnectionsPanel() {
           <div className="cap-drawer-body">
             <GmailCard />
             <TelegramCard />
-            <YouTubeCard />
             <WhatsAppCard />
+            <YouTubeCard />
             <SerpApiCard />
+            <SocialTokenCard
+              spec={{
+                id: "discord",
+                label: "Discord",
+                icon: <MessageCircle size={14} />,
+                tokenLabel: "bot token",
+                tokenPlaceholder: "Bot token from the Developer Portal",
+                guideHref: "https://discord.com/developers/applications",
+                guideText: "Create a bot in the Discord Developer Portal",
+                description: "Send messages to a server VYOM's bot is in.",
+              }}
+            />
+            <SocialTokenCard
+              spec={{
+                id: "twitter",
+                label: "Twitter / X",
+                icon: <Send size={14} />,
+                tokenLabel: "access token",
+                tokenPlaceholder: "OAuth 2.0 User Context access token",
+                guideHref: "https://developer.x.com/en/portal",
+                guideText: "Get a token from the X Developer Portal",
+                description: "Post tweets, up to 280 characters.",
+              }}
+            />
+            <SocialTokenCard
+              spec={{
+                id: "linkedin",
+                label: "LinkedIn",
+                icon: <Send size={14} />,
+                tokenLabel: "access token",
+                tokenPlaceholder: "OAuth 2.0 access token",
+                guideHref: "https://www.linkedin.com/developers/",
+                guideText: "Create an app in the LinkedIn Developers portal",
+                description: "Post text updates to your LinkedIn feed.",
+              }}
+            />
+            <SocialTokenCard
+              spec={{
+                id: "facebook",
+                label: "Facebook",
+                icon: <MessageCircle size={14} />,
+                tokenLabel: "Page access token",
+                tokenPlaceholder: "Long-lived Page access token",
+                guideHref: "https://developers.facebook.com/tools/explorer/",
+                guideText: "Get a Page token from the Graph API Explorer",
+                description: "Post text, links, and photos to your Facebook Page.",
+              }}
+            />
+            <InstagramCard />
           </div>
         </aside>
       )}
