@@ -70,6 +70,8 @@ pub fn run() {
             voice::voice_audio_stream_end,
             voice::voice_disconnect,
             desktop::show_native_notification,
+            desktop::minimize_vyom_window,
+            desktop::restore_vyom_window,
         ])
         .setup(|app| {
             if app.get_webview_window("main").is_none() {

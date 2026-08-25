@@ -82,3 +82,33 @@ pub fn show_native_notification(app: AppHandle, title: String, body: String) -> 
         .show()
         .map_err(|error| error.to_string())
 }
+
+/// Minimize VYOM's own window. Called (via the frontend bridge) when a
+/// task is about to run in the BACKGROUND (see app/execution/visibility.py
+/// in the Brain): VYOM works invisibly and gets out of the user's way
+/// rather than keeping a window up for work the user can't see anyway.
+#[tauri::command]
+pub fn minimize_vyom_window(app: AppHandle) -> Result<(), String> {
+    app.get_webview_window("main")
+        .map(|window| window.minimize())
+        .unwrap_or(Ok(()))
+        .map_err(|error| error.to_string())
+}
+
+/// Restore VYOM's own window to the foreground. Called when a BACKGROUND
+/// task finishes, or when the user wants VYOM back after it minimized
+/// itself for a silent run.
+#[tauri::command]
+pub fn restore_vyom_window(app: AppHandle) -> Result<(), String> {
+    let Some(window) = app.get_webview_window("main") else {
+        return Ok(());
+    };
+    window
+        .unminimize()
+        .or_else(|_| window.show())
+        .and_then(|_| {
+            window.set_focus()?;
+            Ok(())
+        })
+        .map_err(|error| error.to_string())
+}
