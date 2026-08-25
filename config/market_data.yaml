@@ -31,7 +31,15 @@ providers:
     # existing offline tests/demos are unaffected; callers that want real
     # data ask ProviderRegistry for provider_id="yahoo-finance" explicitly.
 
-default_provider: local-fixture
+default_provider: yahoo-finance
+# Real, free, live-market-hours-aware Yahoo Finance data is the default
+# for every /api/markets/* call now that it exists and is verified
+# working (see app/market_data/yahoo_provider.py) — a caller asking
+# "what's TSLA trading at" should get the real, live-verified price by
+# default, not silently get a deterministic fixture value with no signal
+# that it isn't real. local-fixture remains fully available and is what
+# tests/demos explicitly request via provider_id="local-fixture" — this
+# only changes what an UNQUALIFIED request resolves to.
 
 freshness:
   live_max_age_seconds: 15
