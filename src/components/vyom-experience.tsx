@@ -98,21 +98,42 @@ export function VyomExperience() {
   // response used to be spoken, which is why it repeated "on it" while a
   // mission was still working. Progress belongs on the canvas; the voice
   // is reserved for the outcome (or a state that needs the user).
+  //
+  // FIX (Aug 2026): The previous implementation had a race condition —
+  // composerState, response, and terminalEventKey are set by separate
+  // useState calls and React batches/re-renders them independently.
+  // The effect fired when terminalEventKey arrived but composerState
+  // wasn't "Completed" yet → returned early. Next render composerState
+  // updated → effect fired again → but either spokenTerminalRef was
+  // already set (if the key matched) OR terminalEventKey was null (if
+  // next command cleared it). Result: 61/61 voice completions silent.
+  //
+  // Fix: terminalEventKey is the authoritative signal that a terminal
+  // event arrived. We capture the response at that moment using a ref
+  // so we're not racing against async state updates. composerState check
+  // removed — terminalEventKey already encodes the event type.
   const spokenTerminalRef = useRef<string | null>(null);
+  const lastResponseRef = useRef<string | null>(null);
+  lastResponseRef.current = response;
+
   useEffect(() => {
-    if (!voice.sessionActive || !response || !terminalEventKey) return;
-    const terminal =
-      composerState === "Completed" || composerState === "Failed" || composerState === "WaitingApproval";
-    if (!terminal) return;
+    if (!terminalEventKey) return;
+    if (!voice.sessionActive) return;
     if (spokenTerminalRef.current === terminalEventKey) return;
+    // Capture response synchronously at the moment terminalEventKey fires.
+    // This avoids the race where response is set in the same batch but
+    // composerState hasn't caught up yet.
+    const textToSpeak = lastResponseRef.current;
+    if (!textToSpeak) return;
     spokenTerminalRef.current = terminalEventKey;
     // The final TTS hop of the command path, through the same trace
     // mechanism as every other hop, so a session can be analyzed
-    // end-to-end (utterance -> task -> terminal -> ONE spoken answer)
-    // from the existing trace file.
-    trace(newCorrelationId(), "tts.speak", { state: composerState, text: response.slice(0, 200) });
-    voice.speak(response);
-  }, [response, composerState, terminalEventKey, voice]);
+    // end-to-end (utterance -> task -> terminal -> ONE spoken answer).
+    trace(newCorrelationId(), "tts.speak", { terminalKey: terminalEventKey, text: textToSpeak.slice(0, 200) });
+    voice.speak(textToSpeak);
+  // Intentionally exclude composerState — it races with terminalEventKey.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terminalEventKey, voice]);
   const state = voice.sessionActive && voice.state !== "Idle" ? voice.state : composerState;
   const visual = STATE_VISUALS[state];
   const isBusy = busy || (voice.sessionActive && voice.state !== "Idle");

@@ -110,6 +110,17 @@ export function useVyomRuntime(): RuntimeSnapshot {
   // Tracks whether VYOM's own window has been minimized for a background
   // task, so we restore it exactly once when that task finishes.
   const windowMinimizedRef = useRef(false);
+  // FIX (Aug 2026) DOUBLE-ANSWER / duplicate commands. The same command
+  // was being dispatched to the Brain many times ("What is my status
+  // today?" -> 7 tasks, 'Analyze NVDA' -> 9 tasks). The voice dedup only
+  // catches near-simultaneous duplicates within a 2.2s window; a second
+  // dispatch of the SAME command while its first task is still running
+  // sailed straight through. This ref holds the last in-flight command;
+  // submitToBrain won't create a duplicate task for it until the first
+  // reaches a terminal event (task_completed/failed/cancelled). Genuine
+  // re-asks after a result are unaffected.
+  const inFlightCommandRef = useRef<string | null>(null);
+  const inFlightTaskIdRef = useRef<string | null>(null);
 
   useEffect(() => { compositionRef.current = composition; }, [composition]);
   useEffect(() => { activeTaskRef.current = activeTaskId; }, [activeTaskId]);
@@ -220,6 +231,16 @@ export function useVyomRuntime(): RuntimeSnapshot {
             ? "Background task failed"
             : "Background task cancelled";
         void dispatchNativeNotification(backgroundTitle, event.human_readable_message);
+        // FIX (Aug 2026): Rapid voice commands (e.g. two questions spoken
+        // 0.6s apart) bump the first task to background before its response
+        // arrives — causing it to be silently dropped. If voice is active
+        // and no foreground task is currently speaking, surface the result.
+        // This is what the user expects: BOTH answers come back.
+        if (event.type === "task_completed") {
+          const bgResponse = event.structured_payload.response ?? event.human_readable_message;
+          if (bgResponse) void dispatchWindowVisibility("restore").catch(() => undefined);
+          void dispatchNativeNotification("VYOM (earlier task)", bgResponse ?? "Completed");
+        }
       }
       return;
     }
@@ -349,6 +370,8 @@ export function useVyomRuntime(): RuntimeSnapshot {
             response: event.structured_payload.response ?? event.human_readable_message,
           });
         }
+        inFlightCommandRef.current = null;
+        inFlightTaskIdRef.current = null;
         setApproval(null);
         if (event.structured_payload.task?.result?.structured_data?.clear_workspace) {
           setVisibleObjectIds([]);
@@ -369,6 +392,8 @@ export function useVyomRuntime(): RuntimeSnapshot {
             error: event.structured_payload.error ?? event.human_readable_message,
           });
         }
+        inFlightCommandRef.current = null;
+        inFlightTaskIdRef.current = null;
         setApproval(null);
         setState("Failed");
         setResponse(event.structured_payload.error ?? event.human_readable_message);
@@ -378,6 +403,8 @@ export function useVyomRuntime(): RuntimeSnapshot {
         returnToCalm(4200);
         break;
       case "task_cancelled":
+        inFlightCommandRef.current = null;
+        inFlightTaskIdRef.current = null;
         setApproval(null);
         setState("Idle");
         setResponse("Task cancelled.");
@@ -408,6 +435,20 @@ export function useVyomRuntime(): RuntimeSnapshot {
     const correlation = correlationId ?? newCorrelationId();
     const submission = ++foregroundSubmissionRef.current;
     correlationRef.current = correlation;
+    // FIX (Aug 2026): collapse duplicate dispatch of the SAME command while
+    // its first task is still in-flight. This is the source of the
+    // double/multi-answer problem (one question -> 4-9 tasks). A second
+    // submit of the identical normalized command is dropped unless the
+    // previous task already reached a terminal event or it is an explicit
+    // supersede. Genuine re-asks after a completed result still work.
+    const normCommand = command.trim().toLowerCase();
+    if (!options?.supersedesPrevious && inFlightCommandRef.current === normCommand) {
+      trace(correlation, "command.submit.deduplicated", {
+        command, in_flight: inFlightTaskIdRef.current,
+      });
+      return;
+    }
+    inFlightCommandRef.current = normCommand;
     trace(correlation, "command.submitted", { command, source: correlationId ? "voice" : "text" });
     clearTimers();
     // A voice turn split by a premature VAD end-of-turn (see voice.rs) can
@@ -449,6 +490,7 @@ export function useVyomRuntime(): RuntimeSnapshot {
       }
       activeTaskRef.current = task.id;
       setActiveTaskId(task.id);
+      inFlightTaskIdRef.current = task.id;
       setBrainConnection("online");
       trace(correlation, "brain.task_created", { task_id: task.id, command });
     }).catch((error: unknown) => {
