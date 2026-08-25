@@ -26,9 +26,9 @@ mcp_servers:
   # real MCP handshake completed, real tools registered into the shared
   # ToolRegistry alongside the built-in tools.
   - id: fs-temp
-    name: "Filesystem (Temp scratch space)"
+    name: "Filesystem (Project + Temp scratch space)"
     command: npx
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "${TEMP}"]
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "${TEMP}", "${VYOM_PROJECT_ROOT:-C:\\VYOM Project}"]
     trust_level: restricted
     timeout_seconds: 45
   - id: memory
