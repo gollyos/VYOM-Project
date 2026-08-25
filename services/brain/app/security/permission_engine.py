@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from app.schemas.approvals import PermissionLevel
 
 
@@ -11,7 +13,7 @@ class PermissionEngine:
         "install software", "install a program", "admin action", "elevated action", "run as administrator",
     }
     L2_MARKERS = {
-        "send email", "send message", "post publicly", "publish", "deploy",
+        "send email", "send an email", "send message", "post publicly", "publish", "deploy",
         "book a", "reserve a", "schedule meeting", "schedule a meeting", "update crm", "submit form",
         "send approved outreach", "send the approved email",
         "send to client", "deliver to", "prepare everything ready to send", "upload deliverable",
@@ -86,6 +88,15 @@ class PermissionEngine:
 
     def classify(self, request: str) -> PermissionLevel:
         normalized = request.lower()
+        # A robust catch for "send [an/the/that/my] email/message ..." in
+        # any article/phrasing variant — the exact-substring L2_MARKERS
+        # list below only ever catches phrasings someone thought to add
+        # verbatim (bug found via real live testing: "send an email to X"
+        # matched neither "send email" nor any other marker and silently
+        # skipped the approval gate entirely). Real external sends are
+        # always L2 regardless of the exact article used.
+        if re.search(r"\bsend\b.{0,20}\b(email|message)\b", normalized):
+            return PermissionLevel.L2
         # Phase 10: paper trading is simulated, never real money. Checked
         # before the generic "trade "/"buy stock" L3 markers below so a
         # phrase like "create a paper trade setup" is never misclassified

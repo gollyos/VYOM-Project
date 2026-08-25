@@ -791,6 +791,17 @@ class TaskClassifier:
             return TaskProfile(domain=TaskDomain.AGENCY, complexity=1, deterministic=True, intent="crm_summary", needs={"business"})
         if "show inbox" in text or "show me my inbox" in text or "search my email" in text:
             return TaskProfile(domain=TaskDomain.COMMUNICATION, complexity=1, deterministic=True, intent="email_inbox", needs={"business"})
+        # A generic "send an email to X..." request — the L2/L3 permission
+        # gate is already set by PermissionEngine.classify() elsewhere;
+        # this only has to route the intent to a real tool workflow once
+        # approved, instead of falling through to "general" and hitting
+        # "No registered consequential workflow exists for this approved
+        # request" after the user already approved sending it.
+        if "send" in text and "email" in text and "approved outreach" not in text and "the approved email" not in text:
+            return TaskProfile(
+                domain=TaskDomain.COMMUNICATION, complexity=2, deterministic=True,
+                intent="send_email", needs={"tools"}, privacy="highly_sensitive",
+            )
         if "schedule" in text and ("meeting" in text or "calendar" in text):
             return TaskProfile(domain=TaskDomain.COMMUNICATION, complexity=2, deterministic=True, intent="schedule_meeting", needs={"business"})
         if "prepare me for" in text and "meeting" in text and "market briefing" not in text:

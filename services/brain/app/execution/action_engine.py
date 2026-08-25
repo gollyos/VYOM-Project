@@ -41,6 +41,10 @@ TOOL_INTENTS = {
     "recover_visibility",
     # Machine state read natively (psutil/platform), never through a shell.
     "system_query",
+    # Sending a real email through the connected Gmail provider (OAuth or
+    # App-Password) — see EmailTool. L2-gated by PermissionEngine before
+    # this intent is ever reached.
+    "send_email",
 }
 
 # Spoken/typed application names -> app_id in the Application Registry.
@@ -235,6 +239,8 @@ class ActionEngine:
                 return await self._screen_observe(task, context)
             if profile.intent == "system_query":
                 return await self._system_query(task, context)
+            if profile.intent == "send_email":
+                return await self._send_email(task, context)
             if profile.intent == "recover_visibility":
                 return await self._recover_visibility(task, context)
             if profile.intent == "browser_tab_close":
@@ -463,6 +469,72 @@ class ActionEngine:
             structured_data={"path": str(directory), "entries": entries},
             ui_composition=self._base_composition(identifier="fs-listing", summary=summary, objects=objects),
             evidence=[f"Listed {len(entries)} entries under {directory}"],
+            usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
+
+    async def _send_email(self, task: Task, context) -> ExecutionResult:
+        """Parses a natural-language 'send an email to X with subject Y
+        and body Z' request and routes it through the real EmailTool
+        (draft -> approve -> send), so the approval this task already
+        obtained (L2, via PermissionEngine) actually results in a real
+        message being sent instead of dead-ending on 'No registered
+        consequential workflow'. Recipients, subject and body are
+        extracted with permissive regexes; anything unparseable raises a
+        clear error rather than guessing."""
+        request = task.user_request
+
+        recipient_match = re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", request)
+        if recipient_match is None:
+            raise RuntimeError(
+                "No email address was found in the request; VYOM will not guess a recipient."
+            )
+        recipient = recipient_match.group(0)
+
+        subject_match = re.search(r'subject[:\s]+["“]([^"”]+)["”]', request, re.IGNORECASE)
+        if subject_match is None:
+            subject_match = re.search(r"subject[:\s]+(.+?)(?:\s+and body|\s+body[:\s]|$)", request, re.IGNORECASE)
+        subject = subject_match.group(1).strip() if subject_match else "(no subject)"
+
+        body_match = re.search(r'body[:\s]+["“]([^"”]+)["”]', request, re.IGNORECASE)
+        if body_match is None:
+            body_match = re.search(r"body[:\s]+(.+)$", request, re.IGNORECASE)
+        body = body_match.group(1).strip() if body_match else ""
+        if not body:
+            raise RuntimeError(
+                "No email body was found in the request (expected a 'body: ...' clause); "
+                "VYOM will not send an empty message."
+            )
+
+        draft_result = await self.executor.invoke(
+            "email",
+            {"action": "draft", "to": [recipient], "subject": subject, "body": body},
+            context,
+        )
+        if not draft_result.success:
+            raise RuntimeError(draft_result.error or "Failed to draft the email")
+        draft_id = draft_result.structured_output.get("id")
+        if not draft_id:
+            raise RuntimeError("Email draft did not return an id — cannot proceed to send")
+
+        send_result = await self.executor.invoke("email", {"action": "send", "draft_id": draft_id}, context)
+        if not send_result.success:
+            raise RuntimeError(send_result.error or "Failed to send the email")
+        message_id = send_result.structured_output.get("message_id", "")
+
+        summary = f"Sent email to {recipient} (subject: '{subject}', message_id={message_id})."
+        objects = [
+            {
+                "id": "verified", "type": "verified-result", "title": "Email sent",
+                "eyebrow": "Evidence", "tone": "verified", "statement": summary,
+                "evidence": [f"To: {recipient}", f"Subject: {subject}", f"Message ID: {message_id}"],
+                "timestamp": generated_at(), "frame": {"x": 12, "y": 6, "width": 60},
+            },
+        ]
+        return ExecutionResult(
+            response=summary,
+            structured_data={"to": recipient, "subject": subject, "message_id": message_id},
+            ui_composition=self._base_composition(identifier="email-sent", summary=summary, objects=objects),
+            evidence=[summary],
             usage=UsageRecord(total_tokens=0, estimated_cost=0),
         )
 
