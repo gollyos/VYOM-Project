@@ -19,6 +19,27 @@ class PlaywrightManager:
     def __init__(self):
         self._playwright: Any = None
         self._browser: Any = None
+        # Whether the browser shows on the user's real screen. Default
+        # headless=True (background, invisible). A task the user asked to
+        # WATCH (see app/execution/visibility.py) flips this to False so a
+        # REAL, visible browser window opens that they can see. Because the
+        # browser is long-lived and shared, this is set BEFORE the task's
+        # first browser action and applied on the next launch — it never
+        # hot-swaps a running browser mid-session (a visible window can't
+        # be silently made headless, and vice-versa without a reload).
+        self.headless = True
+
+    def set_headless(self, headless: bool) -> None:
+        self.headless = headless
+
+    def set_visibility(self, visibility: str) -> None:
+        """'visual' -> a real on-screen browser window; 'background' (or
+        anything else) -> headless. Central place the ActionEngine calls
+        to make a task's browser run visibly or invisibly."""
+        if visibility == "visual":
+            self.headless = False
+        else:
+            self.headless = True
 
     async def start(self) -> Any:
         if self._browser is not None:
@@ -31,7 +52,7 @@ class PlaywrightManager:
         executable = os.getenv("VYOM_BROWSER_EXECUTABLE")
         if not executable:
             executable = next((str(path) for path in EDGE_CANDIDATE_PATHS if path.exists()), None)
-        launch_options: dict[str, Any] = {"headless": True}
+        launch_options: dict[str, Any] = {"headless": self.headless}
         if executable:
             launch_options["executable_path"] = executable
         self._browser = await self._playwright.chromium.launch(**launch_options)

@@ -23,6 +23,7 @@ class ExecutionContextFactory:
         task_id: str,
         permission_level: PermissionLevel,
         emit: EventEmitter,
+        visibility: str | None = None,
     ) -> ToolContext:
         cancellation = self._cancellations.setdefault(task_id, asyncio.Event())
         context = ToolContext(
@@ -32,6 +33,12 @@ class ExecutionContextFactory:
             cancellation_event=cancellation,
             emit=emit,
         )
+        # Per-task visibility decision flows to tools via metadata. The
+        # BrowserTool reads this to open a real on-screen window for a
+        # 'visual' task (headless=False) instead of the default hidden
+        # headless browser — see app/execution/visibility.py.
+        if visibility:
+            context.metadata["visibility"] = visibility
         self._contexts[task_id] = context
         return context
 

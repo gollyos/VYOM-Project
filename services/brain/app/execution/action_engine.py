@@ -218,7 +218,7 @@ class ActionEngine:
             )
 
     async def execute(self, task: Task, profile: TaskProfile, emit) -> ExecutionResult:
-        context = self.context_factory.create(task.id, task.permission_level, emit)
+        context = self.context_factory.create(task.id, task.permission_level, emit, visibility=getattr(profile, "visibility", None))
         self._require_capability(profile.intent)
         self._reject_incompatible_capability(task, profile)
         self._authorize_external_action(task, profile.intent)

@@ -68,6 +68,14 @@ class TaskProfile(BaseModel):
     privacy: str = "normal"
     deterministic: bool = False
     intent: str = "general"
+    #: Whether VYOM should run this task in the BACKGROUND (its own window
+    #: minimized/hidden, headless browser, invisible) or VISUALLY on the
+    #: user's screen (a real non-headless browser, real OS mouse). Decided
+    #: per-task by app/execution/visibility.classify_visibility() so VYOM
+    #: KNOWS how to present the work before it starts (see
+    #: TaskClassifier). Defaults to 'background' — the safe, non-disruptive
+    #: direction unless the user explicitly asked to watch.
+    visibility: str = "background"
 
 
 class PlanStep(BaseModel):

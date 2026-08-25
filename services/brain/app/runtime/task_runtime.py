@@ -19,6 +19,7 @@ from app.schemas.routing import RoutingDecision
 from app.schemas.tasks import ActionProvenance, Task, TaskCreate, TaskDomain, TaskStatus
 from app.security.permission_engine import PermissionEngine
 from app.execution.action_engine import ActionEngine
+from app.execution.visibility import classify_visibility
 from app.learning.intelligence_engine import IntelligenceEngine
 from app.briefing.engine import BusinessEngine
 from app.phase8.engine import Phase8Engine
@@ -247,6 +248,12 @@ class TaskRuntime:
             task.started_at = task.started_at or datetime.now(timezone.utc)
             await self._transition(task, TaskStatus.UNDERSTANDING, EventType.TASK_UNDERSTANDING, "Understanding the request")
             profile = self.classifier.classify(task.user_request)
+            # Per-task visibility: decide BEFORE execution whether VYOM
+            # should run this in the BACKGROUND (headless/invisible) or
+            # VISUALLY on the user's screen (real non-headless browser /
+            # real OS mouse). The browser manager reads this to pick
+            # headless vs headed; the frontend may also minimize itself.
+            profile.visibility = classify_visibility(task.user_request).value
             task.profile = profile
             task.domain = profile.domain
             task.complexity = profile.complexity
@@ -1646,7 +1653,7 @@ class TaskRuntime:
         async def emit_tool(event_type: str, message: str, payload: dict) -> None:
             await self._emit(task, EventType(event_type), message, payload)
 
-        context = self.action_engine.context_factory.create(task.id, task.permission_level, emit_tool)
+        context = self.action_engine.context_factory.create(task.id, task.permission_level, emit_tool, visibility=getattr(task.profile, "visibility", None))
         collected: list[dict] = []
 
         async def execute_call(call) -> dict:

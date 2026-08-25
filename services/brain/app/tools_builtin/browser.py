@@ -50,6 +50,11 @@ class BrowserTool(BaseTool):
         self.validate(inputs, context)
         action = str(inputs["action"])
         await context.emit("browser_action", f"Browser {action}", {"action": action, "url": inputs.get("url")})
+        # Honor the task's per-task visibility decision: a 'visual' task
+        # opens a REAL, on-screen browser window (headless=False) the user
+        # can watch; 'background' (or unset) stays headless/invisible. The
+        # manager applies this on the next browser launch.
+        self.actions.set_visibility(context.metadata.get("visibility"))
         output = await self.actions.perform(action, inputs)
         evidence_type = "browser_screenshot" if action == "screenshot" else "browser_confirmation"
         evidence = EvidenceItem(type=evidence_type, summary=f"Browser {action} completed", data=output)

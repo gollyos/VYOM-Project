@@ -10,6 +10,17 @@ class BrowserActions:
     def __init__(self, session: BrowserSession):
         self.session = session
 
+    def set_visibility(self, visibility: str | None) -> None:
+        """Tell the underlying PlaywrightManager whether the next browser
+        launch should be HEADED (a real, on-screen window the user can
+        watch) or HEADLESS (invisible/background). Passed through from the
+        task's visibility decision (see app/execution/visibility.py); a
+        None/background value is the safe headless default. Because the
+        browser is long-lived, this is applied on the next launch, never
+        hot-swapped mid-session."""
+        if visibility and getattr(self.session.manager, "set_visibility", None):
+            self.session.manager.set_visibility(visibility)
+
     async def perform(self, action: str, inputs: dict[str, Any], *, timeout: float | None = None) -> dict[str, Any]:
         """Bounded: always runs the real Playwright work on the session's
         dedicated worker loop (see BrowserSession), so a stuck navigation
