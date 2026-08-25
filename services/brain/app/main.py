@@ -285,7 +285,7 @@ from app.sheets.service import SheetsService
 from app.calendar.service import CalendarService
 from app.contacts.resolver import ContactResolver
 from app.crm.store import CRMStore
-from app.email.provider import DisconnectedEmailProvider, GmailProvider, GMAIL_SCOPES
+from app.email.provider import CombinedEmailProvider, DisconnectedEmailProvider, GmailAppPasswordProvider, GmailProvider, GMAIL_SCOPES
 from app.email.service import EmailService
 from app.integrations.registry import IntegrationRegistry
 from app.integrations.secrets import UnavailableSecretVault, WindowsDPAPISecretVault
@@ -488,11 +488,19 @@ def create_app(
         if google_client_id and google_client_secret:
             gmail_oauth = GoogleOAuthClient(google_client_id, google_client_secret, GMAIL_SCOPES)
             sheets_oauth = GoogleOAuthClient(google_client_id, google_client_secret, SHEETS_SCOPES)
-            email_provider = GmailProvider(gmail_oauth, secret_vault)
+            oauth_email_provider = GmailProvider(gmail_oauth, secret_vault)
             sheets_provider = GoogleSheetsProvider(sheets_oauth, secret_vault)
         else:
-            email_provider = DisconnectedEmailProvider()
+            oauth_email_provider = DisconnectedEmailProvider()
             sheets_provider = DisconnectedSheetsProvider()
+        # App-Password Gmail is ALWAYS constructed (no client_id/secret
+        # needed — it is the simple path specifically because it needs
+        # none) and combined with whichever the OAuth path resolved to.
+        # POST /api/email/app-password/connect activates it; until a user
+        # calls that (or completes OAuth), CombinedEmailProvider.health()
+        # honestly reports disconnected via both.
+        app_password_provider = GmailAppPasswordProvider(secret_vault)
+        email_provider = CombinedEmailProvider(app_password_provider, oauth_email_provider)
         calendar_provider = DisconnectedCalendarProvider()
         if "gmail" in integration_registry.records:
             integration_registry.register_provider("gmail", email_provider)
@@ -1513,6 +1521,7 @@ def create_app(
         application.state.integration_registry = integration_registry
         application.state.crm_store = crm_store
         application.state.email_service = email_service
+        application.state.gmail_app_password_provider = app_password_provider
         application.state.calendar_service = calendar_service
         application.state.sheets_service = sheets_service
         application.state.telegram_provider = telegram_provider
