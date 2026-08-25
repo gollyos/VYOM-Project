@@ -169,6 +169,7 @@ def test_live_app_brain_composition_and_authenticated_phone_pairing(tmp_path: Pa
         database_path=tmp_path / "app.db", skills_root=tmp_path / "skills", agents_root=tmp_path / "agents",
         audit_log_path=tmp_path / "audit.jsonl", secret_store_path=tmp_path / "secrets",
         artifacts_root=tmp_path / "artifacts", backup_root=tmp_path / "backups",
+        tool_registry_path=Path(__file__).parent / "fixtures" / "tools_no_mcp.yaml",
     )
     with TestClient(create_app(settings)) as client:
         composition = client.get("/api/brain-graph/composition")

@@ -247,6 +247,7 @@ async def test_mission_cancellation_during_real_browser_navigation_leaves_no_orp
             database_path=base / "e2e.db", skills_root=base / "skills", agents_root=base / "agents",
             audit_log_path=base / "audit.jsonl", secret_store_path=base / "secrets",
             artifacts_root=base / "artifacts", backup_root=base / "backups",
+            tool_registry_path=Path(__file__).parent / "fixtures" / "tools_no_mcp.yaml",
         )
         with TestClient(create_app(settings)) as client:
             state = client.app.state

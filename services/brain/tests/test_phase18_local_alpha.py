@@ -18,6 +18,7 @@ def _settings(base: Path) -> Settings:
         database_path=base / "phase18.db", skills_root=base / "skills", agents_root=base / "agents",
         audit_log_path=base / "audit.jsonl", secret_store_path=base / "secrets",
         artifacts_root=base / "artifacts", backup_root=base / "backups",
+        tool_registry_path=Path(__file__).parent / "fixtures" / "tools_no_mcp.yaml",
     )
 
 

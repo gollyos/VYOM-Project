@@ -397,6 +397,7 @@ async def test_live_task_runtime_uses_cognitive_resolution(tmp_path: Path):
         database_path=tmp_path / "b.db", skills_root=tmp_path / "s", agents_root=tmp_path / "a",
         audit_log_path=tmp_path / "a.jsonl", secret_store_path=tmp_path / "sec",
         artifacts_root=tmp_path / "art", backup_root=tmp_path / "bk",
+        tool_registry_path=Path(__file__).parent / "fixtures" / "tools_no_mcp.yaml",
     )
     import time
 

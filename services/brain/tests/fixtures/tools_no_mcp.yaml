@@ -1,0 +1,23 @@
+version: 1
+allowed_roots:
+  - ${VYOM_PROJECT_ROOT:-C:\VYOM Project}
+tools:
+  filesystem:
+    enabled: true
+    risk: low
+  terminal:
+    enabled: true
+    risk: medium
+  git:
+    enabled: true
+    risk: medium
+  browser:
+    enabled: true
+    risk: medium
+  screenshot:
+    enabled: true
+    risk: medium
+  system:
+    enabled: true
+    risk: medium
+mcp_servers: []

@@ -301,6 +301,12 @@ async def test_live_boot_with_phase15_stack(tmp_path):
         database_path=tmp_path / "b.db", skills_root=tmp_path / "s", agents_root=tmp_path / "a",
         audit_log_path=tmp_path / "a.jsonl", secret_store_path=tmp_path / "sec",
         artifacts_root=tmp_path / "art", backup_root=tmp_path / "bk",
+        # No real MCP servers on a unit-test boot - they are subprocess/
+        # network I/O unrelated to what this test verifies, and connecting
+        # every configured server on each create_app() call slowed the
+        # suite dramatically once real servers were wired into
+        # config/tools.yaml.
+        tool_registry_path=Path(__file__).parent / "fixtures" / "tools_no_mcp.yaml",
     )
     with TestClient(create_app(settings)) as client:
         assert client.get("/healthz").json()["alive"] is True
