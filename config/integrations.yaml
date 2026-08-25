@@ -60,6 +60,26 @@ integrations:
     metadata:
       auth: access_token
       secret_storage: windows-dpapi
+  - id: linkedin
+    name: LinkedIn
+    provider: linkedin
+    category: content
+    enabled: true
+    status: disconnected
+    capabilities: [social.post]
+    metadata:
+      auth: access_token
+      secret_storage: windows-dpapi
+  - id: twitter
+    name: Twitter/X
+    provider: twitter
+    category: content
+    enabled: true
+    status: disconnected
+    capabilities: [social.post]
+    metadata:
+      auth: access_token
+      secret_storage: windows-dpapi
   - id: meta-ads
     name: Meta Ads
     provider: meta
@@ -78,6 +98,16 @@ integrations:
     enabled: true
     status: disconnected
     capabilities: [telegram.send, telegram.poll, telegram.list_chats]
+    metadata:
+      auth: bot_token
+      secret_storage: windows-dpapi
+  - id: discord
+    name: Discord
+    provider: discord
+    category: messaging
+    enabled: true
+    status: disconnected
+    capabilities: [discord.send, discord.list_guilds]
     metadata:
       auth: bot_token
       secret_storage: windows-dpapi
