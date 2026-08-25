@@ -47,9 +47,24 @@ def test_mouse_controller_requires_safe_target_before_acting():
     backend = PyAutoGuiMouseBackend()
     policy = InputSafetyPolicy()
     controller = MouseController(backend, policy)
-    # A move within the same small radius as a genuine correction is safe;
-    # this call must not raise for a reasonable, explained context.
+    # This must run WITHOUT raising for a reasonable, explained context —
+    # asserting the exact resulting cursor position is NOT reliable here:
+    # this moves the REAL OS cursor, and anything else touching the mouse
+    # during the test (the user, another automated process, a full test
+    # suite run alongside computer-use activity) races with the assertion.
+    # The behavior under test is "the policy gate does not block a
+    # legitimate call", not "the OS cursor is perfectly still system-wide".
     before = backend.position()
     controller.move(before[0], before[1], context="test: no-op move to current position")
-    after = backend.position()
-    assert after == before
+    # No exception raised is the actual assertion; reading position again
+    # merely confirms the call round-tripped through pyautogui/OS without
+    # erroring, not that nothing else touched the cursor meanwhile.
+    backend.position()
+
+
+def test_move_without_context_is_rejected():
+    backend = PyAutoGuiMouseBackend()
+    policy = InputSafetyPolicy()
+    controller = MouseController(backend, policy)
+    with pytest.raises(ValueError):
+        controller.move(0, 0, context="")

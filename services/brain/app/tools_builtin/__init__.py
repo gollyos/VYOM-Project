@@ -9,9 +9,10 @@ from .screenshot import ScreenshotTool
 from .sheets_tool import SheetsTool
 from .system import SystemTool
 from .telegram_tool import TelegramTool
+from .video_tool import VideoTool
 from .terminal import TerminalTool
 
 __all__ = [
     "BrowserTool", "DesktopTool", "EmailTool", "FilesystemTool", "GitTool", "InputControlTool",
-    "ScreenObserveTool", "ScreenshotTool", "SheetsTool", "SystemTool", "TelegramTool", "TerminalTool",
+    "ScreenObserveTool", "ScreenshotTool", "SheetsTool", "SystemTool", "TelegramTool", "VideoTool", "TerminalTool",
 ]

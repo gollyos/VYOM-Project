@@ -34,7 +34,11 @@ dependencies = [
   # QR code generation for the Telegram bot connect flow (app/api/telegram.py)
   # — VYOM renders a scannable t.me/<bot> link the same way Hermes does for
   # its own connect UX, instead of asking the user to type a chat_id.
-  "qrcode[pil]>=7.4,<8"
+  "qrcode[pil]>=7.4,<8",
+  # Free, no-API-key text-to-speech for the video pipeline's narration
+  # track (app/video/builder.py) — Microsoft's edge-tts service, same
+  # engine backing Windows' own Narrator voices.
+  "edge-tts>=7.0,<8"
 ]
 
 [project.optional-dependencies]

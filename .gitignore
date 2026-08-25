@@ -16,3 +16,4 @@ services/brain/data/*.db-wal
 services/brain/data/*.jsonl
 services/brain/data/screenshots/
 .wwebjs_auth/
+services/brain/data/video-jobs/
