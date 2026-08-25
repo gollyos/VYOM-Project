@@ -60,6 +60,17 @@ integrations:
     metadata:
       auth: access_token
       secret_storage: windows-dpapi
+  - id: meta-ads
+    name: Meta Ads
+    provider: meta
+    category: advertising
+    enabled: true
+    status: disconnected
+    capabilities: [ads.campaign_create]
+    metadata:
+      auth: access_token
+      secret_storage: windows-dpapi
+      safety: campaigns always created PAUSED, daily budget hard-capped at $100
   - id: telegram
     name: Telegram
     provider: telegram
