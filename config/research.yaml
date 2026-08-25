@@ -43,6 +43,13 @@ search_providers:
   browser_search:
     enabled: true
     search_url_template: "https://duckduckgo.com/html/?q={query}"
+  serpapi:
+    # Real Google search via SerpAPI — disconnected by default (no key).
+    # Connect via POST /api/search/serpapi/connect (client pastes their
+    # own SerpAPI key, same self-service pattern as Gmail App-Password).
+    # When connected, this is tried FIRST (before browser_search) since
+    # it returns real Google results without scraping a page.
+    enabled: true
 
 # Source trust policy weights by source_type. See docs/SOURCE_TRUST_POLICY.md.
 trust_weights:

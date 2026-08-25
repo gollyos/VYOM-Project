@@ -10,7 +10,7 @@ from .extractor import ClaimExtractor
 from .freshness import FreshnessPolicy
 from .query_planner import QueryPlanner
 from .schemas import Freshness, ResearchDepth, ResearchPlan, ResearchResult, SourceType
-from .source_discovery import BrowserSearchProvider, LocalFixtureSearchProvider, SearchProvider, SourceDiscovery
+from .source_discovery import BrowserSearchProvider, LocalFixtureSearchProvider, SearchProvider, SerpApiSearchProvider, SourceDiscovery
 from .source_ranker import SourceRanker
 from .synthesizer import ResearchSynthesizer
 from .verifier import ResearchVerifier
@@ -79,6 +79,7 @@ class DeepResearchTask:
         browser_actions: Any = None,
         defuddle_extractor: Any = None,
         knowledge_service: Any = None,
+        serpapi_key: str | None = None,
     ) -> "DeepResearchTask":
         query_planner = QueryPlanner.from_config(config)
         source_ranker = SourceRanker.from_config(config)
@@ -87,6 +88,11 @@ class DeepResearchTask:
         providers: list[SearchProvider] = []
         search_config = config.get("search_providers", {})
         browser_config = search_config.get("browser_search", {})
+        # SerpAPI (real Google results) is tried FIRST when a key is
+        # connected — it needs no page-structure scraping and is more
+        # reliable than BrowserSearchProvider's DuckDuckGo HTML parsing.
+        if search_config.get("serpapi", {}).get("enabled", True) and serpapi_key:
+            providers.append(SerpApiSearchProvider(serpapi_key))
         if browser_config.get("enabled") and browser_actions is not None:
             providers.append(BrowserSearchProvider(browser_actions, browser_config.get(
                 "search_url_template", "https://duckduckgo.com/html/?q={query}",

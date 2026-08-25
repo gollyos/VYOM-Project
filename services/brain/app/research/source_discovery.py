@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
+import httpx
+
 from .schemas import ResearchPlan, Source, SourceType
 
 
@@ -131,6 +133,72 @@ class BrowserSearchProvider(SearchProvider):
             })
             if len(results) >= limit:
                 break
+        return results
+
+
+class SerpApiSearchProvider(SearchProvider):
+    """Real Google search results via SerpAPI (https://serpapi.com) — a
+    paid, structured JSON search API, chosen over scraping DuckDuckGo's
+    HTML (BrowserSearchProvider above) when a client provides their own
+    key: it's faster, more reliable (no page-structure scraping to
+    break), and returns real Google results rather than DuckDuckGo's.
+    Connected via a simple API-key paste (POST /api/search/serpapi/
+    connect), matching the App-Password/access-token connect pattern
+    used by Gmail/Instagram/Meta-Ads elsewhere in this repo rather than
+    a full OAuth flow — SerpAPI itself only ever authenticates by key."""
+
+    name = "serpapi"
+
+    def __init__(self, api_key: str) -> None:
+        self.api_key = api_key
+        self._client: httpx.AsyncClient | None = None
+
+    def _pooled(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=20.0)
+        return self._client
+
+    async def health(self) -> tuple[bool, str | None]:
+        if not self.api_key:
+            return False, "SerpAPI is not connected (no key configured)"
+        try:
+            response = await self._pooled().get(
+                "https://serpapi.com/search",
+                params={"engine": "google", "q": "test", "api_key": self.api_key, "num": 1},
+            )
+        except Exception as error:
+            return False, f"SerpAPI health check failed: {error}"[:300]
+        if response.status_code == 401:
+            return False, "SerpAPI rejected the key (401 Unauthorized)"
+        if response.status_code >= 400:
+            return False, f"SerpAPI returned HTTP {response.status_code}"
+        data = response.json()
+        if "error" in data:
+            return False, f"SerpAPI error: {data['error']}"[:300]
+        return True, None
+
+    async def search(self, query: str, *, limit: int = 5) -> list[dict[str, Any]]:
+        response = await self._pooled().get(
+            "https://serpapi.com/search",
+            params={"engine": "google", "q": query, "api_key": self.api_key, "num": limit},
+        )
+        if response.status_code >= 400:
+            raise RuntimeError(f"SerpAPI search failed: HTTP {response.status_code}: {response.text[:200]}")
+        data = response.json()
+        if "error" in data:
+            raise RuntimeError(f"SerpAPI error: {data['error']}")
+        results: list[dict[str, Any]] = []
+        for item in data.get("organic_results", [])[:limit]:
+            url = item.get("link", "")
+            if not url:
+                continue
+            results.append({
+                "url": url,
+                "title": item.get("title") or url,
+                "publisher": "serpapi-google",
+                "source_type": SourceType.UNKNOWN.value,
+                "excerpt": item.get("snippet", ""),
+            })
         return results
 
 
