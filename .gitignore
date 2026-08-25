@@ -17,3 +17,5 @@ services/brain/data/*.jsonl
 services/brain/data/screenshots/
 .wwebjs_auth/
 services/brain/data/video-jobs/
+services/brain/whatsapp_connector/node_modules/
+services/brain/data/whatsapp-auth/

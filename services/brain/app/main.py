@@ -4,13 +4,14 @@ import asyncio
 import contextlib
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import uvicorn
 import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discovery as discovery_api, email as email_api, extension as extension_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api, meta_ads as meta_ads_api
+from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discovery as discovery_api, email as email_api, extension as extension_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api, meta_ads as meta_ads_api, whatsapp as whatsapp_api, search as search_api
 from app.agency.service import AgencyService, DisconnectedLeadResearchProvider
 from app.agents.evaluator import AgentEvaluator
 from app.agents.factory import AgentFactory
@@ -289,6 +290,7 @@ from app.instagram.provider import DisconnectedInstagramProvider, RealInstagramP
 from app.instagram.service import InstagramService
 from app.meta_ads.provider import DisconnectedMetaAdsProvider, RealMetaAdsProvider
 from app.meta_ads.service import MetaAdsService
+from app.whatsapp.connector import WhatsAppConnector
 from app.calendar.service import CalendarService
 from app.contacts.resolver import ContactResolver
 from app.crm.store import CRMStore
@@ -533,6 +535,10 @@ def create_app(
         youtube_service = YouTubeService(youtube_provider)
         instagram_service = InstagramService(instagram_provider)
         meta_ads_service = MetaAdsService(meta_ads_provider)
+        whatsapp_connector = WhatsAppConnector(
+            connector_dir=Path(__file__).resolve().parent.parent / "whatsapp_connector",
+            auth_data_dir=data_dir / "whatsapp-auth",
+        )
         # Telegram authenticates with a single bot token (from @BotFather),
         # not OAuth — set TELEGRAM_BOT_TOKEN to activate; until then this
         # behaves exactly like the disconnected stub it replaces.
@@ -698,7 +704,11 @@ def create_app(
         mcp_manager = MCPConnectionManager(mcp_registry, tool_registry, project_root)
         configured_mcp_servers = load_mcp_server_configs(selected_settings.tool_registry_path)
         research_config = DeepResearchTask.load_config(selected_settings.research_config_path)
-        research_task = DeepResearchTask.from_config(research_config, browser_actions=browser_actions, knowledge_service=knowledge_service)
+        stored_serpapi_key = secret_vault.get("token:serpapi")
+        research_task = DeepResearchTask.from_config(
+            research_config, browser_actions=browser_actions, knowledge_service=knowledge_service,
+            serpapi_key=stored_serpapi_key.decode("utf-8") if stored_serpapi_key else None,
+        )
         subscription_registry = SubscriptionRegistry()
         discovery_engine = DiscoveryEngine(capability_registry, research_task, subscription_registry, mcp_registry)
 
@@ -1558,6 +1568,7 @@ def create_app(
         application.state.instagram_provider = instagram_provider
         application.state.meta_ads_service = meta_ads_service
         application.state.meta_ads_provider = meta_ads_provider
+        application.state.whatsapp_connector = whatsapp_connector
         application.state.contact_resolver = contact_resolver
         application.state.agency_service = agency_service
         application.state.meeting_service = meeting_service
@@ -1837,6 +1848,8 @@ def create_app(
     application.include_router(youtube_api.router)
     application.include_router(instagram_api.router)
     application.include_router(meta_ads_api.router)
+    application.include_router(whatsapp_api.router)
+    application.include_router(search_api.router)
     application.include_router(memory.router)
     application.include_router(brain_graph_api.router)
     application.include_router(skills.router)
