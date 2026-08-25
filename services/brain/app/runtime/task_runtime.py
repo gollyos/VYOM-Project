@@ -2413,12 +2413,23 @@ class TaskRuntime:
             while len(self._terminalized) > 512:
                 self._terminalized.popitem(last=False)
 
+        # Per-task visibility is surfaced on EVERY event so the frontend can
+        # react the moment it is known: a 'background' task (profile.visibility)
+        # tells VYOM's own window to minimize itself and work invisibly; a
+        # 'visual' task keeps the window up (the browser itself opens headed).
+        # Mirrored from app/execution/visibility.classify_visibility at task
+        # classify time; absent for events emitted before profile is set.
+        event_payload = dict(payload or {})
+        visibility = getattr(getattr(task, "profile", None), "visibility", None)
+        if visibility:
+            event_payload["window_visibility"] = visibility
+
         await self.event_bus.publish(
             BrainEvent(
                 task_id=task.id,
                 type=event_type,
                 human_readable_message=message,
-                structured_payload=payload or {},
+                structured_payload=event_payload,
             )
         )
 

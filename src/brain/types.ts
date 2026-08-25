@@ -111,12 +111,19 @@ export type BrainEvent = {
         };
       };
     };
-    /**
-     * Telemetry the Brain emits about ITSELF (health checks, resource
+    /** Telemetry the Brain emits about ITSELF (health checks, resource
      * sampling). It is recorded internally but must never take over the
      * foreground, interrupt a mission, or be spoken - see LAW 8.
      */
     background?: boolean;
+    /**
+     * Per-task execution mode the Brain decided (from
+     * classify_visibility): 'background' -> minimize VYOM's own window and
+     * work invisibly; 'visual' -> keep the window up (browser opens headed).
+     * Present once profile.visibility is set (absent on the very first
+     * task_created event).
+     */
+    window_visibility?: "background" | "visual";
     channel?: "BACKGROUND_HEALTH" | string;
     routing?: {
       primary_model: string;

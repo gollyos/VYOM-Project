@@ -23,6 +23,17 @@ async function dispatchNativeNotification(title: string, body: string) {
   }
 }
 
+async function dispatchWindowVisibility(action: "minimize" | "restore") {
+  if (!("__TAURI_INTERNALS__" in window)) return;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    if (action === "minimize") await invoke("minimize_vyom_window");
+    else await invoke("restore_vyom_window");
+  } catch {
+    // Window control is best-effort; the in-app task flow remains authoritative.
+  }
+}
+
 type RuntimeSnapshot = {
   state: VyomState;
   response: string | null;
@@ -96,6 +107,9 @@ export function useVyomRuntime(): RuntimeSnapshot {
   const lastCommandRef = useRef<string | null>(null);
   const correlationRef = useRef<string | null>(null);
   const supersededTaskIdsRef = useRef<Set<string>>(new Set());
+  // Tracks whether VYOM's own window has been minimized for a background
+  // task, so we restore it exactly once when that task finishes.
+  const windowMinimizedRef = useRef(false);
 
   useEffect(() => { compositionRef.current = composition; }, [composition]);
   useEffect(() => { activeTaskRef.current = activeTaskId; }, [activeTaskId]);
@@ -169,7 +183,24 @@ export function useVyomRuntime(): RuntimeSnapshot {
       event.task_id === "system";
     if (isBackground) return;
 
-    // A superseded task has permanently lost foreground authority.  Its
+    // Per-task execution mode (background vs visual) reaches the frontend
+    // on every event as structured_payload.window_visibility. When the
+    // Brain decides a task should run in the BACKGROUND (profile.visibility
+    // = 'background', from classify_visibility), VYOM's own window minimizes
+    // so the work happens invisibly and out of the user's way; when that
+    // task ends (completed/failed/cancelled) the window is restored so the
+    // user sees the result. Guarded by windowMinimizedRef so we only
+    // minimize once and restore exactly once. Best-effort (Tauri only).
+    const windowVisibility = event.structured_payload.window_visibility;
+    if (windowVisibility === "background" && !windowMinimizedRef.current) {
+      windowMinimizedRef.current = true;
+      void dispatchWindowVisibility("minimize");
+    }
+    if (windowMinimizedRef.current &&
+        ["task_completed", "task_failed", "task_cancelled"].includes(event.type)) {
+      windowMinimizedRef.current = false;
+      void dispatchWindowVisibility("restore");
+    }
     // late cancellation/failure/completion event must not replace the UI
     // state of the newer command during the create-task handoff window.
     if (supersededTaskIdsRef.current.has(event.task_id)) {
