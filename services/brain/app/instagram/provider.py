@@ -9,7 +9,7 @@ import httpx
 
 from app.integrations.provider import IntegrationProvider
 
-from .schemas import InstagramPostRequest, InstagramPostReceipt
+from .schemas import InstagramMessageReceipt, InstagramMessageRequest, InstagramPostRequest, InstagramPostReceipt
 
 
 _GRAPH_API = "https://graph.facebook.com/v21.0"
@@ -19,6 +19,9 @@ class InstagramProvider(IntegrationProvider, ABC):
     @abstractmethod
     async def post(self, request: InstagramPostRequest) -> InstagramPostReceipt: ...
 
+    @abstractmethod
+    async def send_message(self, request: InstagramMessageRequest) -> InstagramMessageReceipt: ...
+
 
 class DisconnectedInstagramProvider(InstagramProvider):
     id = "instagram.disconnected"
@@ -27,6 +30,9 @@ class DisconnectedInstagramProvider(InstagramProvider):
         return False, "Instagram integration is disconnected"
 
     async def post(self, request: InstagramPostRequest) -> InstagramPostReceipt:
+        raise RuntimeError("Instagram integration is disconnected")
+
+    async def send_message(self, request: InstagramMessageRequest) -> InstagramMessageReceipt:
         raise RuntimeError("Instagram integration is disconnected")
 
 
@@ -165,4 +171,31 @@ class RealInstagramProvider(DisconnectedInstagramProvider):
         return InstagramPostReceipt(
             provider=self.id, media_id=media_id, permalink=permalink, verified=True,
             evidence=[f"provider_media_id:{media_id}", f"container_id:{container_id}"],
+        )
+
+    async def send_message(self, request: InstagramMessageRequest) -> InstagramMessageReceipt:
+        """Sends a DM through the Instagram Messaging API — a SEPARATE
+        endpoint from posting (POST /<IG_ID>/messages, not the media
+        container flow above). Meta only allows replying inside a 24h
+        customer-service window since the recipient last messaged the
+        account; sending outside that window is rejected by Meta
+        itself, surfaced here as the normal _friendly_error path rather
+        than a special case."""
+        creds = self._load_credentials()
+        if creds is None:
+            raise RuntimeError("Instagram is not connected")
+        account_id = creds["instagram_business_account_id"]
+        access_token = creds["access_token"]
+
+        response = await self._pooled().post(
+            f"{_GRAPH_API}/{account_id}/messages",
+            json={"recipient": {"id": request.recipient_id}, "message": {"text": request.text}},
+            params={"access_token": access_token},
+        )
+        if response.status_code >= 400:
+            raise RuntimeError(f"Instagram message failed: {self._friendly_error(response)}")
+        body = response.json()
+        return InstagramMessageReceipt(
+            provider=self.id, message_id=body.get("message_id", ""),
+            recipient_id=request.recipient_id, verified=True,
         )

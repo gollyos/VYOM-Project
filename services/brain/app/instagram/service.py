@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .provider import InstagramProvider
-from .schemas import InstagramPostReceipt, InstagramPostRequest
+from .schemas import InstagramMessageReceipt, InstagramMessageRequest, InstagramPostReceipt, InstagramPostRequest
 
 
 class InstagramService:
@@ -16,3 +16,9 @@ class InstagramService:
         if not receipt.verified or not receipt.media_id:
             raise RuntimeError("Instagram did not return a verifiable media id")
         return receipt
+
+    async def send_message(self, request: InstagramMessageRequest) -> InstagramMessageReceipt:
+        healthy, error = await self.provider.health()
+        if not healthy:
+            raise RuntimeError(error or "Instagram provider unavailable")
+        return await self.provider.send_message(request)

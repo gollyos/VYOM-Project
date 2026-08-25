@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
 
-from app.instagram.schemas import InstagramConnectRequest, InstagramPostReceipt, InstagramPostRequest
+from app.instagram.schemas import (
+    InstagramConnectRequest,
+    InstagramMessageReceipt,
+    InstagramMessageRequest,
+    InstagramPostReceipt,
+    InstagramPostRequest,
+)
 
 router = APIRouter(prefix="/api/instagram", tags=["instagram"])
 
@@ -39,5 +45,13 @@ async def status(request: Request) -> dict:
 async def post_media(payload: InstagramPostRequest, request: Request) -> InstagramPostReceipt:
     try:
         return await request.app.state.instagram_service.post(payload)
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+
+@router.post("/message", response_model=InstagramMessageReceipt)
+async def send_message(payload: InstagramMessageRequest, request: Request) -> InstagramMessageReceipt:
+    try:
+        return await request.app.state.instagram_service.send_message(payload)
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error

@@ -10,16 +10,18 @@ from app.tools.result import EvidenceItem, ToolResult
 
 
 class InstagramTool(BaseTool):
-    """Post to Instagram (image/reel/story). L2 — leaves VYOM's control
-    boundary and reaches a public external platform, same tier as
-    sending an email or uploading to YouTube."""
+    """Post to Instagram (image/reel/story) or send a DM, over the SAME
+    InstagramService the REST API uses. Both are L2 — posting reaches
+    the public, and messaging reaches a specific person outside VYOM's
+    control boundary, the same tier as sending an email."""
 
     metadata = ToolMetadata(
         name="instagram",
         description=(
-            "Post to Instagram: media_url (a PUBLIC https URL — Instagram fetches it "
-            "itself, a local file path will not work), media_type (IMAGE/REELS/STORIES), "
-            "caption. Requires Instagram to be connected first. L2 — requires explicit approval."
+            "action='post': media_url (a PUBLIC https URL — Instagram fetches it itself, a "
+            "local file path will not work), media_type (IMAGE/REELS/STORIES), caption. "
+            "action='send_message': recipient_id (the Instagram-Scoped ID, not a @username), "
+            "text. Requires Instagram to be connected first. L2 — requires explicit approval."
         ),
         category="content",
         required_permissions=[PermissionLevel.L2],
@@ -33,7 +35,21 @@ class InstagramTool(BaseTool):
         return PermissionLevel.L2
 
     async def execute(self, inputs: dict[str, Any], context: ToolContext) -> ToolResult:
-        from app.instagram.schemas import InstagramPostRequest
+        from app.instagram.schemas import InstagramMessageRequest, InstagramPostRequest
+
+        action = str(inputs.get("action", "post"))
+
+        if action == "send_message":
+            recipient_id = str(inputs.get("recipient_id", "")).strip()
+            text = str(inputs.get("text", "")).strip()
+            if not recipient_id or not text:
+                raise ToolValidationError("recipient_id and text are required for send_message")
+            receipt = await self.service.send_message(InstagramMessageRequest(recipient_id=recipient_id, text=text))
+            return ToolResult.completed(
+                f"Sent Instagram message to {recipient_id}", output=receipt.model_dump(mode="json"),
+                evidence=[EvidenceItem(type="tool_result", summary="Instagram message sent",
+                                       data={"message_id": receipt.message_id, "recipient_id": receipt.recipient_id})],
+            )
 
         media_url = str(inputs.get("media_url", "")).strip()
         if not media_url:

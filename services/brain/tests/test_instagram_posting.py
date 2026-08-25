@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 from app.instagram.provider import DisconnectedInstagramProvider, RealInstagramProvider
-from app.instagram.schemas import InstagramPostRequest
+from app.instagram.schemas import InstagramMessageRequest, InstagramPostRequest
 from app.instagram.service import InstagramService
 from app.integrations.secrets import InMemorySecretVault
 
@@ -133,3 +133,54 @@ def test_disconnect_removes_stored_credentials():
     assert provider._load_credentials() is not None
     asyncio.run(provider.disconnect())
     assert provider._load_credentials() is None
+
+
+# -- messaging (DMs) --------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_send_message_posts_to_the_messages_endpoint():
+    provider = _connected_provider()
+    calls: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append({"method": request.method, "url": str(request.url)})
+        assert request.url.path.endswith("/messages")
+        import json as _json
+
+        body = _json.loads(request.content)
+        assert body["recipient"]["id"] == "1234567890"
+        assert body["message"]["text"] == "Hello from VYOM"
+        return httpx.Response(200, json={"recipient_id": "1234567890", "message_id": "mid.abc123"})
+
+    provider._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    request = InstagramMessageRequest(recipient_id="1234567890", text="Hello from VYOM")
+    receipt = await provider.send_message(request)
+
+    assert receipt.verified is True
+    assert receipt.message_id == "mid.abc123"
+    assert receipt.recipient_id == "1234567890"
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_send_message_surfaces_real_error_honestly():
+    """Regression guard: Meta rejects DMs sent outside the 24h
+    customer-service window - this must surface as a real error, not a
+    silent no-op or a fabricated success."""
+    provider = _connected_provider()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": {"message": "Message is sent outside of allowed window"}})
+
+    provider._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    request = InstagramMessageRequest(recipient_id="1234567890", text="too late")
+    with pytest.raises(RuntimeError, match="allowed window"):
+        await provider.send_message(request)
+
+
+@pytest.mark.asyncio
+async def test_service_refuses_message_when_provider_unhealthy():
+    service = InstagramService(DisconnectedInstagramProvider())
+    request = InstagramMessageRequest(recipient_id="123", text="hi")
+    with pytest.raises(RuntimeError, match="disconnected"):
+        await service.send_message(request)

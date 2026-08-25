@@ -56,6 +56,16 @@ integrations:
     category: content
     enabled: true
     status: disconnected
+    capabilities: [social.post, social.message]
+    metadata:
+      auth: access_token
+      secret_storage: windows-dpapi
+  - id: facebook
+    name: Facebook
+    provider: meta
+    category: content
+    enabled: true
+    status: disconnected
     capabilities: [social.post]
     metadata:
       auth: access_token

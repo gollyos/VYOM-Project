@@ -11,7 +11,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discord as discord_api, discovery as discovery_api, email as email_api, extension as extension_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api, twitter as twitter_api, linkedin as linkedin_api, meta_ads as meta_ads_api, whatsapp as whatsapp_api, search as search_api
+from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discord as discord_api, discovery as discovery_api, email as email_api, extension as extension_api, facebook as facebook_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api, twitter as twitter_api, linkedin as linkedin_api, meta_ads as meta_ads_api, whatsapp as whatsapp_api, search as search_api
 from app.agency.service import AgencyService, DisconnectedLeadResearchProvider
 from app.agents.evaluator import AgentEvaluator
 from app.agents.factory import AgentFactory
@@ -290,6 +290,8 @@ from app.youtube.provider import DisconnectedYouTubeProvider, RealYouTubeProvide
 from app.youtube.service import YouTubeService
 from app.instagram.provider import DisconnectedInstagramProvider, RealInstagramProvider
 from app.instagram.service import InstagramService
+from app.facebook.provider import DisconnectedFacebookProvider, RealFacebookProvider
+from app.facebook.service import FacebookService
 from app.linkedin.provider import DisconnectedLinkedInProvider, RealLinkedInProvider
 from app.linkedin.service import LinkedInService
 from app.twitter.provider import DisconnectedTwitterProvider, RealTwitterProvider
@@ -311,7 +313,7 @@ from app.security.command_policy import CommandPolicy
 from app.security.permission_engine import PermissionEngine
 from app.tools.executor import ToolExecutor
 from app.tools.registry import ToolRegistry
-from app.tools_builtin import BrowserTool, DesktopTool, DiscordTool, EmailTool, FilesystemTool, GitTool, InputControlTool, InstagramTool, LinkedInTool, MetaAdsTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, TwitterTool, VideoTool, YouTubeTool, SafetyJudgeTool, TerminalTool
+from app.tools_builtin import BrowserTool, DesktopTool, DiscordTool, EmailTool, FacebookTool, FilesystemTool, GitTool, InputControlTool, InstagramTool, LinkedInTool, MetaAdsTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, TwitterTool, VideoTool, YouTubeTool, SafetyJudgeTool, TerminalTool
 from app.skills.builder import SkillBuilder
 from app.skills.executor import SkillExecutor
 from app.skills.teachable import TeachableSkillService
@@ -520,6 +522,7 @@ def create_app(
         # honestly reports disconnected via both.
         app_password_provider = GmailAppPasswordProvider(secret_vault)
         instagram_provider = RealInstagramProvider(secret_vault)
+        facebook_provider = RealFacebookProvider(secret_vault)
         twitter_provider = RealTwitterProvider(secret_vault)
         linkedin_provider = RealLinkedInProvider(secret_vault)
         meta_ads_provider = RealMetaAdsProvider(secret_vault)
@@ -535,6 +538,8 @@ def create_app(
             integration_registry.register_provider("youtube", youtube_provider)
         if "instagram" in integration_registry.records:
             integration_registry.register_provider("instagram", instagram_provider)
+        if "facebook" in integration_registry.records:
+            integration_registry.register_provider("facebook", facebook_provider)
         if "linkedin" in integration_registry.records:
             integration_registry.register_provider("linkedin", linkedin_provider)
         if "twitter" in integration_registry.records:
@@ -547,6 +552,7 @@ def create_app(
         sheets_service = SheetsService(sheets_provider)
         youtube_service = YouTubeService(youtube_provider)
         instagram_service = InstagramService(instagram_provider)
+        facebook_service = FacebookService(facebook_provider)
         twitter_service = TwitterService(twitter_provider)
         linkedin_service = LinkedInService(linkedin_provider)
         meta_ads_service = MetaAdsService(meta_ads_provider)
@@ -605,6 +611,7 @@ def create_app(
         tool_registry.register(SafetyJudgeTool(query_safety_judge))
         application.state.query_safety_judge = query_safety_judge
         tool_registry.register(InstagramTool(instagram_service))
+        tool_registry.register(FacebookTool(facebook_service))
         tool_registry.register(TwitterTool(twitter_service))
         tool_registry.register(LinkedInTool(linkedin_service))
         tool_registry.register(MetaAdsTool(meta_ads_service))
@@ -1614,6 +1621,8 @@ def create_app(
         application.state.youtube_service = youtube_service
         application.state.instagram_service = instagram_service
         application.state.instagram_provider = instagram_provider
+        application.state.facebook_service = facebook_service
+        application.state.facebook_provider = facebook_provider
         application.state.twitter_service = twitter_service
         application.state.twitter_provider = twitter_provider
         application.state.linkedin_service = linkedin_service
@@ -1900,6 +1909,7 @@ def create_app(
     application.include_router(video_api.router)
     application.include_router(youtube_api.router)
     application.include_router(instagram_api.router)
+    application.include_router(facebook_api.router)
     application.include_router(twitter_api.router)
     application.include_router(linkedin_api.router)
     application.include_router(meta_ads_api.router)

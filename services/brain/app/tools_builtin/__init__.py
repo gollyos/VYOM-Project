@@ -2,6 +2,7 @@ from .browser import BrowserTool
 from .desktop import DesktopTool
 from .discord_tool import DiscordTool
 from .email_tool import EmailTool
+from .facebook_tool import FacebookTool
 from .filesystem import FilesystemTool
 from .git import GitTool
 from .input_control import InputControlTool
@@ -20,7 +21,7 @@ from .safety_judge_tool import SafetyJudgeTool
 from .terminal import TerminalTool
 
 __all__ = [
-    "BrowserTool", "DesktopTool", "DiscordTool", "EmailTool", "FilesystemTool", "GitTool", "InputControlTool",
+    "BrowserTool", "DesktopTool", "DiscordTool", "EmailTool", "FacebookTool", "FilesystemTool", "GitTool", "InputControlTool",
     "InstagramTool", "LinkedInTool", "MetaAdsTool", "ScreenObserveTool", "ScreenshotTool", "SheetsTool", "SystemTool",
     "TelegramTool", "TwitterTool", "VideoTool", "YouTubeTool", "SafetyJudgeTool", "TerminalTool",
 ]
