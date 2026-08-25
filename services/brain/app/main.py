@@ -540,9 +540,15 @@ def create_app(
             auth_data_dir=data_dir / "whatsapp-auth",
         )
         # Telegram authenticates with a single bot token (from @BotFather),
-        # not OAuth — set TELEGRAM_BOT_TOKEN to activate; until then this
-        # behaves exactly like the disconnected stub it replaces.
+        # not OAuth. It's read from TELEGRAM_BOT_TOKEN if set, otherwise
+        # from a token stored via the self-service POST
+        # /api/telegram/connect endpoint (same pattern as Instagram/
+        # Meta-Ads' access-token connect) — env var wins if both exist.
         telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+        if not telegram_bot_token:
+            stored_telegram_token = secret_vault.get("token:telegram")
+            if stored_telegram_token:
+                telegram_bot_token = stored_telegram_token.decode("utf-8")
         telegram_provider = (
             RealTelegramProvider(telegram_bot_token) if telegram_bot_token
             else DisconnectedTelegramProvider()

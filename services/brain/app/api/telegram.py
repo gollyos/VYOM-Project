@@ -15,6 +15,27 @@ class SendMessagePayload(BaseModel):
     parse_mode: str | None = None
 
 
+class ConnectTokenPayload(BaseModel):
+    bot_token: str
+
+
+@router.post("/connect-token")
+async def connect_with_token(payload: ConnectTokenPayload, request: Request) -> dict:
+    """Self-service Telegram connect: paste a @BotFather bot token
+    directly (no TELEGRAM_BOT_TOKEN env var edit needed). Verifies the
+    token against a real getMe call before storing it — never reports
+    success on a bad token. Restart the Brain to activate it (read once
+    at startup, matching GOOGLE_OAUTH_CLIENT_ID/_SECRET's pattern)."""
+    from app.messaging.telegram_provider import RealTelegramProvider
+
+    provider = RealTelegramProvider(payload.bot_token)
+    healthy, error = await provider.health()
+    if not healthy:
+        raise HTTPException(status_code=401, detail=error or "Telegram bot token rejected")
+    request.app.state.secret_vault.set("token:telegram", payload.bot_token.encode("utf-8"))
+    return {"status": "connected", "note": "Restart the Brain to activate this bot token."}
+
+
 @router.get("/connect")
 async def get_connect_info(request: Request) -> dict:
     """Returns the bot's t.me link AND a scannable QR code encoding that
