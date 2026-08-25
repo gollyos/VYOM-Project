@@ -13,10 +13,11 @@ from .system import SystemTool
 from .telegram_tool import TelegramTool
 from .video_tool import VideoTool
 from .youtube_tool import YouTubeTool
+from .safety_judge_tool import SafetyJudgeTool
 from .terminal import TerminalTool
 
 __all__ = [
     "BrowserTool", "DesktopTool", "EmailTool", "FilesystemTool", "GitTool", "InputControlTool",
     "InstagramTool", "MetaAdsTool", "ScreenObserveTool", "ScreenshotTool", "SheetsTool", "SystemTool",
-    "TelegramTool", "VideoTool", "YouTubeTool", "TerminalTool",
+    "TelegramTool", "VideoTool", "YouTubeTool", "SafetyJudgeTool", "TerminalTool",
 ]
