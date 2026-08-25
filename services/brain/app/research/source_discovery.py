@@ -221,6 +221,25 @@ class SourceDiscovery:
                 try:
                     results = await provider.search(query, limit=per_query_limit)
                 except Exception:
+                    # A provider that raises (network down, API error) must
+                    # NOT block the fallback chain — skip it so the NEXT
+                    # provider (e.g. a cheaper/free one, or SerpAPI as the
+                    # paid fallback) gets a chance. Silently swallowing here
+                    # is correct: SourceDiscovery's job is to gather real
+                    # sources from whatever healthy provider succeeds, and
+                    # forcing it back to the first provider would defeat the
+                    # whole fallback design.
+                    continue
+                if not results:
+                    # Zero results from THIS provider is not a success — fall
+                    # through to the next provider in the chain (e.g. try the
+                    # free browser first, then SerpAPI as the paid fallback)
+                    # rather than stopping here. Before this fix the loop
+                    # unconditionally `break`-ed after the first healthy
+                    # provider even when it returned 0 results, so a browser
+                    # search that parsed to nothing never reached SerpAPI,
+                    # AND (because SerpAPI was listed first) every task hit
+                    # the paid API before the free one at all.
                     continue
                 for item in results:
                     url = str(item.get("url", "")).strip()

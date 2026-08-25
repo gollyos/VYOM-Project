@@ -47,8 +47,17 @@ search_providers:
     # Real Google search via SerpAPI — disconnected by default (no key).
     # Connect via POST /api/search/serpapi/connect (client pastes their
     # own SerpAPI key, same self-service pattern as Gmail App-Password).
-    # When connected, this is tried FIRST (before browser_search) since
-    # it returns real Google results without scraping a page.
+    # priority controls WHEN it's used relative to the free real-browsing
+    # path (browser_search):
+    #   fallback (default) -> browser_search is tried FIRST (free, real),
+    #                          SerpAPI only if that yields zero results —
+    #                          so a paid search is never the automatic
+    #                          first call on every research task (it
+    #                          burns paid quota needlessly).
+    #   primary           -> SerpAPI is listed ahead of browser_search
+    #                          (explicit opt-in, e.g. when a client
+    #                          wants structured Google JSON always).
+    priority: fallback
     enabled: true
 
 # Source trust policy weights by source_type. See docs/SOURCE_TRUST_POLICY.md.

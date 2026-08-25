@@ -88,15 +88,26 @@ class DeepResearchTask:
         providers: list[SearchProvider] = []
         search_config = config.get("search_providers", {})
         browser_config = search_config.get("browser_search", {})
-        # SerpAPI (real Google results) is tried FIRST when a key is
-        # connected — it needs no page-structure scraping and is more
-        # reliable than BrowserSearchProvider's DuckDuckGo HTML parsing.
-        if search_config.get("serpapi", {}).get("enabled", True) and serpapi_key:
-            providers.append(SerpApiSearchProvider(serpapi_key))
+        # Provider PRIORITY (minimize paid SerpAPI spam): the FREE real
+        # browsing path (actual Google/DuckDuckGo results via the browser
+        # tool) is tried FIRST; the PAID SerpAPI key is a FALLBACK — only
+        # invoked when the browser path yields zero results or errors, so
+        # every research task doesn't silently burn paid quota. LocalFixture
+        # is the clearly-labelled offline/demo last resort.
         if browser_config.get("enabled") and browser_actions is not None:
             providers.append(BrowserSearchProvider(browser_actions, browser_config.get(
                 "search_url_template", "https://duckduckgo.com/html/?q={query}",
             )))
+        # SerpAPI (real Google JSON) — only consulted as a fallback when
+        # the free browser path above came up empty. If you set
+        # search_providers.serpapi.priority: primary (see config/research.yaml)
+        # it moves ahead of browser_search instead (explict opt-in).
+        serpapi_config = search_config.get("serpapi", {})
+        if serpapi_config.get("enabled", True) and serpapi_key:
+            if serpapi_config.get("priority") == "primary":
+                providers.insert(0, SerpApiSearchProvider(serpapi_key))
+            else:
+                providers.append(SerpApiSearchProvider(serpapi_key))
         if search_config.get("local_fixture", {}).get("enabled", True):
             providers.append(LocalFixtureSearchProvider())
         source_discovery = SourceDiscovery(providers)
