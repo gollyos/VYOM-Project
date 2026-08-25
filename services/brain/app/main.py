@@ -10,7 +10,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discovery as discovery_api, email as email_api, extension as extension_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api
+from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discovery as discovery_api, email as email_api, extension as extension_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api
 from app.agency.service import AgencyService, DisconnectedLeadResearchProvider
 from app.agents.evaluator import AgentEvaluator
 from app.agents.factory import AgentFactory
@@ -285,6 +285,8 @@ from app.sheets.service import SheetsService
 from app.video.service import VideoService
 from app.youtube.provider import DisconnectedYouTubeProvider, RealYouTubeProvider, YOUTUBE_SCOPES
 from app.youtube.service import YouTubeService
+from app.instagram.provider import DisconnectedInstagramProvider, RealInstagramProvider
+from app.instagram.service import InstagramService
 from app.calendar.service import CalendarService
 from app.contacts.resolver import ContactResolver
 from app.crm.store import CRMStore
@@ -298,7 +300,7 @@ from app.security.command_policy import CommandPolicy
 from app.security.permission_engine import PermissionEngine
 from app.tools.executor import ToolExecutor
 from app.tools.registry import ToolRegistry
-from app.tools_builtin import BrowserTool, DesktopTool, EmailTool, FilesystemTool, GitTool, InputControlTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, VideoTool, YouTubeTool, TerminalTool
+from app.tools_builtin import BrowserTool, DesktopTool, EmailTool, FilesystemTool, GitTool, InputControlTool, InstagramTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, VideoTool, YouTubeTool, TerminalTool
 from app.skills.builder import SkillBuilder
 from app.skills.executor import SkillExecutor
 from app.skills.teachable import TeachableSkillService
@@ -506,6 +508,7 @@ def create_app(
         # calls that (or completes OAuth), CombinedEmailProvider.health()
         # honestly reports disconnected via both.
         app_password_provider = GmailAppPasswordProvider(secret_vault)
+        instagram_provider = RealInstagramProvider(secret_vault)
         email_provider = CombinedEmailProvider(app_password_provider, oauth_email_provider)
         calendar_provider = DisconnectedCalendarProvider()
         if "gmail" in integration_registry.records:
@@ -516,11 +519,14 @@ def create_app(
             integration_registry.register_provider("google-sheets", sheets_provider)
         if "youtube" in integration_registry.records:
             integration_registry.register_provider("youtube", youtube_provider)
+        if "instagram" in integration_registry.records:
+            integration_registry.register_provider("instagram", instagram_provider)
         crm_store = CRMStore(database)
         email_service = EmailService(database, email_provider)
         calendar_service = CalendarService(calendar_provider)
         sheets_service = SheetsService(sheets_provider)
         youtube_service = YouTubeService(youtube_provider)
+        instagram_service = InstagramService(instagram_provider)
         # Telegram authenticates with a single bot token (from @BotFather),
         # not OAuth — set TELEGRAM_BOT_TOKEN to activate; until then this
         # behaves exactly like the disconnected stub it replaces.
@@ -542,6 +548,7 @@ def create_app(
         tool_registry.register(TelegramTool(telegram_service))
         tool_registry.register(VideoTool(video_service))
         tool_registry.register(YouTubeTool(youtube_service))
+        tool_registry.register(InstagramTool(instagram_service))
         contact_resolver = ContactResolver()
         agency_service = AgencyService(crm_store, email_service, DisconnectedLeadResearchProvider())
         meeting_service = MeetingService(calendar_service, crm_store, contact_resolver, database)
@@ -1540,6 +1547,8 @@ def create_app(
         application.state.telegram_service = telegram_service
         application.state.video_service = video_service
         application.state.youtube_service = youtube_service
+        application.state.instagram_service = instagram_service
+        application.state.instagram_provider = instagram_provider
         application.state.contact_resolver = contact_resolver
         application.state.agency_service = agency_service
         application.state.meeting_service = meeting_service
@@ -1817,6 +1826,7 @@ def create_app(
     application.include_router(telegram_api.router)
     application.include_router(video_api.router)
     application.include_router(youtube_api.router)
+    application.include_router(instagram_api.router)
     application.include_router(memory.router)
     application.include_router(brain_graph_api.router)
     application.include_router(skills.router)

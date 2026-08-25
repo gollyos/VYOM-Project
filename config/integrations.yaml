@@ -50,6 +50,16 @@ integrations:
     metadata:
       oauth: required
       secret_storage: windows-dpapi
+  - id: instagram
+    name: Instagram
+    provider: meta
+    category: content
+    enabled: true
+    status: disconnected
+    capabilities: [social.post]
+    metadata:
+      auth: access_token
+      secret_storage: windows-dpapi
   - id: telegram
     name: Telegram
     provider: telegram
