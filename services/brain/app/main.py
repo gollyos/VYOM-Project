@@ -288,6 +288,7 @@ from app.youtube.provider import DisconnectedYouTubeProvider, RealYouTubeProvide
 from app.youtube.service import YouTubeService
 from app.instagram.provider import DisconnectedInstagramProvider, RealInstagramProvider
 from app.instagram.service import InstagramService
+from app.safety.query_judge import QuerySafetyJudge
 from app.meta_ads.provider import DisconnectedMetaAdsProvider, RealMetaAdsProvider
 from app.meta_ads.service import MetaAdsService
 from app.whatsapp.connector import WhatsAppConnector
@@ -304,7 +305,7 @@ from app.security.command_policy import CommandPolicy
 from app.security.permission_engine import PermissionEngine
 from app.tools.executor import ToolExecutor
 from app.tools.registry import ToolRegistry
-from app.tools_builtin import BrowserTool, DesktopTool, EmailTool, FilesystemTool, GitTool, InputControlTool, InstagramTool, MetaAdsTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, VideoTool, YouTubeTool, TerminalTool
+from app.tools_builtin import BrowserTool, DesktopTool, EmailTool, FilesystemTool, GitTool, InputControlTool, InstagramTool, MetaAdsTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, VideoTool, YouTubeTool, SafetyJudgeTool, TerminalTool
 from app.skills.builder import SkillBuilder
 from app.skills.executor import SkillExecutor
 from app.skills.teachable import TeachableSkillService
@@ -566,6 +567,9 @@ def create_app(
         tool_registry.register(TelegramTool(telegram_service))
         tool_registry.register(VideoTool(video_service))
         tool_registry.register(YouTubeTool(youtube_service))
+        query_safety_judge = QuerySafetyJudge()
+        tool_registry.register(SafetyJudgeTool(query_safety_judge))
+        application.state.query_safety_judge = query_safety_judge
         tool_registry.register(InstagramTool(instagram_service))
         tool_registry.register(MetaAdsTool(meta_ads_service))
         contact_resolver = ContactResolver()
