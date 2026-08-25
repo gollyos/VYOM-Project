@@ -51,7 +51,8 @@ class FactExtractor:
 
     def extract(self, *, text: str, source_url: str | None, source_title: str | None = None,
                 subject_hint: str | None = None, task_id: str | None = None,
-                confidence: float = 0.55, max_facts: int = 8) -> list[KnowledgeFact]:
+                confidence: float = 0.55, max_facts: int = 8,
+                domain: str = "general") -> list[KnowledgeFact]:
         facts: list[KnowledgeFact] = []
         seen: set[tuple[str, str]] = set()
         for sentence in _split_sentences(text):
@@ -81,6 +82,7 @@ class FactExtractor:
                     source_title=source_title,
                     confidence=confidence,
                     task_id=task_id,
+                    domain=domain,
                 ))
                 break
             if len(facts) >= max_facts:

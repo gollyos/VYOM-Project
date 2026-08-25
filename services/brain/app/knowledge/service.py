@@ -41,10 +41,11 @@ class KnowledgeService:
 
     async def record_fact(self, fact: KnowledgeFact) -> KnowledgeFact:
         """Record one fact with its real source evidence. Re-recording
-        the same (subject, predicate) confirms/refreshes it instead of
-        duplicating - this is what lets a fact stay 'fresh' across
-        repeated research without the store growing unboundedly."""
-        existing = await self.store.find_existing(fact.subject, fact.predicate)
+        the same (subject, predicate, domain) confirms/refreshes it
+        instead of duplicating - this is what lets a fact stay 'fresh'
+        across repeated research without the store growing unboundedly,
+        and keeps each agent's own wiki independent."""
+        existing = await self.store.find_existing(fact.subject, fact.predicate, domain=fact.domain)
         if existing is not None:
             existing.value = fact.value
             existing.confidence = max(existing.confidence, fact.confidence)
@@ -66,14 +67,17 @@ class KnowledgeService:
                                       source_title: str | None = None,
                                       subject_hint: str | None = None,
                                       task_id: str | None = None,
-                                      confidence: float = 0.55) -> list[KnowledgeFact]:
+                                      confidence: float = 0.55,
+                                      domain: str = "general") -> list[KnowledgeFact]:
         """Extracts candidate facts from clean article text (e.g. a
         DefuddleExtractor.ExtractionResult.content) and records every
         one with the real source_url as evidence. Never fabricates -
-        only sentences literally present in `text` become facts."""
+        only sentences literally present in `text` become facts. `domain`
+        tags the facts as belonging to one agent's own wiki."""
         candidates = self.extractor.extract(
             text=text, source_url=source_url, source_title=source_title,
             subject_hint=subject_hint, task_id=task_id, confidence=confidence,
+            domain=domain,
         )
         recorded = []
         for candidate in candidates:
@@ -86,7 +90,7 @@ class KnowledgeService:
             content=fact.as_sentence(),
             summary=fact.as_sentence()[:180],
             type=MemoryType.SEMANTIC,
-            tags=[_NAMESPACE_TAG, CognitiveNamespace.KNOWLEDGE.value, fact.subject.lower()],
+            tags=[_NAMESPACE_TAG, CognitiveNamespace.KNOWLEDGE.value, fact.subject.lower(), f"wiki:{fact.domain}"],
             entities=[fact.subject],
             source=fact.source_url,
             provenance=[MemoryProvenance(
@@ -103,17 +107,19 @@ class KnowledgeService:
 
     # -- recall --------------------------------------------------------
 
-    async def recall(self, subject: str, *, limit: int = 20) -> KnowledgeRecallResult:
+    async def recall(self, subject: str, *, limit: int = 20, domain: str | None = None) -> KnowledgeRecallResult:
         """Ask the knowledge base first. Exact/substring subject match
         via KnowledgeStore; if nothing is found there, falls back to
         the existing FTS5 + embedding MemoryRetriever scoped to the
         knowledge namespace, then resolves any hit back to structured
-        facts by subject."""
-        facts = await self.store.by_subject(subject, limit=limit)
+        facts by subject. When `domain` is given, restrict to ONE
+        agent's own wiki (per-agent knowledge base); when omitted,
+        search across all wikis (global)."""
+        facts = await self.store.by_subject(subject, limit=limit, domain=domain)
         if not facts:
-            resolved_subjects = await self.store.search_subjects(subject, limit=5)
+            resolved_subjects = await self.store.search_subjects(subject, limit=5, domain=domain)
             for resolved in resolved_subjects:
-                facts.extend(await self.store.by_subject(resolved, limit=limit))
+                facts.extend(await self.store.by_subject(resolved, limit=limit, domain=domain))
         if not facts:
             results = await self.memory.search(MemoryQuery(text=subject, limit=limit))
             hit_subjects = {
@@ -121,8 +127,10 @@ class KnowledgeService:
                 if _NAMESPACE_TAG in (item.memory.tags or [])
                 for entity in (item.memory.entities or [])
             }
+            # When scoped to a domain, only resolve hits that belong to
+            # that domain's wiki.
             for hit_subject in hit_subjects:
-                facts.extend(await self.store.by_subject(hit_subject, limit=limit))
+                facts.extend(await self.store.by_subject(hit_subject, limit=limit, domain=domain))
 
         if not facts:
             return KnowledgeRecallResult(
@@ -141,20 +149,23 @@ class KnowledgeService:
                    f"facts are older than {self.fresh_after_days} days; a refresh is recommended",
         )
 
-    async def ask_or_research(self, subject: str, research_fn, *, limit: int = 20) -> KnowledgeRecallResult:
+    async def ask_or_research(self, subject: str, research_fn, *, limit: int = 20,
+                              domain: str | None = None) -> KnowledgeRecallResult:
         """Reusable entry point for the task runtime and any other
         caller: 'ask the knowledge base first, browse only if not
         found or stale'. `research_fn` is an async callable taking no
         args that performs the real research/browsing and returns the
         list of newly recorded KnowledgeFact (typically via
         record_facts_from_text) - it is only invoked when recall()
-        reports needs_research=True."""
-        result = await self.recall(subject, limit=limit)
+        reports needs_research=True. `domain` scopes the recall (and the
+        facts the research records, via the caller's research_fn) to one
+        agent's own wiki."""
+        result = await self.recall(subject, limit=limit, domain=domain)
         if not result.needs_research:
             return result
         new_facts = await research_fn()
         if new_facts:
-            return await self.recall(subject, limit=limit)
+            return await self.recall(subject, limit=limit, domain=domain)
         # Research ran but found nothing new; return what we had
         # (possibly stale, possibly empty) rather than pretending success.
         return result

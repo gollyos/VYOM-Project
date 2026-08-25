@@ -44,77 +44,107 @@ class KnowledgeStore:
             INSERT INTO knowledge_facts(
                 id, subject, subject_key, predicate, value, source_url, source_title,
                 confidence, first_learned_at, last_confirmed_at, confirmations,
-                task_id, memory_id, fact_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                task_id, memory_id, domain, fact_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 subject=excluded.subject, subject_key=excluded.subject_key,
                 predicate=excluded.predicate, value=excluded.value,
                 source_url=excluded.source_url, source_title=excluded.source_title,
                 confidence=excluded.confidence, last_confirmed_at=excluded.last_confirmed_at,
                 confirmations=excluded.confirmations, memory_id=excluded.memory_id,
-                fact_json=excluded.fact_json
+                domain=excluded.domain, fact_json=excluded.fact_json
             """,
             (
                 fact.id, fact.subject, subject_key, fact.predicate, fact.value,
                 fact.source_url, fact.source_title, fact.confidence,
                 fact.first_learned_at.isoformat(), fact.last_confirmed_at.isoformat(),
-                fact.confirmations, fact.task_id, fact.memory_id, payload,
+                fact.confirmations, fact.task_id, fact.memory_id, fact.domain, payload,
             ),
         )
         await connection.commit()
         return fact
 
-    async def find_existing(self, subject: str, predicate: str) -> KnowledgeFact | None:
-        """The (subject, predicate) pair that record_fact() re-confirms
-        instead of duplicating, e.g. re-learning 'created by' for the
-        same subject bumps confirmations rather than creating a
-        second row."""
+    async def find_existing(self, subject: str, predicate: str, *, domain: str = "general") -> KnowledgeFact | None:
+        """The (subject, predicate, domain) triple that record_fact() re-
+        confirms instead of duplicating. Scoped per-domain so the SAME
+        fact can exist independently in two agents' wikis without one
+        overwriting/conflicting with the other."""
         connection = self.database.require_connection()
         cursor = await connection.execute(
-            "SELECT fact_json FROM knowledge_facts WHERE subject_key = ? AND predicate = ? LIMIT 1",
-            (_normalize_subject(subject), predicate),
+            "SELECT fact_json FROM knowledge_facts WHERE domain = ? AND subject_key = ? AND predicate = ? LIMIT 1",
+            (domain, _normalize_subject(subject), predicate),
         )
         row = await cursor.fetchone()
         return KnowledgeFact.model_validate_json(row["fact_json"]) if row else None
 
-    async def by_subject(self, subject: str, limit: int = 50) -> list[KnowledgeFact]:
+    async def by_subject(self, subject: str, limit: int = 50, *, domain: str | None = None) -> list[KnowledgeFact]:
         """Exact-subject lookup - the infobox path. Fast, no search
-        ranking involved."""
+        ranking involved. When `domain` is given, restrict to that
+        agent's wiki; otherwise search across all domains (global)."""
         connection = self.database.require_connection()
         key = _normalize_subject(subject)
-        cursor = await connection.execute(
-            "SELECT fact_json FROM knowledge_facts WHERE subject_key = ? "
-            "ORDER BY last_confirmed_at DESC LIMIT ?",
-            (key, limit),
-        )
+        if domain is not None:
+            cursor = await connection.execute(
+                "SELECT fact_json FROM knowledge_facts WHERE domain = ? AND subject_key = ? "
+                "ORDER BY last_confirmed_at DESC LIMIT ?",
+                (domain, key, limit),
+            )
+        else:
+            cursor = await connection.execute(
+                "SELECT fact_json FROM knowledge_facts WHERE subject_key = ? "
+                "ORDER BY last_confirmed_at DESC LIMIT ?",
+                (key, limit),
+            )
         rows = await cursor.fetchall()
         if rows:
             return [KnowledgeFact.model_validate_json(row["fact_json"]) for row in rows]
         # Fall back to a substring match ("python" should surface facts
         # stored under "python programming language").
-        cursor = await connection.execute(
-            "SELECT fact_json FROM knowledge_facts WHERE subject_key LIKE ? "
-            "ORDER BY last_confirmed_at DESC LIMIT ?",
-            (f"%{key}%", limit),
-        )
+        if domain is not None:
+            cursor = await connection.execute(
+                "SELECT fact_json FROM knowledge_facts WHERE domain = ? AND subject_key LIKE ? "
+                "ORDER BY last_confirmed_at DESC LIMIT ?",
+                (domain, f"%{key}%", limit),
+            )
+        else:
+            cursor = await connection.execute(
+                "SELECT fact_json FROM knowledge_facts WHERE subject_key LIKE ? "
+                "ORDER BY last_confirmed_at DESC LIMIT ?",
+                (f"%{key}%", limit),
+            )
         return [KnowledgeFact.model_validate_json(row["fact_json"]) for row in await cursor.fetchall()]
 
-    async def search_subjects(self, text: str, limit: int = 20) -> list[str]:
+    async def search_subjects(self, text: str, limit: int = 20, *, domain: str | None = None) -> list[str]:
         """Distinct subjects whose key contains any token of `text` -
         used to resolve a loose query ('who made python') to a known
-        subject before falling back to full memory search."""
+        subject before falling back to full memory search. When `domain`
+        is given, restrict to that agent's wiki."""
         connection = self.database.require_connection()
         tokens = [t for t in re.findall(r"[a-z0-9]+", text.lower()) if len(t) > 2]
         if not tokens:
             return []
         clauses = " OR ".join("subject_key LIKE ?" for _ in tokens)
-        params = [f"%{token}%" for token in tokens]
-        cursor = await connection.execute(
-            f"SELECT DISTINCT subject FROM knowledge_facts WHERE {clauses} "
-            f"ORDER BY last_confirmed_at DESC LIMIT ?",
-            (*params, limit),
-        )
+        if domain is not None:
+            cursor = await connection.execute(
+                f"SELECT DISTINCT subject FROM knowledge_facts WHERE domain = ? AND ({clauses}) "
+                f"ORDER BY last_confirmed_at DESC LIMIT ?",
+                (domain, *[f"%{token}%" for token in tokens], limit),
+            )
+        else:
+            cursor = await connection.execute(
+                f"SELECT DISTINCT subject FROM knowledge_facts WHERE {clauses} "
+                f"ORDER BY last_confirmed_at DESC LIMIT ?",
+                (*[f"%{token}%" for token in tokens], limit),
+            )
         return [row["subject"] for row in await cursor.fetchall()]
+
+    async def namespaces(self) -> list[str]:
+        """Distinct agent domains ('wikis') that currently hold facts,
+        e.g. ['general', 'research', 'coding']. Used by the UI to show a
+        client which per-agent knowledge bases actually exist."""
+        connection = self.database.require_connection()
+        cursor = await connection.execute("SELECT DISTINCT domain FROM knowledge_facts ORDER BY domain")
+        return [row["domain"] for row in await cursor.fetchall()]
 
     async def confirm(self, fact: KnowledgeFact, *, source_url: str | None = None,
                        confidence: float | None = None) -> KnowledgeFact:

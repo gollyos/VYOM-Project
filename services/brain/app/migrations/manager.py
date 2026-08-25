@@ -126,9 +126,30 @@ class MigrationManager:
         validation_expected=(1,),
     )
 
+    KNOWLEDGE_NAMESPACE = Migration(
+        version=7,
+        name="knowledge_namespace_v1",
+        statements=(
+            # Add a per-agent namespace column to knowledge_facts so each
+            # distinct agent/task-type (research, coding, email, video,
+            # market data, ...) accumulates its OWN 'wiki' that improves
+            # independently, instead of every fact mixing into one pool.
+            "ALTER TABLE knowledge_facts ADD COLUMN domain TEXT NOT NULL DEFAULT 'general'",
+            # The old unique index was (subject_key, predicate) — that would
+            # now wrongly forbid the SAME subject+predicate from existing in
+            # two different domains. Replace it with a composite that scopes
+            # the reconfirm key per-domain.
+            "DROP INDEX IF EXISTS idx_knowledge_subject_predicate",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_domain_subject_predicate ON knowledge_facts(domain, subject_key, predicate)",
+            "CREATE INDEX IF NOT EXISTS idx_knowledge_domain ON knowledge_facts(domain)",
+        ),
+        validation_query="SELECT COUNT(*) FROM pragma_table_info('knowledge_facts') WHERE name='domain'",
+        validation_expected=(1,),
+    )
+
     def __init__(self, database, migrations: list[Migration] | None = None):
         self.database = database
-        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY, self.KNOWLEDGE_BASE, self.MESSAGING], key=lambda item: item.version)
+        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY, self.KNOWLEDGE_BASE, self.MESSAGING, self.KNOWLEDGE_NAMESPACE], key=lambda item: item.version)
         self.last_error: str | None = None
 
     async def ensure_table(self) -> None:

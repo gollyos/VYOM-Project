@@ -183,6 +183,7 @@ class DeepResearchTask:
                             recorded = await self.knowledge_service.record_facts_from_text(
                                 text=extraction.content, source_url=source.url,
                                 source_title=source.title, subject_hint=plan.goal,
+                                domain="research",
                             )
                             if recorded:
                                 await emit(

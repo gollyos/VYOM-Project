@@ -29,6 +29,13 @@ class KnowledgeFact(BaseModel):
     subject: str = Field(min_length=1, max_length=300)
     predicate: str = Field(min_length=1, max_length=200)
     value: str = Field(min_length=1, max_length=4000)
+    #: Which agent/task-type this fact belongs to (its own 'wiki'). Every
+    #: distinct capability (research, coding, email, video, market data,
+    #: ...) accumulates and improves its own namespace independently
+    #: instead of all facts mixing into one undifferentiated pool. Facts
+    #: default to the 'general' namespace so existing unscoped callers
+    #: keep working unchanged.
+    domain: str = Field(default="general", max_length=64)
     source_url: str | None = None
     source_title: str | None = None
     confidence: float = Field(default=0.6, ge=0, le=1)
