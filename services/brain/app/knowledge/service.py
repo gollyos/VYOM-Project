@@ -47,6 +47,24 @@ class KnowledgeService:
         and keeps each agent's own wiki independent."""
         existing = await self.store.find_existing(fact.subject, fact.predicate, domain=fact.domain)
         if existing is not None:
+            prev_value = existing.value
+            # Karpathy's contradiction rule: a DIFFERENT value for the same
+            # (subject, predicate, domain) is a real discrepancy, NOT a
+            # silent overwrite. Flag it, keep the prior value/source, and
+            # bump the counter so lint can surface it for review — the
+            # conflict is never silently dropped. (Same value = a normal
+            # re-confirmation, no flag.)
+            if prev_value.strip().lower() != fact.value.strip().lower():
+                existing.contradicted = True
+                existing.contradiction_count += 1
+                prior = list(existing.metadata.get("prior_values", []))
+                prior.append({
+                    "value": prev_value,
+                    "source_url": existing.source_url,
+                    "source_title": existing.source_title,
+                    "conflicted_at": utc_now().isoformat(),
+                })
+                existing.metadata["prior_values"] = prior[-5:]
             existing.value = fact.value
             existing.confidence = max(existing.confidence, fact.confidence)
             if fact.source_url:
@@ -169,3 +187,54 @@ class KnowledgeService:
         # Research ran but found nothing new; return what we had
         # (possibly stale, possibly empty) rather than pretending success.
         return result
+
+    # -- Karpathy-style wiki audit + cross-reference ---------------------
+
+    async def related(self, subject: str, *, domain: str | None = None, limit: int = 20) -> list[KnowledgeFact]:
+        """Karpathy cross-reference: facts in (optionally) one agent's wiki
+        that are linked to `subject` by a shared subject token or the same
+        predicate — the structured equivalent of a [[wikilink]]. This is
+        what turns a pile of facts into a connected knowledge graph that
+        compounds, so recalling one subject surfaces its neighbours."""
+        return await self.store.related(subject, domain=domain, limit=limit)
+
+    async def lint(self, domain: str | None = None, *, stale_days: int | None = None,
+                   low_confidence: float = 0.4) -> dict:
+        """Karpathy-style wiki audit/lint for one agent's wiki (or all if
+        `domain` is None). Surfaces the problems a human or the client
+        should review rather than silently letting weak/conflicting facts
+        harden into accepted truth:
+
+          - contradicted: same (subject, predicate) got a DIFFERENT value
+            (flagged by record_fact; never silently dropped)
+          - stale: last confirmed longer ago than `fresh_after_days`
+          - low_confidence: confidence below `low_confidence`
+          - orphans: facts with no cross-reference to any other fact
+        """
+        stale_days = stale_days or self.fresh_after_days
+        domains = [domain] if domain else await self.store.namespaces()
+        report = {"domains": {}, "totals": {"facts": 0, "contradicted": 0, "stale": 0,
+                                            "low_confidence": 0, "orphans": 0}}
+        for dom in domains:
+            facts = await self.store.facts_in_domain(dom)
+            contradicted = [f for f in facts if f.contradicted or f.contradiction_count > 0]
+            stale = [f for f in facts if self.store.is_stale(f, stale_days)]
+            low = [f for f in facts if f.confidence < low_confidence]
+            orphans = []
+            for f in facts:
+                links = await self.store.related(f.subject, domain=dom, limit=2)
+                if not links:
+                    orphans.append(f)
+            report["domains"][dom] = {
+                "facts": len(facts),
+                "contradicted": [f.model_dump(mode="json") for f in contradicted],
+                "stale": [f.model_dump(mode="json") for f in stale],
+                "low_confidence": [f.model_dump(mode="json") for f in low],
+                "orphans": [f.model_dump(mode="json") for f in orphans],
+            }
+            for key in ("facts", "contradicted", "stale", "low_confidence", "orphans"):
+                value = report["domains"][dom][key]
+                report["totals"][key] += value if isinstance(value, int) else len(value)
+        report["stale_days"] = stale_days
+        report["low_confidence_threshold"] = low_confidence
+        return report

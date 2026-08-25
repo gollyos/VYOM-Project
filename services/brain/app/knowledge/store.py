@@ -44,21 +44,23 @@ class KnowledgeStore:
             INSERT INTO knowledge_facts(
                 id, subject, subject_key, predicate, value, source_url, source_title,
                 confidence, first_learned_at, last_confirmed_at, confirmations,
-                task_id, memory_id, domain, fact_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                task_id, memory_id, domain, contradicted, contradiction_count, fact_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 subject=excluded.subject, subject_key=excluded.subject_key,
                 predicate=excluded.predicate, value=excluded.value,
                 source_url=excluded.source_url, source_title=excluded.source_title,
                 confidence=excluded.confidence, last_confirmed_at=excluded.last_confirmed_at,
                 confirmations=excluded.confirmations, memory_id=excluded.memory_id,
-                domain=excluded.domain, fact_json=excluded.fact_json
+                domain=excluded.domain, contradicted=excluded.contradicted,
+                contradiction_count=excluded.contradiction_count, fact_json=excluded.fact_json
             """,
             (
                 fact.id, fact.subject, subject_key, fact.predicate, fact.value,
                 fact.source_url, fact.source_title, fact.confidence,
                 fact.first_learned_at.isoformat(), fact.last_confirmed_at.isoformat(),
-                fact.confirmations, fact.task_id, fact.memory_id, fact.domain, payload,
+                fact.confirmations, fact.task_id, fact.memory_id, fact.domain,
+                fact.contradicted, fact.contradiction_count, payload,
             ),
         )
         await connection.commit()
@@ -145,6 +147,44 @@ class KnowledgeStore:
         connection = self.database.require_connection()
         cursor = await connection.execute("SELECT DISTINCT domain FROM knowledge_facts ORDER BY domain")
         return [row["domain"] for row in await cursor.fetchall()]
+
+    async def facts_in_domain(self, domain: str, *, limit: int = 500) -> list[KnowledgeFact]:
+        """All facts in one agent's wiki (bounded). Feeds the wiki lint /
+        audit (orphans, contradictions, stale, low-confidence) and the
+        cross-reference (related) view."""
+        connection = self.database.require_connection()
+        cursor = await connection.execute(
+            "SELECT fact_json FROM knowledge_facts WHERE domain = ? "
+            "ORDER BY last_confirmed_at DESC LIMIT ?",
+            (domain, limit),
+        )
+        return [KnowledgeFact.model_validate_json(row["fact_json"]) for row in await cursor.fetchall()]
+
+    async def related(self, subject: str, domain: str | None = None, *, limit: int = 20) -> list[KnowledgeFact]:
+        """Karpathy-style cross-reference: facts in the same 'wiki' that
+        are related to `subject` because they share a subject token or the
+        same predicate (the structured analogue of a [[wikilink]]). Lets
+        the KB compound knowledge into a connected graph instead of
+        isolated rows."""
+        key = _normalize_subject(subject)
+        tokens = [t for t in re.findall(r"[a-z0-9]+", key) if len(t) > 2]
+        connection = self.database.require_connection()
+        clauses: list[str] = []
+        params: list[object] = []
+        if domain is not None:
+            clauses.append("domain = ?")
+            params.append(domain)
+        if tokens:
+            clauses.append("(" + " OR ".join("subject_key LIKE ?" for _ in tokens) + ")")
+            params.extend(f"%{token}%" for token in tokens)
+        if not clauses:
+            return []
+        cursor = await connection.execute(
+            f"SELECT fact_json FROM knowledge_facts WHERE {' AND '.join(clauses)} "
+            "AND subject_key != ? ORDER BY last_confirmed_at DESC LIMIT ?",
+            (*params, key, limit),
+        )
+        return [KnowledgeFact.model_validate_json(row["fact_json"]) for row in await cursor.fetchall()]
 
     async def confirm(self, fact: KnowledgeFact, *, source_url: str | None = None,
                        confidence: float | None = None) -> KnowledgeFact:

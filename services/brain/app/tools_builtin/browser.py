@@ -53,8 +53,12 @@ class BrowserTool(BaseTool):
         # Honor the task's per-task visibility decision: a 'visual' task
         # opens a REAL, on-screen browser window (headless=False) the user
         # can watch; 'background' (or unset) stays headless/invisible. The
-        # manager applies this on the next browser launch.
-        self.actions.set_visibility(context.metadata.get("visibility"))
+        # manager applies this on the next browser launch. Guarded with
+        # getattr so a mock/bare actions object (tests) without the method
+        # does not crash the whole call.
+        set_visibility = getattr(self.actions, "set_visibility", None)
+        if set_visibility is not None:
+            set_visibility(context.metadata.get("visibility"))
         output = await self.actions.perform(action, inputs)
         evidence_type = "browser_screenshot" if action == "screenshot" else "browser_confirmation"
         evidence = EvidenceItem(type=evidence_type, summary=f"Browser {action} completed", data=output)

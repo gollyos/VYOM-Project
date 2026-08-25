@@ -147,9 +147,26 @@ class MigrationManager:
         validation_expected=(1,),
     )
 
+    KNOWLEDGE_CONTRADICTION = Migration(
+        version=8,
+        name="knowledge_contradiction_v1",
+        statements=(
+            # Karpathy-style contradiction handling: when a re-record finds
+            # a DIFFERENT value for the same (subject, predicate, domain),
+            # VYOM no longer silently overwrites — it flags the conflict so
+            # lint can surface it for review instead of dropping a real
+            # discrepancy. Adds the two columns that carry that signal.
+            "ALTER TABLE knowledge_facts ADD COLUMN contradicted INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE knowledge_facts ADD COLUMN contradiction_count INTEGER NOT NULL DEFAULT 0",
+            "CREATE INDEX IF NOT EXISTS idx_knowledge_contradicted ON knowledge_facts(domain, contradicted)",
+        ),
+        validation_query="SELECT COUNT(*) FROM pragma_table_info('knowledge_facts') WHERE name='contradicted'",
+        validation_expected=(1,),
+    )
+
     def __init__(self, database, migrations: list[Migration] | None = None):
         self.database = database
-        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY, self.KNOWLEDGE_BASE, self.MESSAGING, self.KNOWLEDGE_NAMESPACE], key=lambda item: item.version)
+        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY, self.KNOWLEDGE_BASE, self.MESSAGING, self.KNOWLEDGE_NAMESPACE, self.KNOWLEDGE_CONTRADICTION], key=lambda item: item.version)
         self.last_error: str | None = None
 
     async def ensure_table(self) -> None:

@@ -44,6 +44,14 @@ class KnowledgeFact(BaseModel):
     confirmations: int = 1
     task_id: str | None = None
     memory_id: str | None = None  # links to the MemoryEntry that carries this fact for FTS/embedding recall
+    #: Karpathy-style contradiction handling. When a re-record finds a
+    #: DIFFERENT value for the same (subject, predicate, domain), VYOM no
+    #: longer silently overwrites: it flags the fact as contradicted and
+    #: notes both values/sources so lint can surface it for review. A
+    #: newer, more-confident source can still supersede, but the conflict
+    #: is never silently dropped.
+    contradicted: bool = False
+    contradiction_count: int = 0
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     def as_sentence(self) -> str:

@@ -34,6 +34,32 @@ async def list_namespaces(request: Request) -> dict[str, Any]:
     return {"namespaces": namespaces, "count": len(namespaces)}
 
 
+@router.get("/related")
+async def related_facts(subject: str, request: Request, domain: str | None = None, limit: int = 20) -> dict[str, Any]:
+    """Karpathy-style cross-reference: facts linked to `subject` by a
+    shared subject token or the same predicate (the structured analogue of
+    a [[wikilink]]). Pass `domain` to scope to one agent's wiki."""
+    if not subject.strip():
+        raise HTTPException(status_code=400, detail="subject is required")
+    facts = await request.app.state.knowledge_service.related(
+        subject, domain=domain, limit=min(max(limit, 1), 100),
+    )
+    return {"subject": subject, "domain": domain, "related": [f.model_dump(mode="json") for f in facts]}
+
+
+@router.get("/lint")
+async def lint_wiki(request: Request, domain: str | None = None, stale_days: int | None = None,
+                    low_confidence: float = 0.4) -> dict[str, Any]:
+    """Karpathy-style wiki audit/lint. Surfaces what a client should
+    review instead of letting weak/conflicting facts harden into truth:
+    contradicted facts, stale facts, low-confidence facts, and orphans
+    (facts with no cross-reference). Pass `domain` for one agent's wiki,
+    or omit to lint all."""
+    return await request.app.state.knowledge_service.lint(
+        domain=domain, stale_days=stale_days, low_confidence=low_confidence,
+    )
+
+
 @router.get("/{topic}")
 async def knowledge_for_topic(topic: str, request: Request, limit: int = 50, domain: str | None = None) -> dict[str, Any]:
     """All known facts on a topic (exact/substring subject match). Pass
