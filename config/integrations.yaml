@@ -40,6 +40,16 @@ integrations:
     metadata:
       oauth: required
       secret_storage: windows-dpapi
+  - id: youtube
+    name: YouTube
+    provider: google
+    category: content
+    enabled: true
+    status: disconnected
+    capabilities: [video.upload]
+    metadata:
+      oauth: required
+      secret_storage: windows-dpapi
   - id: telegram
     name: Telegram
     provider: telegram
