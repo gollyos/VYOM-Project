@@ -1,0 +1,3 @@
+name: task-logger
+version: "1.0.0"
+description: "Example plugin - logs every completed task to a local file. Proves the plugin system end to end."

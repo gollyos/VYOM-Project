@@ -11,7 +11,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, conversation as conversation_api, crm, curator as curator_api, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discord as discord_api, discovery as discovery_api, email as email_api, extension as extension_api, facebook as facebook_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api, twitter as twitter_api, linkedin as linkedin_api, meta_ads as meta_ads_api, whatsapp as whatsapp_api, search as search_api
+from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, conversation as conversation_api, crm, curator as curator_api, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discord as discord_api, discovery as discovery_api, email as email_api, extension as extension_api, facebook as facebook_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, kanban as kanban_api, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, plugins as plugins_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api, twitter as twitter_api, linkedin as linkedin_api, meta_ads as meta_ads_api, whatsapp as whatsapp_api, search as search_api
 from app.agency.service import AgencyService, DisconnectedLeadResearchProvider
 from app.agents.evaluator import AgentEvaluator
 from app.agents.factory import AgentFactory
@@ -24,7 +24,7 @@ from app.browser.browser_verifier import BrowserVerifier
 from app.browser.playwright_manager import PlaywrightManager
 from app.browser_extension.bridge import ExtensionBridge
 from app.browser_extension.pairing import PairingStore
-from app.core.config import Settings, get_settings
+from app.core.config import Settings, get_settings, BRAIN_ROOT, PROJECT_ROOT
 from app.core.logging import configure_logging
 from app.capabilities.discovery import CapabilityDiscovery
 from app.capabilities.registry import CapabilityRegistry
@@ -34,6 +34,9 @@ from app.persistence.model_performance_store import ModelPerformanceStore
 from app.persistence.task_store import TaskStore
 from app.persistence.conversation_store import ConversationStore
 from app.adaptive.curator import Curator, CuratorRunStore
+from app.plugins.registry import PluginRegistry
+from app.kanban.store import KanbanStore
+from app.kanban.dispatcher import KanbanDispatcher
 from app.providers import ProviderRegistry, create_provider_registry
 from app.providers.response_cache import ResponseCache
 from app.routing.model_registry import ModelRegistry
@@ -1099,6 +1102,15 @@ def create_app(
 
         automation_scheduler = AutomationScheduler(automation_store, execute_automation)
         curator_run_store = CuratorRunStore(database)
+        plugin_registry = PluginRegistry()
+        plugin_registry.discover_and_load(
+            BRAIN_ROOT / "plugins",
+            Path(os.getenv("VYOM_PLUGINS_DIR", str(PROJECT_ROOT / "data" / "plugins"))),
+        )
+        kanban_store = KanbanStore(database)
+        kanban_dispatcher = KanbanDispatcher(
+            kanban_store, base_url=f"http://{selected_settings.host}:{selected_settings.port}",
+        )
         curator = Curator(
             task_store=task_store,
             run_store=curator_run_store,
@@ -1588,6 +1600,9 @@ def create_app(
         application.state.conversation_store = conversation_store
         application.state.curator = curator
         application.state.curator_run_store = curator_run_store
+        application.state.plugin_registry = plugin_registry
+        application.state.kanban_store = kanban_store
+        application.state.kanban_dispatcher = kanban_dispatcher
         application.state.performance_store = performance_store
         application.state.event_bus = event_bus
         application.state.model_registry = model_registry
@@ -1822,6 +1837,7 @@ def create_app(
         runtime.knowledge_service = knowledge_service
         runtime.automation_store = automation_store
         runtime.conversation_store = conversation_store
+        runtime.plugin_registry = plugin_registry
         # Phase 12 crash recovery runs BEFORE any task is restarted: a
         # consequential task with evidence of a partial external action
         # (or one owned by another node) must never be blindly
@@ -1864,6 +1880,7 @@ def create_app(
         automation_scheduler.start()
         automation_events.start()
         curator.start()
+        kanban_dispatcher.start()
         remote_delivery_bridge.start()
         supervisor.start()
         await sync_bridge.start()
@@ -1876,6 +1893,7 @@ def create_app(
         await remote_delivery_bridge.stop()
         await automation_scheduler.stop()
         await curator.stop()
+        await kanban_dispatcher.stop()
         for active in tuple(runtime.active.values()):
             active.cancel()
         if runtime.active:
@@ -1916,6 +1934,8 @@ def create_app(
     application.include_router(tasks.router)
     application.include_router(conversation_api.router)
     application.include_router(curator_api.router)
+    application.include_router(plugins_api.router)
+    application.include_router(kanban_api.router)
     application.include_router(approvals.router)
     application.include_router(models.router)
     application.include_router(tools.router)

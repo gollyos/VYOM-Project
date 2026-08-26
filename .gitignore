@@ -19,3 +19,4 @@ services/brain/data/screenshots/
 services/brain/data/video-jobs/
 services/brain/whatsapp_connector/node_modules/
 services/brain/data/whatsapp-auth/
+services/brain/plugins/task_logger/task_log.txt

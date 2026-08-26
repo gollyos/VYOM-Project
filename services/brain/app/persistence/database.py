@@ -670,6 +670,32 @@ class Database:
             );
             CREATE INDEX IF NOT EXISTS idx_curator_runs_started
                 ON curator_runs(started_at);
+
+            -- Kanban board: a real multi-agent task board mirroring
+            -- Hermes's own hermes_cli/kanban_db.py pattern. A dispatcher
+            -- claims PENDING cards and spawns an isolated worker
+            -- subprocess per card; the worker owns the card end to end
+            -- (claim -> in_progress -> completed/blocked) so several
+            -- cards genuinely run in parallel as separate OS processes,
+            -- not just concurrent asyncio tasks inside one request.
+            CREATE TABLE IF NOT EXISTS kanban_cards (
+                id TEXT PRIMARY KEY,
+                board TEXT NOT NULL DEFAULT 'default',
+                title TEXT NOT NULL,
+                goal TEXT NOT NULL,
+                status TEXT NOT NULL,
+                worker_pid INTEGER,
+                claimed_at TEXT,
+                completed_at TEXT,
+                result_json TEXT,
+                error TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_kanban_board_status
+                ON kanban_cards(board, status);
+            CREATE INDEX IF NOT EXISTS idx_kanban_created
+                ON kanban_cards(created_at);
             """
         )
         await self.connection.commit()

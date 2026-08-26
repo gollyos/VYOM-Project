@@ -112,6 +112,7 @@ class TaskRuntime:
         self.knowledge_service = None  # attached post-construction; the "khud ka Wikipedia" recall-first service
         self.automation_store = None  # attached post-construction; one durable scheduler/store
         self.conversation_store = None  # attached post-construction; raw turn-by-turn transcript (see app/persistence/conversation_store.py)
+        self.plugin_registry = None  # attached post-construction; see app/plugins/registry.py
         from .verifier import GoalVerifier, PostconditionVerifier
         self.postconditions = PostconditionVerifier()
         # The ONE authority that can promote a task to VERIFIED_COMPLETE.
@@ -2240,6 +2241,13 @@ class TaskRuntime:
             except Exception:
                 import logging
                 logging.getLogger(__name__).warning("Failed to record conversation turn for task %s", task.id, exc_info=True)
+
+        # PLUGIN HOOK. Fires after every real completion, same boundary
+        # as conversation recording above - see app/plugins/registry.py.
+        # A broken plugin callback is isolated by invoke_hook and can
+        # never break the response that already succeeded.
+        if self.plugin_registry is not None and self.plugin_registry.has_hook("post_task_complete"):
+            await self.plugin_registry.invoke_hook("post_task_complete", task=task, result=result)
 
         # ACTIVE CONTEXT. Record what this task actually DID - the URL that
         # opened, the profile attached to, the windows read - so the next
