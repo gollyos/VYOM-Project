@@ -39,6 +39,8 @@ export function VyomExperience() {
     activeTaskId,
     terminalEventKey,
     approval,
+    pendingWork,
+    dismissPendingWork,
     runCommand,
     decideApproval,
     cancelActiveTask,
@@ -340,6 +342,28 @@ export function VyomExperience() {
       <ConnectionsPanel />
 
       <section className="interaction-dock">
+        {pendingWork.length > 0 && (
+          <div className="brain-approval-notice" role="alert" aria-label="Unfinished work from before">
+            <span>
+              <AlertCircle size={11} />
+              {pendingWork.length} unfinished task{pendingWork.length > 1 ? "s" : ""} from before —{" "}
+              {pendingWork[0].summary}
+              {pendingWork.length > 1 ? ` (+${pendingWork.length - 1} more)` : ""}
+            </span>
+            <div>
+              <button type="button" onClick={dismissPendingWork}>Dismiss</button>
+              <button
+                type="button"
+                onClick={() => {
+                  runCommand(`Resume this: ${pendingWork[0].summary}`);
+                  dismissPendingWork();
+                }}
+              >
+                Resume
+              </button>
+            </div>
+          </div>
+        )}
         {approval && (
           <div className="brain-approval-notice" role="alert">
             <span><AlertCircle size={11} />{approval.level} approval · {approval.action}</span>

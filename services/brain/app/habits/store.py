@@ -8,8 +8,14 @@ from .schemas import Habit, HabitEvent, HabitStatus
 
 
 class HabitStore:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, memory=None) -> None:
         self.database = database
+        #: Optional MemoryManager - mirrors every habit save into the
+        #: shared cross-domain memory graph (see
+        #: app/memory/cross_domain.py) so "how are my habits going"
+        #: research and goal-linkage can find it. None is fully
+        #: supported; mirroring is purely additive.
+        self.memory = memory
 
     async def save(self, habit: Habit) -> Habit:
         connection = self.database.require_connection()
@@ -20,6 +26,17 @@ class HabitStore:
             (habit.id, habit.status.value, habit.model_dump_json(), habit.created_at.isoformat(), datetime.now(timezone.utc).isoformat()),
         )
         await connection.commit()
+        if self.memory is not None:
+            from app.memory.cross_domain import mirror
+            from app.memory.namespaces import CognitiveNamespace
+
+            await mirror(
+                self.memory, namespace=CognitiveNamespace.PERSONAL, domain_store="habit", record_id=habit.id,
+                title=f"Habit: {habit.name}",
+                content=f"{habit.name} ({habit.desired_direction.value}, {habit.frequency}, category: {habit.category}, status: {habit.status.value})",
+                entities=[habit.name], extra_tags=[f"status:{habit.status.value}", f"category:{habit.category}"],
+                importance=0.5,
+            )
         return habit
 
     async def get(self, habit_id: str) -> Habit | None:

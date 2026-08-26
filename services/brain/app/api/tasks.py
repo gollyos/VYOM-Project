@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from app.schemas.tasks import Task, TaskCreate
+from app.schemas.tasks import Task, TaskCreate, TaskStatus
 
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -16,6 +16,32 @@ async def create_task(payload: TaskCreate, request: Request) -> Task:
 @router.get("", response_model=list[Task])
 async def list_tasks(request: Request, limit: int = 100) -> list[Task]:
     return await request.app.state.task_store.list(min(max(limit, 1), 500))
+
+
+@router.get("/pending-work")
+async def pending_work(request: Request) -> dict:
+    """Unfinished work from before the app was last closed/crashed/lost
+    power - the answer to 'bijli chali gayi thi, kya pending tha'.
+    Called by the frontend once on boot (see use-vyom-runtime.ts) so the
+    user is told about interrupted work WITHOUT having to ask for a
+    daily briefing first. Real task_store rows only - PAUSED tasks were
+    deliberately not auto-resumed (Phase 12 recovery decided it was
+    unsafe to blindly re-run), FAILED tasks genuinely failed; both need
+    an explicit user decision (resume / retry / dismiss), never a
+    silent re-run.
+    """
+    paused = await request.app.state.task_store.list_by_status({TaskStatus.PAUSED})
+    failed = await request.app.state.task_store.list_by_status({TaskStatus.FAILED})
+    def _summarize(task: Task) -> dict:
+        return {
+            "task_id": task.id,
+            "summary": (task.user_request or task.goal or "task")[:200],
+            "status": task.status.value,
+            "created_at": task.created_at.isoformat(),
+            "error": task.error,
+        }
+    items = [_summarize(t) for t in (paused + failed)[:10]]
+    return {"count": len(items), "items": items}
 
 
 @router.get("/{task_id}", response_model=Task)

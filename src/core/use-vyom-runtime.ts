@@ -13,6 +13,16 @@ const NATIVE_NOTIFICATION_CATEGORIES: Partial<Record<BrainEvent["type"], string>
   meeting_verified: "Meeting confirmed",
 };
 
+export type PendingWorkItem = {
+  task_id: string;
+  summary: string;
+  status: string;
+  created_at: string;
+  error: string | null;
+};
+
+const BRAIN_URL = (import.meta.env.VITE_VYOM_BRAIN_URL as string | undefined)?.replace(/\/$/, "") || "http://127.0.0.1:7788";
+
 async function dispatchNativeNotification(title: string, body: string) {
   if (!("__TAURI_INTERNALS__" in window)) return;
   try {
@@ -47,6 +57,8 @@ type RuntimeSnapshot = {
   activeTaskId: string | null;
   terminalEventKey: string | null;
   approval: PendingApproval | null;
+  pendingWork: PendingWorkItem[];
+  dismissPendingWork: () => void;
   runCommand: (
     command: string,
     correlationId?: string,
@@ -95,6 +107,8 @@ export function useVyomRuntime(): RuntimeSnapshot {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [terminalEventKey, setTerminalEventKey] = useState<string | null>(null);
   const [approval, setApproval] = useState<PendingApproval | null>(null);
+  const [pendingWork, setPendingWork] = useState<PendingWorkItem[]>([]);
+  const dismissPendingWork = useCallback(() => setPendingWork([]), []);
   const timers = useRef<number[]>([]);
   const clientRef = useRef<BrainClient | null>(null);
   const compositionRef = useRef<UIComposition | null>(null);
@@ -427,6 +441,31 @@ export function useVyomRuntime(): RuntimeSnapshot {
     };
   }, [clearTimers, handleBrainEvent]);
 
+  // "bijli chali gayi thi, kya pending tha" — fetched once on mount so
+  // interrupted work from before a restart/crash/power-loss is surfaced
+  // WITHOUT the user having to ask for a daily briefing first (that path
+  // already existed, via phase11 Phase11Engine.pending_work_recalled,
+  // but only fired on an explicit "what should I do today" — never
+  // proactively on app open). Real task_store rows only; see
+  // GET /api/tasks/pending-work in app/api/tasks.py.
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`${BRAIN_URL}/api/tasks/pending-work`, { signal: AbortSignal.timeout(5000) });
+        if (!response.ok) return;
+        const data = (await response.json()) as { items: PendingWorkItem[] };
+        if (!cancelled && data.items?.length) setPendingWork(data.items);
+      } catch {
+        // Best-effort: an offline Brain at boot just means no pending-work banner this session.
+      }
+    }, 800); // let the Brain connection settle first
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
+
   const submitToBrain = useCallback((
     command: string,
     correlationId?: string,
@@ -626,6 +665,8 @@ export function useVyomRuntime(): RuntimeSnapshot {
     activeTaskId,
     terminalEventKey,
     approval,
+    pendingWork,
+    dismissPendingWork,
     runCommand,
     decideApproval,
     cancelActiveTask,

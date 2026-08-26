@@ -546,7 +546,7 @@ def create_app(
             integration_registry.register_provider("twitter", twitter_provider)
         if "meta-ads" in integration_registry.records:
             integration_registry.register_provider("meta-ads", meta_ads_provider)
-        crm_store = CRMStore(database)
+        crm_store = CRMStore(database, memory=memory_manager)
         email_service = EmailService(database, email_provider)
         calendar_service = CalendarService(calendar_provider)
         sheets_service = SheetsService(sheets_provider)
@@ -822,7 +822,7 @@ def create_app(
             catalyst_researcher, sentiment_analyzer, thesis_builder,
         )
 
-        portfolio_store = PortfolioStore(database)
+        portfolio_store = PortfolioStore(database, memory=memory_manager)
         watchlist_store = WatchlistStore(database)
         portfolio_service = PortfolioService(portfolio_store, quote_service)
 
@@ -866,7 +866,7 @@ def create_app(
         commitment_service = CommitmentService(commitment_store)
         personal_context_builder = PersonalContextBuilder()
 
-        goal_store = GoalStore(database)
+        goal_store = GoalStore(database, memory=memory_manager)
         milestone_store = MilestoneStore(database)
         milestone_service = MilestoneService(milestone_store)
         goals_config = yaml.safe_load((project_root / "config" / "goals.yaml").read_text(encoding="utf-8")) or {}
@@ -883,7 +883,7 @@ def create_app(
         )
 
         habits_config = yaml.safe_load((project_root / "config" / "habits.yaml").read_text(encoding="utf-8")) or {}
-        habit_store = HabitStore(database)
+        habit_store = HabitStore(database, memory=memory_manager)
         habit_event_store = HabitEventStore(database)
         habit_allowed_sources = set(habits_config.get("tracking", {}).get("allowed_sources", []))
         habit_tracker = HabitTracker(habit_store, habit_event_store, allowed_sources=habit_allowed_sources)

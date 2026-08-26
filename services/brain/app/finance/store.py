@@ -8,8 +8,14 @@ from .schemas import Portfolio, Watchlist
 
 
 class PortfolioStore:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, memory=None) -> None:
         self.database = database
+        #: Optional MemoryManager - mirrors every portfolio save into
+        #: the shared cross-domain memory graph under
+        #: CognitiveNamespace.FINANCE (see app/memory/cross_domain.py),
+        #: so "what positions do I hold" and general recall can find it
+        #: alongside other finance context. None is fully supported.
+        self.memory = memory
 
     async def save(self, portfolio: Portfolio) -> Portfolio:
         portfolio.updated_at = datetime.now(timezone.utc)
@@ -25,6 +31,17 @@ class PortfolioStore:
             ),
         )
         await connection.commit()
+        if self.memory is not None:
+            from app.memory.cross_domain import mirror
+            from app.memory.namespaces import CognitiveNamespace
+
+            holdings = ", ".join(p.instrument.normalized_symbol() for p in getattr(portfolio, "positions", [])[:10]) or "no positions yet"
+            await mirror(
+                self.memory, namespace=CognitiveNamespace.FINANCE, domain_store="portfolio", record_id=portfolio.id,
+                title=f"Portfolio: {portfolio.name}",
+                content=f"{portfolio.name} ({portfolio.kind.value}) — holdings: {holdings}",
+                entities=[portfolio.name], extra_tags=[f"portfolio_kind:{portfolio.kind.value}"], importance=0.5,
+            )
         return portfolio
 
     async def get(self, portfolio_id: str) -> Portfolio | None:

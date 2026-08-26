@@ -15,8 +15,15 @@ def normalize_key(value: str) -> str:
 
 
 class CRMStore:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, memory=None) -> None:
         self.database = database
+        #: Optional MemoryManager - mirrors every upsert into the shared
+        #: cross-domain memory graph (see app/memory/cross_domain.py)
+        #: under CognitiveNamespace.AGENCY, the same namespace research
+        #: and outreach tasks already use, so a lead/client/person is
+        #: findable alongside the agency work done for them. None is
+        #: fully supported; mirroring is purely additive.
+        self.memory = memory
 
     async def upsert(self, record: CRMRecord) -> tuple[CRMRecord, bool]:
         key_source = record.normalized_key or getattr(record, "domain", "") or record.name
@@ -40,6 +47,20 @@ class CRMStore:
             (record.id, record.record_type, record.normalized_key, record.model_dump_json(), record.created_at.isoformat(), record.updated_at.isoformat()),
         )
         await connection.commit()
+        if self.memory is not None:
+            from app.memory.cross_domain import mirror
+            from app.memory.namespaces import CognitiveNamespace
+
+            details = ", ".join(
+                f"{field}: {value}" for field in ("company", "domain", "state", "status", "stage", "channel")
+                if (value := getattr(record, field, None))
+            )
+            await mirror(
+                self.memory, namespace=CognitiveNamespace.AGENCY, domain_store=f"crm_{record.record_type}",
+                record_id=record.id, title=f"{record.record_type.title()}: {record.name}",
+                content=f"{record.name} ({record.record_type}){' — ' + details if details else ''}",
+                entities=[record.name], extra_tags=[f"crm_type:{record.record_type}"], importance=0.5,
+            )
         return record, created
 
     async def get(self, record_id: str) -> CRMRecord:

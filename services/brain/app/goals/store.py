@@ -8,8 +8,16 @@ from .schemas import Goal, GoalStatus, Milestone
 
 
 class GoalStore:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, memory=None) -> None:
         self.database = database
+        #: Optional MemoryManager - when given, every save() also
+        #: mirrors the goal into the shared cross-domain memory graph
+        #: (see app/memory/cross_domain.py) so it is findable alongside
+        #: habits, CRM contacts, and researched facts, not just from
+        #: this table. None is a valid, fully-supported mode (tests,
+        #: or contexts where memory isn't wired) - mirroring is
+        #: strictly additive and never required for goals to work.
+        self.memory = memory
 
     async def save(self, goal: Goal) -> Goal:
         goal.updated_at = datetime.now(timezone.utc)
@@ -22,6 +30,17 @@ class GoalStore:
             (goal.id, goal.status.value, goal.category.value, goal.model_dump_json(), goal.created_at.isoformat(), goal.updated_at.isoformat()),
         )
         await connection.commit()
+        if self.memory is not None:
+            from app.memory.cross_domain import mirror
+            from app.memory.namespaces import CognitiveNamespace
+
+            await mirror(
+                self.memory, namespace=CognitiveNamespace.PERSONAL, domain_store="goal", record_id=goal.id,
+                title=f"Goal: {goal.title}",
+                content=f"{goal.title} — {goal.description} (status: {goal.status.value}, category: {goal.category.value})",
+                entities=[goal.title], extra_tags=[f"status:{goal.status.value}", f"category:{goal.category.value}"],
+                importance=0.6 if goal.status.value == "active" else 0.4,
+            )
         return goal
 
     async def get(self, goal_id: str) -> Goal | None:
