@@ -6,6 +6,7 @@ import { OnboardingOverlay } from "./onboarding-overlay";
 import { UIComposer } from "@/composer/ui-composer";
 import { AgentStackPanel } from "./agent-stack-panel";
 import { ConnectionsPanel } from "./connections-panel";
+import { WindowControls } from "./window-controls";
 import { newCorrelationId, trace } from "@/core/trace";
 import { STATE_VISUALS } from "@/core/vyom-state";
 import { useVyomRuntime } from "@/core/use-vyom-runtime";
@@ -283,6 +284,7 @@ export function VyomExperience() {
           <span className="status-divider" />
           <span>{time || "--:--"}</span>
         </div>
+        <WindowControls />
       </header>
 
       <UIComposer

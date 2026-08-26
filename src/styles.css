@@ -116,6 +116,39 @@ button {
   gap: 12px;
 }
 
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.window-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #687572;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.12s ease, color 0.12s ease;
+  -webkit-app-region: no-drag;
+}
+
+.window-control:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #cfd8d6;
+}
+
+.window-control-close:hover {
+  background: #e5484d;
+  color: #ffffff;
+}
+
+
 .identity-mark {
   position: relative;
   display: grid;

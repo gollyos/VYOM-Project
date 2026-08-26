@@ -72,6 +72,8 @@ pub fn run() {
             desktop::show_native_notification,
             desktop::minimize_vyom_window,
             desktop::restore_vyom_window,
+            desktop::toggle_maximize_vyom_window,
+            desktop::close_vyom_window,
         ])
         .setup(|app| {
             if app.get_webview_window("main").is_none() {

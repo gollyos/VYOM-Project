@@ -112,3 +112,33 @@ pub fn restore_vyom_window(app: AppHandle) -> Result<(), String> {
         })
         .map_err(|error| error.to_string())
 }
+
+/// Toggle maximize/restore on VYOM's own window. Since the window runs
+/// with `decorations: false` (a fully custom titlebar), there is no OS
+/// double-click-to-maximize or native maximize button — the frontend's
+/// custom titlebar calls this directly.
+#[tauri::command]
+pub fn toggle_maximize_vyom_window(app: AppHandle) -> Result<(), String> {
+    let Some(window) = app.get_webview_window("main") else {
+        return Ok(());
+    };
+    let is_maximized = window.is_maximized().map_err(|error| error.to_string())?;
+    if is_maximized {
+        window.unmaximize().map_err(|error| error.to_string())
+    } else {
+        window.maximize().map_err(|error| error.to_string())
+    }
+}
+
+/// Close VYOM's own window: a genuine quit; the frontend's custom
+/// titlebar calls this because with `decorations: false` there is no
+/// native close button. Note this is intentionally different from the
+/// tray's "minimize to tray" `CloseRequested` interception (which
+/// catches the OS-level close signal, e.g. Alt+F4) — a user who
+/// deliberately clicks a close button in VYOM's own UI expects the app
+/// to actually exit, not vanish into the tray.
+#[tauri::command]
+pub fn close_vyom_window(app: AppHandle) -> Result<(), String> {
+    app.exit(0);
+    Ok(())
+}
