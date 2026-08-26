@@ -11,7 +11,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, crm, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discord as discord_api, discovery as discovery_api, email as email_api, extension as extension_api, facebook as facebook_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api, twitter as twitter_api, linkedin as linkedin_api, meta_ads as meta_ads_api, whatsapp as whatsapp_api, search as search_api
+from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, conversation as conversation_api, crm, curator as curator_api, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discord as discord_api, discovery as discovery_api, email as email_api, extension as extension_api, facebook as facebook_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api, twitter as twitter_api, linkedin as linkedin_api, meta_ads as meta_ads_api, whatsapp as whatsapp_api, search as search_api
 from app.agency.service import AgencyService, DisconnectedLeadResearchProvider
 from app.agents.evaluator import AgentEvaluator
 from app.agents.factory import AgentFactory
@@ -32,6 +32,8 @@ from app.capabilities.schemas import CapabilityRecord, CapabilitySource, Capabil
 from app.persistence.database import Database
 from app.persistence.model_performance_store import ModelPerformanceStore
 from app.persistence.task_store import TaskStore
+from app.persistence.conversation_store import ConversationStore
+from app.adaptive.curator import Curator, CuratorRunStore
 from app.providers import ProviderRegistry, create_provider_registry
 from app.providers.response_cache import ResponseCache
 from app.routing.model_registry import ModelRegistry
@@ -332,6 +334,7 @@ def create_app(
         database = Database(selected_settings.database_path)
         await database.connect()
         task_store = TaskStore(database)
+        conversation_store = ConversationStore(database)
         performance_store = ModelPerformanceStore(database)
         event_bus = EventBus()
         model_registry = ModelRegistry.from_yaml(selected_settings.model_registry_path)
@@ -1095,6 +1098,14 @@ def create_app(
             raise RuntimeError("Automation action is not registered")
 
         automation_scheduler = AutomationScheduler(automation_store, execute_automation)
+        curator_run_store = CuratorRunStore(database)
+        curator = Curator(
+            task_store=task_store,
+            run_store=curator_run_store,
+            knowledge_service=knowledge_service,
+            automation_store=automation_store,
+            event_bus=event_bus,
+        )
         automation_events = AutomationEventEngine(automation_store, automation_scheduler, event_bus)
         model_router = ModelRouter(
             model_registry,
@@ -1574,6 +1585,9 @@ def create_app(
 
         application.state.database = database
         application.state.task_store = task_store
+        application.state.conversation_store = conversation_store
+        application.state.curator = curator
+        application.state.curator_run_store = curator_run_store
         application.state.performance_store = performance_store
         application.state.event_bus = event_bus
         application.state.model_registry = model_registry
@@ -1807,6 +1821,7 @@ def create_app(
         runtime.memory_manager = memory_manager
         runtime.knowledge_service = knowledge_service
         runtime.automation_store = automation_store
+        runtime.conversation_store = conversation_store
         # Phase 12 crash recovery runs BEFORE any task is restarted: a
         # consequential task with evidence of a partial external action
         # (or one owned by another node) must never be blindly
@@ -1848,6 +1863,7 @@ def create_app(
             readiness_tracker.mark_degraded(startup_report.failures)
         automation_scheduler.start()
         automation_events.start()
+        curator.start()
         remote_delivery_bridge.start()
         supervisor.start()
         await sync_bridge.start()
@@ -1859,6 +1875,7 @@ def create_app(
         await automation_events.stop()
         await remote_delivery_bridge.stop()
         await automation_scheduler.stop()
+        await curator.stop()
         for active in tuple(runtime.active.values()):
             active.cancel()
         if runtime.active:
@@ -1897,6 +1914,8 @@ def create_app(
     )
     application.add_middleware(ProductionMiddleware)
     application.include_router(tasks.router)
+    application.include_router(conversation_api.router)
+    application.include_router(curator_api.router)
     application.include_router(approvals.router)
     application.include_router(models.router)
     application.include_router(tools.router)

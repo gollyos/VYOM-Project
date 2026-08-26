@@ -111,6 +111,7 @@ class TaskRuntime:
         self.memory_manager = None  # attached post-construction in main.py, same pattern
         self.knowledge_service = None  # attached post-construction; the "khud ka Wikipedia" recall-first service
         self.automation_store = None  # attached post-construction; one durable scheduler/store
+        self.conversation_store = None  # attached post-construction; raw turn-by-turn transcript (see app/persistence/conversation_store.py)
         from .verifier import GoalVerifier, PostconditionVerifier
         self.postconditions = PostconditionVerifier()
         # The ONE authority that can promote a task to VERIFIED_COMPLETE.
@@ -2222,6 +2223,23 @@ class TaskRuntime:
         task.progress = 1
         task.completed_at = datetime.now(timezone.utc)
         await self.task_store.save(task)
+
+        # RAW TRANSCRIPT. Distinct from the structured task row above and
+        # from any summarized memory below: this is the exact user request
+        # and exact response, so a later session can literally full-text
+        # search "what did I say about X" (see ConversationStore.search),
+        # the way a real chat-history search works, not just "what tasks
+        # touched X". Best-effort - a transcript write failure must never
+        # break the user-facing response that already succeeded.
+        if self.conversation_store is not None:
+            try:
+                await self.conversation_store.record_exchange(
+                    context_id=task.context_id, task_id=task.id,
+                    user_message=task.user_request, assistant_response=result.response or "",
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning("Failed to record conversation turn for task %s", task.id, exc_info=True)
 
         # ACTIVE CONTEXT. Record what this task actually DID - the URL that
         # opened, the profile attached to, the windows read - so the next

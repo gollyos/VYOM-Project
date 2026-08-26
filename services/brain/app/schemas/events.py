@@ -191,6 +191,7 @@ class EventType(str, Enum):
     COMMITMENT_COMPLETED = "commitment_completed"
     DAILY_PLAN_CREATED = "daily_plan_created"
     PENDING_WORK_RECALLED = "pending_work_recalled"
+    CURATOR_RUN_COMPLETED = "curator_run_completed"
     MORNING_BRIEFING_READY = "morning_briefing_ready"
     EVENING_REVIEW_READY = "evening_review_ready"
     WEEKLY_REVIEW_READY = "weekly_review_ready"

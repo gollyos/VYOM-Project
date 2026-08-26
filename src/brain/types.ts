@@ -181,6 +181,7 @@ export type BrainEventType =
   | "commitment_completed"
   | "daily_plan_created"
   | "pending_work_recalled"
+  | "curator_run_completed"
   | "morning_briefing_ready"
   | "evening_review_ready"
   | "weekly_review_ready"

@@ -616,6 +616,60 @@ class Database:
                 detected_at TEXT NOT NULL,
                 change_json TEXT NOT NULL
             );
+
+            -- Turn-by-turn conversation transcript. Distinct from `tasks`
+            -- (one row per unit of work, keyed by task lifecycle) and from
+            -- `memories` (curated/summarized facts): this is the raw
+            -- back-and-forth as it happened, so a later session can
+            -- literally search "what did I say about X" the way a chat
+            -- history search does, not just "what tasks touched X".
+            CREATE TABLE IF NOT EXISTS conversation_turns (
+                id TEXT PRIMARY KEY,
+                context_id TEXT NOT NULL,
+                task_id TEXT,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_conversation_context_created
+                ON conversation_turns(context_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_conversation_task
+                ON conversation_turns(task_id);
+
+            -- Full-text index over conversation turns, same external-content
+            -- FTS5 pattern as memories_fts above: text stays in
+            -- conversation_turns (single authority), index maps by rowid.
+            CREATE VIRTUAL TABLE IF NOT EXISTS conversation_turns_fts USING fts5(
+                content, id UNINDEXED,
+                content='conversation_turns', content_rowid='rowid'
+            );
+            CREATE TRIGGER IF NOT EXISTS conversation_turns_fts_ai AFTER INSERT ON conversation_turns BEGIN
+                INSERT INTO conversation_turns_fts(rowid, content, id)
+                VALUES (new.rowid, new.content, new.id);
+            END;
+            CREATE TRIGGER IF NOT EXISTS conversation_turns_fts_ad AFTER DELETE ON conversation_turns BEGIN
+                INSERT INTO conversation_turns_fts(conversation_turns_fts, rowid, content, id)
+                VALUES ('delete', old.rowid, old.content, old.id);
+            END;
+            CREATE TRIGGER IF NOT EXISTS conversation_turns_fts_au AFTER UPDATE ON conversation_turns BEGIN
+                INSERT INTO conversation_turns_fts(conversation_turns_fts, rowid, content, id)
+                VALUES ('delete', old.rowid, old.content, old.id);
+                INSERT INTO conversation_turns_fts(rowid, content, id)
+                VALUES (new.rowid, new.content, new.id);
+            END;
+
+            -- Curator: background self-review of VYOM's own adaptive state
+            -- (lessons, strategies, skills). One row per run so its history
+            -- is inspectable, mirroring how automation_runs works.
+            CREATE TABLE IF NOT EXISTS curator_runs (
+                id TEXT PRIMARY KEY,
+                started_at TEXT NOT NULL,
+                completed_at TEXT,
+                status TEXT NOT NULL,
+                summary_json TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_curator_runs_started
+                ON curator_runs(started_at);
             """
         )
         await self.connection.commit()
