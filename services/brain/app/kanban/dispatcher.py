@@ -11,7 +11,12 @@ from .store import KanbanCard, KanbanStatus, KanbanStore
 logger = logging.getLogger(__name__)
 
 DEFAULT_POLL_SECONDS = 5
-DEFAULT_MAX_CONCURRENT_WORKERS = 3  # VYOM equivalent of Hermes's per-profile worker cap
+# Hermes's own delegate_task defaults to up to 10 parallel children per
+# batch (see delegation.max_concurrent_children in its config). VYOM's
+# equivalent default is set the same way - this is a resource ceiling
+# on simultaneous real OS subprocesses, not a queueing limit: extra
+# cards past this cap simply wait as PENDING until a worker frees up.
+DEFAULT_MAX_CONCURRENT_WORKERS = 10
 
 
 class KanbanDispatcher:

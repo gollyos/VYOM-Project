@@ -20,6 +20,25 @@ async def create_card(request: Request, payload: dict) -> KanbanCard:
     return await store.create(board=board, title=title, goal=goal)
 
 
+@router.post("/cards/batch")
+async def create_batch(request: Request, payload: dict) -> dict:
+    """Create several independent cards in one call - VYOM's parallel
+    batch dispatch, the Kanban-board equivalent of Hermes's
+    delegate_task(tasks=[...]). Body: {"goals": [{"title": optional,
+    "goal": required}, ...], "board": optional}. Every card is
+    genuinely independent PENDING work; the dispatcher (bounded by
+    max_concurrent_workers, see GET /api/kanban/status) claims and runs
+    as many as capacity allows as real separate subprocesses, queueing
+    the rest until a worker frees up - not sequential execution
+    disguised as parallel."""
+    store = request.app.state.kanban_store
+    goals = payload.get("goals") or []
+    if not goals:
+        raise HTTPException(status_code=400, detail="goals must be a non-empty list")
+    cards = await store.create_batch(board=payload.get("board", "default"), goals=goals)
+    return {"count": len(cards), "cards": [c.model_dump(mode="json") for c in cards]}
+
+
 @router.get("/cards")
 async def list_cards(request: Request, board: str = "default", status: str | None = None, limit: int = 100) -> dict:
     store = request.app.state.kanban_store

@@ -54,6 +54,24 @@ class KanbanStore:
         await self._insert(card)
         return card
 
+    async def create_batch(self, *, board: str = "default", goals: list[dict]) -> list[KanbanCard]:
+        """Create several PENDING cards in one call - the batch parallel
+        dispatch VYOM was missing, mirroring Hermes's own
+        delegate_task(tasks=[...]) batch form. Each goals[i] is
+        {"title": optional, "goal": required}. All cards land as
+        genuinely independent PENDING cards; the dispatcher (bounded by
+        max_concurrent_workers) then claims and runs them as real,
+        separate OS subprocesses - not sequentially, not as one big
+        multi-step task."""
+        cards: list[KanbanCard] = []
+        for spec in goals:
+            goal_text = spec["goal"]
+            title = spec.get("title") or goal_text[:80]
+            card = KanbanCard(board=board, title=title, goal=goal_text)
+            await self._insert(card)
+            cards.append(card)
+        return cards
+
     async def _insert(self, card: KanbanCard) -> None:
         connection = self.database.require_connection()
         await connection.execute(

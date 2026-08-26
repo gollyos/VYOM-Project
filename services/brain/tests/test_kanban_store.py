@@ -141,3 +141,29 @@ async def test_reclaim_stale_does_not_touch_a_card_with_a_live_worker(store):
     assert claimed.id not in reclaimed_ids
     still_in_progress = await store.get(claimed.id)
     assert still_in_progress.status == KanbanStatus.IN_PROGRESS
+
+
+@pytest.mark.asyncio
+async def test_create_batch_creates_every_card_independently(store):
+    cards = await store.create_batch(goals=[
+        {"title": "First", "goal": "do first thing"},
+        {"title": "Second", "goal": "do second thing"},
+        {"goal": "do third thing without an explicit title"},
+    ])
+    assert len(cards) == 3
+    assert len({c.id for c in cards}) == 3  # every card genuinely distinct
+    assert all(c.status == KanbanStatus.PENDING for c in cards)
+    third = cards[2]
+    assert third.title == "do third thing without an explicit title"  # falls back to the goal text
+
+
+@pytest.mark.asyncio
+async def test_create_batch_cards_are_independently_claimable(store):
+    await store.create_batch(goals=[{"goal": "a"}, {"goal": "b"}, {"goal": "c"}])
+    claimed_ids = set()
+    for _ in range(3):
+        card = await store.claim_next(worker_pid=1)
+        assert card is not None
+        claimed_ids.add(card.id)
+    assert len(claimed_ids) == 3  # all three genuinely distinct, no double-claim
+    assert await store.claim_next(worker_pid=1) is None  # nothing left

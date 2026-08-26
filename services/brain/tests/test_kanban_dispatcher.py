@@ -113,3 +113,11 @@ async def test_start_and_stop_do_not_raise(store):
     dispatcher = KanbanDispatcher(store, poll_seconds=1)
     dispatcher.start()
     await dispatcher.stop()
+
+
+def test_default_max_concurrent_workers_matches_hermes_batch_default(store):
+    """Hermes's own delegate_task defaults to up to 10 parallel
+    children per batch - VYOM's dispatcher default is set the same
+    way, a deliberate parity choice."""
+    dispatcher = KanbanDispatcher(store)
+    assert dispatcher.max_concurrent_workers == 10
