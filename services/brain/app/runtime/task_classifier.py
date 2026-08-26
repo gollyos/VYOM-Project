@@ -758,6 +758,39 @@ class TaskClassifier:
                 intent="run_taught_skill", needs={"intelligence", "tools"},
             )
 
+        # "connect to notion" / "connect notion mcp" / "add the slack mcp
+        # server" - a plain-language request to attach an external
+        # capability, resolved deterministically against VYOM's own
+        # curated MCP catalog (app/mcp/catalog.py) via the SAME
+        # fuzzy-match logic /api/mcp/connect already uses - see
+        # ActionEngine._mcp_connect. No model call: this is a lookup
+        # against a known, reviewed list, not open-ended reasoning.
+        # Deliberately requires the word "mcp" (or "mcp server") so an
+        # unrelated "connect the dots" / "connect my phone" never
+        # misfires - "connect" alone is too common a verb to gate on.
+        mcp_match = re.search(
+            r"\b(?:connect(?:\s+(?:to|with))?|add)\s+(?:the\s+)?(.+?)\s+mcp(?:\s+server)?\b", original,
+        )
+        if mcp_match:
+            service_name = mcp_match.group(1).strip()
+            if service_name and len(service_name) < 80:
+                return TaskProfile(
+                    domain=TaskDomain.SYSTEM, complexity=1, deterministic=True,
+                    intent="mcp_connect", needs={"tools"},
+                )
+
+        # "learn how to X" / "learn to do X" / "learn this workflow: ..." -
+        # a plain-language request to author a reusable skill from a
+        # described workflow, resolved deterministically through
+        # app/skills/learn.py's LearnService.from_description - see
+        # ActionEngine._learn_skill. No model call: numbered/bulleted
+        # step parsing, same as /api/learn/from-description.
+        if re.search(r"\blearn\s+(?:how\s+to|to\s+do|this\s+workflow|the\s+following)\b", original):
+            return TaskProfile(
+                domain=TaskDomain.SYSTEM, complexity=1, deterministic=True,
+                intent="learn_skill", needs={"tools"},
+            )
+
         if any(phrase in original for phrase in (
             "show my brain", "show vyom brain", "brain graph", "brain connections",
             "living core graph", "show what you know",

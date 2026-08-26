@@ -43,6 +43,12 @@ class ActionProvenance(str, Enum):
     APPROVED_AUTOMATION = "APPROVED_AUTOMATION"
     CURRENT_GOAL_RECOVERY = "CURRENT_GOAL_RECOVERY"
     SYSTEM_SAFETY_ACTION = "SYSTEM_SAFETY_ACTION"
+    #: A fresh attempt of a request whose prior try failed with a
+    #: FailureAnalyzer-classified TRANSIENT error (see task_runtime.py's
+    #: _maybe_self_heal) - traces back to the original USER_COMMAND that
+    #: started the chain, bounded by RETRY_CHAIN_LIMIT, never a new
+    #: independent action the user did not ask for.
+    SELF_HEALING_RETRY = "SELF_HEALING_RETRY"
 
 
 class TaskStatus(str, Enum):

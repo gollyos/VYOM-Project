@@ -121,3 +121,30 @@ def test_default_max_concurrent_workers_matches_hermes_batch_default(store):
     way, a deliberate parity choice."""
     dispatcher = KanbanDispatcher(store)
     assert dispatcher.max_concurrent_workers == 10
+
+
+@pytest.mark.asyncio
+async def test_worker_spawn_never_shows_a_visible_console_window(store, monkeypatch):
+    """A kanban worker is background execution, same invariant VYOM's
+    own terminal.py already applies to every tool-invoked command -
+    the user should never see a console window flash on screen per
+    claimed card. Captures the REAL kwargs Popen is called with,
+    unlike the other dispatch tests whose fake_popen ignores kwargs
+    entirely (which is why this regression wasn't caught earlier)."""
+    await store.create(title="silent", goal="x")
+    dispatcher = KanbanDispatcher(store)
+
+    import subprocess as subprocess_module
+    captured_kwargs: dict = {}
+    original_popen = subprocess_module.Popen
+
+    def fake_popen(args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return original_popen([sys.executable, "-c", "pass"])
+
+    monkeypatch.setattr(subprocess_module, "Popen", fake_popen)
+    await dispatcher._dispatch_one_if_capacity()
+
+    assert captured_kwargs.get("creationflags") == getattr(subprocess_module, "CREATE_NO_WINDOW", 0x0800_0000)
+    assert captured_kwargs.get("stdout") == subprocess_module.DEVNULL
+    assert captured_kwargs.get("stderr") == subprocess_module.DEVNULL

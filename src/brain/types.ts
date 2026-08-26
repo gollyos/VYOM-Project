@@ -37,6 +37,7 @@ export type BrainEventType =
   | "verification_failed"
   | "task_completed"
   | "task_failed"
+  | "task_retried"
   | "task_cancelled"
   | "memory_retrieved"
   | "memory_created"

@@ -1846,6 +1846,20 @@ def create_app(
         runtime.automation_store = automation_store
         runtime.conversation_store = conversation_store
         runtime.plugin_registry = plugin_registry
+        runtime.learn_service = learn_service
+
+        async def _mcp_connector(service_name: str) -> dict:
+            """Wires the classifier's chat-native 'connect to X mcp'
+            intent to the SAME lookup POST /api/mcp/connect already
+            uses (app/api/mcp.py connect_service) - a FastAPI app
+            instance exposes `.state` identically to `request.app.state`,
+            so no fake Request object or duplicated matching logic is
+            needed here."""
+            from app.api.mcp import ConnectServiceRequest, connect_service
+
+            return await connect_service(ConnectServiceRequest(service=service_name), application)
+
+        runtime.mcp_connector = _mcp_connector
         # Phase 12 crash recovery runs BEFORE any task is restarted: a
         # consequential task with evidence of a partial external action
         # (or one owned by another node) must never be blindly

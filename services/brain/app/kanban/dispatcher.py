@@ -91,6 +91,14 @@ class KanbanDispatcher:
             process = subprocess.Popen(
                 [self.python_executable, "-m", "app.kanban.worker", card.id, card.goal, "--base-url", self.base_url],
                 cwd=str(Path(__file__).resolve().parents[2]),
+                # Runs entirely in the background - no visible console
+                # window per worker. Same invariant VYOM's own
+                # terminal.py already applies to every tool-invoked
+                # command (CREATE_NO_WINDOW); a kanban worker is
+                # background execution too, not something the user
+                # should see flash on screen for every claimed card.
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x0800_0000),
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
             )
         except Exception as error:
             await self.store.fail(card.id, error=f"Failed to spawn worker: {error}")

@@ -47,6 +47,7 @@ class EventType(str, Enum):
     VERIFICATION_FAILED = "verification_failed"
     TASK_COMPLETED = "task_completed"
     TASK_FAILED = "task_failed"
+    TASK_RETRIED = "task_retried"
     TASK_CANCELLED = "task_cancelled"
     MEMORY_RETRIEVED = "memory_retrieved"
     MEMORY_CREATED = "memory_created"

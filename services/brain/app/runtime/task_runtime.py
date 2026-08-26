@@ -54,6 +54,12 @@ def _humanize_goal_evidence(evidence: str) -> str:
 
 
 class TaskRuntime:
+    #: How many times a single request chain may self-heal-retry before
+    #: VYOM stops and reports the failure as-is - a bound against ever
+    #: looping forever on a target that never stabilizes, not a
+    #: guarantee any given retry succeeds.
+    RETRY_CHAIN_LIMIT = 2
+
     def __init__(
         self,
         *,
@@ -113,6 +119,8 @@ class TaskRuntime:
         self.automation_store = None  # attached post-construction; one durable scheduler/store
         self.conversation_store = None  # attached post-construction; raw turn-by-turn transcript (see app/persistence/conversation_store.py)
         self.plugin_registry = None  # attached post-construction; see app/plugins/registry.py
+        self.mcp_connector = None  # attached post-construction; async callable(service_name) -> dict, the same lookup POST /api/mcp/connect uses
+        self.learn_service = None  # attached post-construction; see app/skills/learn.py LearnService
         from .verifier import GoalVerifier, PostconditionVerifier
         self.postconditions = PostconditionVerifier()
         # The ONE authority that can promote a task to VERIFIED_COMPLETE.
@@ -263,6 +271,16 @@ class TaskRuntime:
             task.permission_level = self.permission_engine.raise_to_intent_floor(
                 self.permission_engine.classify(task.user_request), profile.intent
             )
+            # mcp_connect / learn_skill are read-only lookups against
+            # VYOM's own reviewed catalog and local skill authoring
+            # respectively - never a consequential external action, even
+            # when the request text happens to contain a normally-L2+
+            # trigger word (e.g. "deploy" inside a learned workflow's
+            # description). Capped explicitly rather than relying on
+            # INTENT_FLOOR, which only ever RAISES a level, never lowers
+            # one.
+            if profile.intent in ("mcp_connect", "learn_skill"):
+                task.permission_level = PermissionLevel.L1
             if profile.intent == "run_taught_skill" and self.intelligence_engine is not None:
                 from app.skills.teachable import parse_skill_command
 
@@ -578,6 +596,16 @@ class TaskRuntime:
                 await self._finish_result(task, result, None, started, retries, fallback_used)
                 return
 
+            if profile.intent == "mcp_connect":
+                task.plan = self.planner.create_plan(task, profile)
+                await self._connect_mcp_from_request(task, started)
+                return
+
+            if profile.intent == "learn_skill":
+                task.plan = self.planner.create_plan(task, profile)
+                await self._learn_skill_from_request(task, started)
+                return
+
             if task.requires_tools:
                 if self.action_engine is None or not self.action_engine.supports(profile.intent):
                     raise RuntimeError("No registered action workflow can satisfy this tool request")
@@ -850,6 +878,52 @@ class TaskRuntime:
                 task, EventType.TASK_FAILED, "Task failed",
                 {"error": humanize_error(task.error), "diagnostic": task.error},
             )
+
+            # SELF-HEALING RETRY. A transient failure (the target existed
+            # but was not yet in a usable state - see FailureAnalyzer's
+            # retriable=True rules) gets ONE automatic fresh attempt as a
+            # new linked task, not a blind loop: the same broken plan
+            # re-run identically would just fail identically again, so
+            # only failures FailureAnalyzer classifies as genuinely
+            # transient are eligible, and RETRY_CHAIN_LIMIT bounds how
+            # many times a request can retry itself even across several
+            # transient failures in a row.
+            await self._maybe_self_heal(task)
+
+    async def _maybe_self_heal(self, failed_task: Task) -> None:
+        if self.intelligence_engine is None or self.intelligence_engine.improvement is None:
+            return
+        analysis = self.intelligence_engine.improvement.failures.analyze(failed_task.error or "")
+        if not analysis or not analysis.get("retriable"):
+            return
+        chain_depth = await self._retry_chain_depth(failed_task)
+        if chain_depth >= self.RETRY_CHAIN_LIMIT:
+            return
+        retry_request = TaskCreate(
+            user_request=failed_task.user_request, context_id=failed_task.context_id,
+            source=failed_task.source, parent_task_id=failed_task.id,
+        )
+        retry_task = await self.create_task(retry_request, provenance=ActionProvenance.SELF_HEALING_RETRY)
+        await self._emit(
+            failed_task, EventType.TASK_RETRIED,
+            f"Retrying automatically: {analysis['lesson']}",
+            {"retry_task_id": retry_task.id, "reason": analysis["lesson"], "chain_depth": chain_depth + 1},
+        )
+
+    async def _retry_chain_depth(self, task: Task) -> int:
+        """How many times THIS request has already retried itself,
+        walking parent_task_id back through the chain - bounds
+        RETRY_CHAIN_LIMIT even across several different transient
+        failures in a row, not just one."""
+        depth = 0
+        current = task
+        while current.parent_task_id and depth < self.RETRY_CHAIN_LIMIT + 1:
+            parent = await self.task_store.get(current.parent_task_id)
+            if parent is None:
+                break
+            depth += 1
+            current = parent
+        return depth
 
 
 
@@ -1168,6 +1242,103 @@ class TaskRuntime:
             usage=UsageRecord(total_tokens=0, estimated_cost=0),
         )
         await self._finish_result(task, result, None, started, 0, False)
+
+    async def _connect_mcp_from_request(self, task: Task, started: float) -> None:
+        """Chat-native MCP self-service: 'connect to notion mcp' resolves
+        against VYOM's own curated catalog (app/mcp/catalog.py) using the
+        exact fuzzy-match logic POST /api/mcp/connect already applies -
+        one lookup path, reached from either the API or plain language,
+        never a second implementation that could drift from it."""
+        from app.schemas.results import ExecutionResult
+        from app.schemas.routing import UsageRecord
+
+        task.assigned_model = "local-mcp-connect-v1"
+        await self.task_store.save(task)
+        await self._emit(
+            task, EventType.MODEL_SELECTED, "Matching against VYOM's reviewed MCP catalog locally",
+            {"routing": {"primary_model": "local-mcp-connect-v1", "primary_provider": "local",
+                         "fallback_models": [], "estimated_cost_tier": "free",
+                         "reason_selected": "Catalog lookup; no model call required"}},
+        )
+
+        import re as _re
+        match = _re.search(
+            r"\b(?:connect(?:\s+(?:to|with))?|add)\s+(?:the\s+)?(.+?)\s+mcp(?:\s+server)?\b",
+            task.user_request.strip().lower(),
+        )
+        service_name = match.group(1).strip() if match else task.user_request
+
+        if self.mcp_connector is None:
+            result = ExecutionResult(
+                response="MCP connection support is not attached to this Brain instance.",
+                usage=UsageRecord(total_tokens=0, estimated_cost=0),
+            )
+        else:
+            outcome = await self.mcp_connector(service_name)
+            status = outcome.get("status")
+            if status == "connected":
+                response = f"Connected to {outcome.get('name', service_name)} — {outcome.get('tool_count', 0)} tools now available."
+            elif status == "unknown_service":
+                response = outcome.get("detail", f"'{service_name}' is not in VYOM's reviewed MCP catalog yet.")
+            else:
+                response = outcome.get("detail", f"Could not connect to '{service_name}': {status}")
+            result = ExecutionResult(
+                response=response, structured_data=outcome,
+                evidence=[f"mcp_connect:{service_name}:{status}"],
+                usage=UsageRecord(total_tokens=0, estimated_cost=0),
+            )
+        await self._finish_result(task, result, None, started, 0, False)
+
+    async def _learn_skill_from_request(self, task: Task, started: float) -> None:
+        """Chat-native skill authoring: 'learn how to X: 1. ... 2. ...'
+        resolves through the SAME LearnService.from_description path
+        POST /api/learn/from-description already uses - always
+        TESTING-status, never auto-activated (see app/skills/learn.py's
+        safety rationale)."""
+        from app.schemas.results import ExecutionResult
+        from app.schemas.routing import UsageRecord
+
+        task.assigned_model = "local-learn-skill-v1"
+        await self.task_store.save(task)
+        await self._emit(
+            task, EventType.MODEL_SELECTED, "Parsing the described workflow locally",
+            {"routing": {"primary_model": "local-learn-skill-v1", "primary_provider": "local",
+                         "fallback_models": [], "estimated_cost_tier": "free",
+                         "reason_selected": "Deterministic step parsing; no model call required"}},
+        )
+
+        if self.learn_service is None:
+            result = ExecutionResult(
+                response="Skill-learning support is not attached to this Brain instance.",
+                usage=UsageRecord(total_tokens=0, estimated_cost=0),
+            )
+        else:
+            import re as _re
+
+            body = task.user_request
+            header_match = _re.search(r"\blearn\s+(?:how\s+to|to\s+do|this\s+workflow|the\s+following)\b\s*:?\s*", body, _re.I)
+            description = body[header_match.end():].strip() if header_match else body
+            name = (description.split("\n")[0] or "Learned skill")[:80]
+            slug = _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:50] or "learned-skill"
+            skill_id = f"learned-{slug}"
+            try:
+                skill = self.learn_service.from_description(description, skill_id=skill_id, name=name)
+                response = (
+                    f"Learned a new skill: '{skill.name}' ({len(skill.steps)} steps, id={skill.id}). "
+                    "It is TESTING-status and will not run automatically until reviewed and activated."
+                )
+                result = ExecutionResult(
+                    response=response, structured_data={"skill_id": skill.id, "status": skill.status.value, "steps": len(skill.steps)},
+                    evidence=[f"skill_learned:{skill.id}"],
+                    usage=UsageRecord(total_tokens=0, estimated_cost=0),
+                )
+            except ValueError as error:
+                result = ExecutionResult(
+                    response=f"Could not learn a skill from that description: {error}",
+                    usage=UsageRecord(total_tokens=0, estimated_cost=0),
+                )
+        await self._finish_result(task, result, None, started, 0, False)
+
 
     async def _answer_from_profile(self, task: Task, profile, started: float) -> None:
         """Answer from VYOM's OWN store, with zero model calls.
