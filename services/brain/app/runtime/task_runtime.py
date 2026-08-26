@@ -1551,12 +1551,15 @@ class TaskRuntime:
                 memory = result.memory
                 if re.search(r"gaana|gana|song|music|artist|favourite|favorite",
                              f"{memory.title} {memory.content}", re.I):
-                    task.metadata["preference_recalled"] = memory.content
+                    query = memory.content.strip()
+                    if memory.title == "Boss favourite music" and ":" in query:
+                        query = query.split(":", 1)[1].strip()
+                    task.metadata["preference_recalled"] = query
                     if getattr(self, "event_bus", None) is not None:
                         await self._emit(task, EventType.MEMORY_RETRIEVED,
                                          "Boss ka favourite yaad rakha hai — wahi chala raha hoon",
                                          {"memory_id": memory.id})
-                    return memory.content.strip()
+                    return query
         return None
 
     async def _capture_conversational_facts(self, task: Task) -> list[str]:

@@ -17,6 +17,12 @@ load_dotenv(BRAIN_ROOT / ".env", override=False)
 class Settings:
     host: str = os.getenv("VYOM_BRAIN_HOST", "127.0.0.1")
     port: int = int(os.getenv("VYOM_BRAIN_PORT", "7788"))
+    external_capabilities_config_path: Path = Path(
+        os.getenv(
+            "VYOM_EXTERNAL_CAPABILITIES_CONFIG",
+            str(PROJECT_ROOT / "config" / "external_capabilities.yaml"),
+        )
+    ).resolve()
     database_path: Path = Path(
         os.getenv("VYOM_BRAIN_DATABASE", str(BRAIN_ROOT / "data" / "vyom-brain.db"))
     ).resolve()

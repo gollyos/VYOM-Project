@@ -160,6 +160,11 @@ _FACT_PATTERNS: list[tuple[str, str, str]] = [
     (r"\b(?:correct|sahi)\s+(?:naam|name)\s*(?:hai|is)?\s*([\w{_DEV} .'-]{{2,40}})".format(_DEV=_DEV),
      "identity", "User name"),
     # Stable preferences
+    # Natural owner phrasing: "mujhe Danda Noli gaana pasand hai". Keep a
+    # stable slot title so a later preference supersedes this value cleanly.
+    (r"\b(?:mujhe|mera|meri)\s+(.{2,70}?)\s+(?:gaana|gana|song|music|artist)\s+"
+     r"(?:pasand|favourite|favorite)\s*(?:hai|hain)?\b",
+     "preference", "Boss favourite music"),
     (r"\bi prefer\s+([\w\u0900-\u0963\u0966-\u097F .'-]{3,60})", "preference", "User preference"),
     (r"\bremember that\s+(.{5,120})", "preference", "User instruction"),
     (r"\byaad rakhna\s+(.{5,120})", "preference", "User instruction"),

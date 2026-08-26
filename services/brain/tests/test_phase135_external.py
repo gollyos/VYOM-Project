@@ -420,8 +420,9 @@ async def test_vyom_core_starts_with_all_external_capabilities_disabled(tmp_path
     from app.core.config import Settings
     from app.main import create_app
 
-    config_path = Path(__file__).resolve().parents[3] / "config" / "external_capabilities.yaml"
-    original = config_path.read_text(encoding="utf-8")
+    template_path = Path(__file__).resolve().parents[3] / "config" / "external_capabilities.yaml"
+    original = template_path.read_text(encoding="utf-8")
+    config_path = tmp_path / "external_capabilities.yaml"
     disabled = yaml.safe_load(original)
     disabled["defuddle"]["enabled"] = False
     disabled["codebase_memory"]["enabled"] = False
@@ -432,6 +433,7 @@ async def test_vyom_core_starts_with_all_external_capabilities_disabled(tmp_path
             database_path=tmp_path / "b.db", skills_root=tmp_path / "s", agents_root=tmp_path / "a",
             audit_log_path=tmp_path / "a.jsonl", secret_store_path=tmp_path / "sec",
             artifacts_root=tmp_path / "art", backup_root=tmp_path / "bk",
+            external_capabilities_config_path=config_path,
         )
         with TestClient(create_app(settings)) as client:
             assert client.get("/healthz").json()["alive"] is True

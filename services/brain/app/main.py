@@ -1600,7 +1600,7 @@ def create_app(
         # All optional: VYOM Core boots and works with every external
         # capability disabled (regression-tested).
         external_capabilities_config = yaml.safe_load(
-            (project_root / "config" / "external_capabilities.yaml").read_text(encoding="utf-8")
+            settings.external_capabilities_config_path.read_text(encoding="utf-8")
         ) or {}
         external_intake = ExternalCapabilityIntake(capability_registry)
         backend_router = CapabilityBackendRouter()
@@ -1993,15 +1993,24 @@ def create_app(
         adaptive_learning_bridge.start()
         # Phone control with a FREE bot token (BotFather), dormant until
         # TELEGRAM_BOT_TOKEN is set — no paid API, no extra dependency.
+        # A bot token authenticates VYOM to Telegram; it does not identify the owner.
+        # Remote command intake stays off until the local owner explicitly allowlists a chat id.
         telegram_gateway = None
-        telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        if telegram_token:
+        telegram_allowed_chat_ids = {
+            item.strip()
+            for item in os.getenv("VYOM_TELEGRAM_OWNER_CHAT_IDS", "").replace(";", ",").split(",")
+            if item.strip()
+        }
+        if telegram_bot_token and telegram_allowed_chat_ids:
             from app.gateway.telegram import TelegramGateway
 
             telegram_gateway = TelegramGateway(
-                telegram_token, runtime, task_store, data_dir / "telegram-state.json")
+                telegram_bot_token, runtime, task_store, data_dir / "telegram-state.json",
+                allowed_chat_ids=telegram_allowed_chat_ids,
+                allowed_file_roots=[settings.artifacts_root],
+            )
             await telegram_gateway.start()
-            application.state.telegram_gateway = telegram_gateway
+        application.state.telegram_gateway = telegram_gateway
         yield
         if telegram_gateway is not None:
             await telegram_gateway.stop()

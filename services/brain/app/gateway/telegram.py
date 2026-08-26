@@ -5,10 +5,11 @@ any Telegram chat into a VYOM command surface: text in -> task in the
 normal Brain runtime -> verified answer back. Files (<=20 MB, Telegram's
 bot limit) can be fetched with /file <path>. No paid APIs, no extra
 dependencies (httpx only), and the gateway stays completely dormant
-until TELEGRAM_BOT_TOKEN is set.
+until a bot token and an explicit local-owner chat allowlist are configured.
 
-Pairing: send /start to the bot after setting the token; the chat id is
-persisted and every later message from that chat is honoured.
+Authorization is fail-closed: /start only activates chat ids explicitly
+listed by the local owner. File delivery is separately restricted to
+configured roots, so a bot chat can never read an arbitrary PC path.
 """
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import httpx
 
@@ -31,16 +33,27 @@ POLL_TIMEOUT_SECONDS = 25
 
 
 class TelegramGateway:
-    def __init__(self, token: str, runtime, task_store, state_path: Path):
+    def __init__(
+        self, token: str, runtime, task_store, state_path: Path, *,
+        allowed_chat_ids: set[str] | None = None,
+        allowed_file_roots: list[Path] | None = None,
+    ):
         self._token = token
         self._runtime = runtime
         self._task_store = task_store
         self._state_path = state_path
+        self._allowed_chat_ids = {
+            str(item).strip() for item in (allowed_chat_ids or set()) if str(item).strip()
+        }
+        self._allowed_file_roots = tuple(
+            Path(root).resolve() for root in (allowed_file_roots or []))
         self._chat_ids: set[str] = set()
         self._poll_task: asyncio.Task | None = None
+        self._message_tasks: set[asyncio.Task] = set()
         self._offset = 0
         self._client: httpx.AsyncClient | None = None
         self._load_state()
+        self._chat_ids.intersection_update(self._allowed_chat_ids)
 
     # -- state -------------------------------------------------------------
 
@@ -66,6 +79,8 @@ class TelegramGateway:
     async def start(self) -> None:
         if self._poll_task is not None:
             return
+        if not self._allowed_chat_ids:
+            raise RuntimeError("Telegram gateway requires an explicit owner chat allowlist")
         self._client = httpx.AsyncClient(timeout=POLL_TIMEOUT_SECONDS + 10)
         self._poll_task = asyncio.create_task(self._poll_loop())
         await self._post("setMyCommands", {"commands": [
@@ -81,6 +96,11 @@ class TelegramGateway:
             except (asyncio.CancelledError, Exception):
                 pass
             self._poll_task = None
+        if self._message_tasks:
+            for task in tuple(self._message_tasks):
+                task.cancel()
+            await asyncio.gather(*self._message_tasks, return_exceptions=True)
+            self._message_tasks.clear()
         if self._client is not None:
             await self._client.aclose()
             self._client = None
@@ -95,6 +115,44 @@ class TelegramGateway:
     async def _send_text(self, chat_id: str, text: str) -> None:
         await self._post("sendMessage", {"chat_id": chat_id, "text": text[:3900]})
 
+    def _track_command(self, chat_id: str, text: str) -> None:
+        correlation_id = f"telegram:{chat_id}:{uuid4().hex}"
+        task = asyncio.create_task(self._run_command(chat_id, text, correlation_id))
+        self._message_tasks.add(task)
+
+        def _finished(done: asyncio.Task) -> None:
+            self._message_tasks.discard(done)
+            if not done.cancelled():
+                done.exception()
+
+        task.add_done_callback(_finished)
+
+    async def _handle_message(self, message: dict[str, Any]) -> None:
+        chat = message.get("chat", {})
+        chat_id = str(chat.get("id", ""))
+        text = str(message.get("text") or "").strip()
+        if not chat_id:
+            return
+        if chat.get("type") != "private":
+            await self._send_text(chat_id, "VYOM remote control only accepts a private owner chat.")
+            return
+        if text.startswith("/start"):
+            if chat_id not in self._allowed_chat_ids:
+                await self._send_text(chat_id, "This Telegram chat is not authorized by the local VYOM owner.")
+                return
+            self._chat_ids.add(chat_id)
+            self._save_state()
+            await self._send_text(chat_id, "VYOM online Boss. This owner chat is authorized.")
+            return
+        if chat_id not in self._allowed_chat_ids or chat_id not in self._chat_ids:
+            await self._send_text(chat_id, "This chat is not paired with VYOM.")
+            return
+        if text.startswith("/file"):
+            await self._handle_file(chat_id, text[len("/file"):].strip())
+            return
+        if text:
+            self._track_command(chat_id, text)
+
     async def _poll_loop(self) -> None:
         while True:
             try:
@@ -105,23 +163,7 @@ class TelegramGateway:
                 for update in data.get("result", []):
                     self._offset = int(update.get("update_id", self._offset))
                     message = update.get("message") or {}
-                    chat_id = str(message.get("chat", {}).get("id", ""))
-                    text = str(message.get("text") or "").strip()
-                    if not chat_id:
-                        continue
-                    if text.startswith("/start"):
-                        self._chat_ids.add(chat_id)
-                        self._save_state()
-                        await self._send_text(chat_id, "VYOM online Boss. Jo kaam karna hai bolo — main PC pe kar deta hoon. 🫡")
-                        continue
-                    if chat_id not in self._chat_ids:
-                        await self._send_text(chat_id, "Pehle /start bhejo Boss — pairing ke liye.")
-                        continue
-                    if text.startswith("/file"):
-                        await self._handle_file(chat_id, text[len("/file"):].strip())
-                        continue
-                    if text:
-                        await self._run_command(chat_id, text)
+                    await self._handle_message(message)
                 self._save_state()
             except asyncio.CancelledError:
                 raise
@@ -131,9 +173,14 @@ class TelegramGateway:
 
     # -- command handling ------------------------------------------------------
 
-    async def _run_command(self, chat_id: str, command: str) -> None:
+    async def _run_command(self, chat_id: str, command: str, correlation_id: str | None = None) -> None:
         try:
-            task = await self._runtime.create_task(TaskCreate(user_request=command))
+            task = await self._runtime.create_task(TaskCreate(
+                user_request=command,
+                context_id=f"telegram:{chat_id}",
+                source=f"telegram:{chat_id}",
+                correlation_id=correlation_id or f"telegram:{chat_id}:{uuid4().hex}",
+            ))
         except Exception as error:
             await self._send_text(chat_id, f"Task bana nahi paaya Boss: {error}")
             return
@@ -145,8 +192,8 @@ class TelegramGateway:
             if current is None:
                 return
             if current.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
-                result = current.result or {}
-                answer = str(result.get("response") or f"Task {current.status.value}.")
+                answer = current.result.response if current.result else None
+                answer = str(answer or f"Task {current.status.value}.")
                 await self._send_text(chat_id, f"{answer}\n\n— VYOM ({current.status.value})")
                 return
         await self._send_text(chat_id, "Kaam abhi chal raha hai Boss — me time lagega. Desktop pe progress dikh raha hai.")
@@ -155,7 +202,14 @@ class TelegramGateway:
         if not raw_path:
             await self._send_text(chat_id, "Poora path bolo Boss: /file C:\\Users\\...\\file.pdf")
             return
-        path = Path(os.path.expandvars(raw_path.strip('"')))
+        try:
+            path = Path(os.path.expandvars(raw_path.strip('"'))).resolve(strict=True)
+        except (OSError, RuntimeError):
+            await self._send_text(chat_id, "Ye file nahi mili Boss. Path check karke dobara bhejo.")
+            return
+        if not self._allowed_file_roots or not any(path.is_relative_to(root) for root in self._allowed_file_roots):
+            await self._send_text(chat_id, "Security ke liye sirf VYOM artifact folder ki files bhej sakta hoon.")
+            return
         if not path.is_file():
             await self._send_text(chat_id, "Ye file nahi mili Boss. Path check karke dobara bhejo.")
             return
