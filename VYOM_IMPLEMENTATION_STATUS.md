@@ -2,7 +2,9 @@
 
 > Persistent implementation ledger. Update this file after every completed work slice.
 >
-> Last updated: 2026-08-23 (Asia/Calcutta) — `repair/soul-and-memory` branch: five-part repair driven by the user's four core complaints (no real understanding, Gemini rate-limit/disconnect churn, PowerShell failures, non-permanent memory). **A)** The last PowerShell call in the Brain (`Get-StartApps`) is replaced by native `shell:AppsFolder` COM enumeration (live-verified: 126 apps, 0 subprocesses, ~2x faster, PowerShell kept only as COM-unavailable fallback); every subprocess path gained timeouts, `CREATE_NO_WINDOW`, and UTF-8→real-ANSI-codepage (`GetACP`) decoding; the terminal env allowlist grew from 9 vars. **B)** Free-tier reliability ("Maya mode"): `QuotaBudgeter` paces requests BEFORE sending (RPM sliding window + persistent per-model daily counters in `data/quota-usage.json`, 429 teach-in clamps the true allowance), the router spreads traffic across three registered Google models (separate per-model daily budgets) and skips exhausted ones, missions wait-and-resume on burst 429s (8s/20s, daily quota still fails honestly), a short-TTL disk `ResponseCache` absorbs burst-repeat calls, `GoogleProvider` uses one pooled httpx client, `/ws/events?since=` replays events missed during disconnects, `/api/quota` exposes today's budget. **C)** Permanent memory: `forget()` is a tombstone (row never erased; purge() exists for deliberate maintenance only and is wired nowhere), every substantive edit appends the outgoing state to `memory_history` (version chain; `GET /api/memory/{id}/history`), external-content FTS5 with trigger sync + startup backfill makes a 2016 record findable instantly under 600+ newer rows, retrieval uses FTS prefilter + one batched relationship query (was N+1) + SQLite-cached embedding vectors, real Gemini embeddings (`config/memory.yaml: provider: gemini`) with local-hash fallback, and every save mirrors to a human-readable Obsidian-style markdown vault (`data/memory-vault`, Raw/Source/Wiki layers, YAML frontmatter + provenance; HIGHLY_SENSITIVE never mirrored). **D)** The soul fix: `LLMTriage` — when both keyword layers decline, one cheap structured model call decides action-vs-conversation (+Hinglish meaning, tone, urgency; failures fall back to exact old behaviour; tone captured into task metadata), pseudo-model labels (`local-phase8-runtime-v1` etc.) replaced with honest `workflow:*`/`gate:*` labels, research synthesis is model-written over the same extracted claims with the deterministic template as fallback. **E)** The morning briefing leads with real failed/paused task rows from the store (restart-safe "pending work yaad rahe") plus `retry_candidates` in the payload. Final exact-source Brain suite after the repair: **727 passed / 2 intentional opt-in skips**; live Brain boot with the full new wiring verified (app created + lifespan complete). See the newest Verification record.
+> Last verified: 2026-08-27 (Asia/Calcutta) — exact Chrome/YouTube/lofi E2E `VERIFIED_COMPLETE` (`task_b41c56e68f7749949c4071d9f6bb0efe`); Telegram fail-closed security + durable Hinglish music preference + config-test isolation in `f91c8b6`; live-found default Brain boot repair in `ecf47e2`; final Brain suite **1195 passed / 2 skipped / 7 warnings**; frontend production build green.
+>
+> Previous detailed checkpoint: 2026-08-23 (Asia/Calcutta) — `repair/soul-and-memory` branch: five-part repair driven by the user's four core complaints (no real understanding, Gemini rate-limit/disconnect churn, PowerShell failures, non-permanent memory). **A)** The last PowerShell call in the Brain (`Get-StartApps`) is replaced by native `shell:AppsFolder` COM enumeration (live-verified: 126 apps, 0 subprocesses, ~2x faster, PowerShell kept only as COM-unavailable fallback); every subprocess path gained timeouts, `CREATE_NO_WINDOW`, and UTF-8→real-ANSI-codepage (`GetACP`) decoding; the terminal env allowlist grew from 9 vars. **B)** Free-tier reliability ("Maya mode"): `QuotaBudgeter` paces requests BEFORE sending (RPM sliding window + persistent per-model daily counters in `data/quota-usage.json`, 429 teach-in clamps the true allowance), the router spreads traffic across three registered Google models (separate per-model daily budgets) and skips exhausted ones, missions wait-and-resume on burst 429s (8s/20s, daily quota still fails honestly), a short-TTL disk `ResponseCache` absorbs burst-repeat calls, `GoogleProvider` uses one pooled httpx client, `/ws/events?since=` replays events missed during disconnects, `/api/quota` exposes today's budget. **C)** Permanent memory: `forget()` is a tombstone (row never erased; purge() exists for deliberate maintenance only and is wired nowhere), every substantive edit appends the outgoing state to `memory_history` (version chain; `GET /api/memory/{id}/history`), external-content FTS5 with trigger sync + startup backfill makes a 2016 record findable instantly under 600+ newer rows, retrieval uses FTS prefilter + one batched relationship query (was N+1) + SQLite-cached embedding vectors, real Gemini embeddings (`config/memory.yaml: provider: gemini`) with local-hash fallback, and every save mirrors to a human-readable Obsidian-style markdown vault (`data/memory-vault`, Raw/Source/Wiki layers, YAML frontmatter + provenance; HIGHLY_SENSITIVE never mirrored). **D)** The soul fix: `LLMTriage` — when both keyword layers decline, one cheap structured model call decides action-vs-conversation (+Hinglish meaning, tone, urgency; failures fall back to exact old behaviour; tone captured into task metadata), pseudo-model labels (`local-phase8-runtime-v1` etc.) replaced with honest `workflow:*`/`gate:*` labels, research synthesis is model-written over the same extracted claims with the deterministic template as fallback. **E)** The morning briefing leads with real failed/paused task rows from the store (restart-safe "pending work yaad rahe") plus `retry_candidates` in the payload. Final exact-source Brain suite after the repair: **727 passed / 2 intentional opt-in skips**; live Brain boot with the full new wiring verified (app created + lifespan complete). See the newest Verification record.
 
 ## Authority and purpose
 
@@ -15,7 +17,7 @@
 
 At the start of future VYOM work:
 
-1. Read `VYOM_PROJECT_MEMORY.md` for product direction.
+1. Read `docs/VYOM_PROJECT_MEMORY.md` for product direction.
 2. Read this file for the current implementation state.
 3. Inspect only the files relevant to the next requested change. Do not re-audit completed phases without a regression signal.
 4. Keep the project native-first: Tauri 2 + Vite + React + TypeScript + Three.js / React Three Fiber.
@@ -344,6 +346,20 @@ Developer focus remains a deliberate local composition and `Close everything` do
 | `docs/` | Product memory, architecture, model-routing, autonomy, and event protocol documentation. |
 
 ## Verification record
+
+### 2026-08-27 - Exact owner media E2E, durable preference, secure Telegram boundary, and cold-boot repair
+
+- Exact live task `task_b41c56e68f7749949c4071d9f6bb0efe` executed `VYOM, Chrome kholo aur YouTube pe lofi play karo` through the real Brain and visible Chrome. Intent was `play_media`; YouTube title was `lofi hip hop radio 📚 beats to relax/study to`; `playing=true` came from `browser-tab-audio-state`; required `app_launch` and `media_playing` postconditions both reached `VERIFIED_COMPLETE`; whole-goal score 1.0; five desktop tool calls; no error. Implemented in `2dee063`.
+- Added real conversational capture for `mujhe Danda Noli gaana pasand hai` into one stable durable preference slot. A later `mera favourite song chala do` retrieves the clean value `Danda Noli`; it does not depend on the short-lived prompt or a private helper-only test.
+- Telegram command intake is fail-closed: a bot token alone cannot enable remote control; a private owner chat must be locally allowlisted and then paired. Stale chats are filtered, group/unknown chats are denied, ten commands dispatch independently with unique correlation IDs, task source/context remain `telegram:<chat_id>`, typed task results are handled correctly, and `/file` can export only from the configured VYOM artifacts root.
+- Telegram remains PARTIALLY VERIFIED, not end-to-end complete: no token or owner chat ID is configured on this machine, so no live Telegram/physical-phone run occurred; inbound voice/files are still open M2 scope.
+- External-capability isolation tests now copy config into `tmp_path`; an interrupted test can no longer leave tracked production capability flags disabled. Live verification found that the first implementation used optional `settings` instead of resolved `selected_settings`, causing default `pythonw -m app.main` cold boot to fail despite the suite passing. `ecf47e2` fixes that blind spot and makes the regression call default `create_app()`.
+- Patched production Brain cold-booted as PID 7004 using `pythonw.exe -m app.main`; `/healthz` returned `alive=true` and `/readyz` returned `ready=true`. Startup took about two minutes in this loaded session, materially slower than the older 24-second note, so startup latency remains open.
+- Current source supersedes the 2026-08-17 onboarding limitation: backend status now includes serialized `steps`; frontend uses an explicit `SetupStatusResponse` snake_case adapter and safe step mapping. The production frontend build passed: 2413 modules, `built in 27.35s`.
+- Verification actually run: focused Telegram + favourite-memory + consolidation `17 passed`; strengthened default cold-boot regression `1 passed, 1 warning`; definitive full Brain suite `1195 passed, 2 skipped, 7 warnings in 664.47s`; `py_compile` and `git diff --check` passed.
+- The seven non-failing warnings are explicit follow-up debt: one Starlette/httpx TestClient deprecation and aiosqlite worker-thread/event-loop teardown warnings in MCP autoconnect, memory continuity, and two voice-control cases.
+- Codex desktop crash diagnosis: the Codex app server exited with Windows code `3221225786` (`0xC000013A`) when a new user message arrived during a long custom-tool wait, followed by a missing custom-tool-output protocol error. VYOM was not the crashing process. Long tests were therefore moved to hidden detached `pythonw` runners with short log polls.
+
 
 ### 2026-08-21 - Real media action, capability truth, and false-verification repair
 
@@ -989,10 +1005,7 @@ Follow-up to the Phase 17 verification pass below, same day: fixes both bugs tha
   result delivery are now full-app integration-tested, but a physical phone on
   the LAN was unavailable, so hardware/network E2E remains open. Arbitrary installed-app coverage
   remains adapter/observable-UI dependent; unsupported work must fail honestly.
-- **Startup:** the desktop shell responds in under 0.3 s, but a first Python
-  Brain boot still takes about 24 s on this Windows machine. The Brain is
-  intentionally detached/persistent so later window opens reuse it. Office/UIA
-  lazy-loading reduced warm module import from 7.60 s to 3.00 s.
+- **Startup:** the desktop shell responds quickly, but the 2026-08-27 cold Brain boot took about two minutes under the current loaded runtime (older evidence was about 24 s). The detached/persistent Brain keeps later window opens warm, but cold-start performance needs a fresh isolated profile before claiming a stable target.
 - **Release portability:** the current executable/installer are verified on
   this source/Python-equipped PC. The Tauri launcher still resolves the Brain
   from the compile-time project tree and uses Python from PATH; a standalone
@@ -1074,6 +1087,15 @@ Do not start a new capability merely because it appears in the future vision. Im
 Recommended next phase when approved: **Phase 17 - Production Integration Activation** (carried): Brain-as-Tauri-sidecar lifecycle, one real Google OAuth E2E, one real web-search/booking/delivery/market-data provider E2E, `pywinauto` accessibility, proactive engine on real triggers, a real second device hardware-verifying the distributed runtime, home-server Docker deployment, code-signing keys + signed updates, and the Expo app on hardware. Phase 16 follow-ups to fold in: register a real planner contract for mission planning (model-assisted planning for genuinely novel multi-step goals, still bounded), route Defuddle/Playwright selection through LearnedRouter.preferred_tool at the research fetch site, and stream mission-loop events into the desktop Core states live.
 
 ## Change log
+
+### 2026-08-27 - Grounded media command, permanent music preference, Telegram hardening, and boot truth
+
+- Routed the owner exact Chrome/YouTube/lofi command to the deterministic media workflow and required real playback evidence.
+- Added durable Hinglish favourite-music capture and clean later recall through the ordinary conversational-memory path.
+- Hardened Telegram with explicit owner allowlisting, private-chat pairing, concurrent task isolation, unique provenance, typed-result replies, and artifact-root-only file export.
+- Isolated capability-disable tests from tracked config and repaired the default app-factory boot bug found only during real cold start.
+- Updated stale onboarding/current verification truth. Commits: `2dee063`, `f91c8b6`, `ecf47e2`.
+
 
 ### 2026-08-21 - Real media action and grounded self-capability answers
 

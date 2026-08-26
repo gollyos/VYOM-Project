@@ -7,19 +7,22 @@
 
 | # | Task | Lane | Status |
 |---|---|---|---|
-| 1 | LIVE E2E: "Chrome kholo + YouTube lofi play" real window me VERIFIED_COMPLETE | VERIFY | open |
+| 1 | LIVE E2E: "Chrome kholo + YouTube lofi play" real window me VERIFIED_COMPLETE | VERIFY | done (2dee063) |
 | 2 | Desktop release build (`npm run desktop:build`) + installed app me voice auto-on check | VERIFY | open |
 | 3 | Morning briefing live: real failed/paused tasks briefing me bole | BRAIN | open |
 | 4 | Paper-trade ek real setup end-to-end (data → thesis → risk PASS → paper order) | SUBSYSTEMS | open |
 | 5 | WS replay live test: task chalate time disconnect karke events wapas aaye | VERIFY | open |
 | 6 | /api/quota budget chip real app me dikhe (15% pe amber) | FRONTEND | open |
 | 7 | Meta-learning / multi-agent orchestrator ke liye live smoke test | SUBSYSTEMS | open |
+| 8 | Exact owner media command routes to `play_media`, not generic Chrome launch | BRAIN | done (2dee063) |
+| 9 | Isolate external-capability tests from tracked production config | BRAIN + VERIFY | done (ecf47e2) |
+| 10 | Telegram gateway fail-closed owner auth, scoped files, remote provenance | BRAIN + VERIFY | done (f91c8b6) |
 
 ## Maya-transcript backlog (28-Aug analysis; priority order)
 
 | # | Task | Lane | Why |
 |---|---|---|---|
-| M1 | **Favorite-preference recall**: play_media/media queries pehle preference memory check kare ("mujhe X pasand hai" → "favorite song chala do" → X) | BRAIN | Maya demo ka exact feature; memory already built hai |
+| M1 | **Favorite-preference recall**: play_media/media queries pehle preference memory check kare ("mujhe X pasand hai" → "favorite song chala do" → X) | BRAIN | done (f91c8b6) |
 | M2 | **Telegram gateway**: bot token + pairing, text/voice command → task → reply, files ≤20MB dono taraf | BRAIN | Phone control bina Android app ke |
 | M3 | **Gmail SMTP/IMAP app-password provider** (email service me naya provider) | SUBSYSTEMS | OAuth ki jagah easy setup, Maya-style |
 | M4 | **Browser agent: user ke REAL Chrome pe** (Chrome extension bridge ya CDP) + URL guardrail + **OTP-wait pattern** (login flow me user OTP dale, agent wait kare) | SUBSYSTEMS | Logged-in sites (Flipkart etc.) ab Playwright me nahi chalte |
