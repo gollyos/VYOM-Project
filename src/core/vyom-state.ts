@@ -129,7 +129,7 @@ export const STATE_VISUALS: Record<VyomState, StateVisual> = {
   },
 };
 
-export type VyomIntent = "wake" | "status" | "plan" | "explain-model" | "agency" | "developer" | "close" | "unknown";
+export type VyomIntent = "wake" | "status" | "plan" | "explain-model" | "agency" | "developer" | "close" | "stop" | "unknown";
 
 export function resolveIntent(command: string): VyomIntent {
   const normalized = command.trim().toLowerCase().replace(/[?.!]+$/g, "");
@@ -147,5 +147,21 @@ export function resolveIntent(command: string): VyomIntent {
   if (normalized === "agency" || normalized.includes("show agency")) return "agency";
   if (normalized === "developer" || normalized.includes("show developer")) return "developer";
   if (normalized.includes("close everything") || normalized.includes("clear everything")) return "close";
+  // Stop/cancel fast-path: these keywords bypass the full 1400ms
+  // dispatch-settle timer and route directly to the backend's
+  // kernel interrupt, which completes in <22ms with zero tokens.
+  // Without this, a spoken "stop" paid the same latency tax as
+  // any other sentence — the user had to wait over a second for
+  // VYOM to stop doing something it shouldn't be doing at all.
+  if (
+    normalized === "stop" || normalized === "ruko" ||
+    normalized === "bas" || normalized === "bas karo" ||
+    normalized === "cancel" || normalized === "ruk" ||
+    normalized === "theher" || normalized === "theher jao" ||
+    normalized === "ruk jao" || normalized === "stop karo" ||
+    normalized === "ruko ruko" || normalized === "bas bas"
+  ) {
+    return "stop";
+  }
   return "unknown";
 }
