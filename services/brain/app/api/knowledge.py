@@ -60,6 +60,16 @@ async def lint_wiki(request: Request, domain: str | None = None, stale_days: int
     )
 
 
+@router.get("/audit-vault")
+async def audit_vault(request: Request) -> dict[str, Any]:
+    """Vault index-truth audit: confirms the on-disk markdown vault
+    (the user's Obsidian window into memory) actually mirrors the
+    database. Reports orphan vault files (claim a memory the store
+    doesn't have) and broken [[wikilinks]] (graph edges to nowhere).
+    Complements /api/knowledge/lint, which audits fact-level quality."""
+    return await request.app.state.knowledge_service.audit_vault()
+
+
 @router.get("/{topic}")
 async def knowledge_for_topic(topic: str, request: Request, limit: int = 50, domain: str | None = None) -> dict[str, Any]:
     """All known facts on a topic (exact/substring subject match). Pass

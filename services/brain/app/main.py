@@ -1991,7 +1991,20 @@ def create_app(
         supervisor.start()
         await sync_bridge.start()
         adaptive_learning_bridge.start()
+        # Phone control with a FREE bot token (BotFather), dormant until
+        # TELEGRAM_BOT_TOKEN is set — no paid API, no extra dependency.
+        telegram_gateway = None
+        telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
+        if telegram_token:
+            from app.gateway.telegram import TelegramGateway
+
+            telegram_gateway = TelegramGateway(
+                telegram_token, runtime, task_store, data_dir / "telegram-state.json")
+            await telegram_gateway.start()
+            application.state.telegram_gateway = telegram_gateway
         yield
+        if telegram_gateway is not None:
+            await telegram_gateway.stop()
         await adaptive_learning_bridge.stop()
         await sync_bridge.stop()
         await supervisor.stop()

@@ -3,7 +3,6 @@ from __future__ import annotations
 from app.memory.namespaces import CognitiveNamespace
 from app.memory.schemas import MemoryEntry, MemoryProvenance, MemoryQuery, MemoryType, ProvenanceType
 from app.memory.manager import MemoryManager
-from app.memory.vault import MemoryVault
 
 from .extractor import FactExtractor
 from .schemas import KnowledgeFact, KnowledgeRecallResult, utc_now
@@ -254,24 +253,3 @@ class KnowledgeService:
         report["stale_days"] = stale_days
         report["low_confidence_threshold"] = low_confidence
         return report
-    async def audit_vault(self) -> dict:
-        """Cross-check the on-disk markdown vault against the database.
-
-        Returns a dict with keys:
-          ok: bool -- True if both checks pass
-          db_count: int -- memories in the database
-          vault_file_count: int -- .md files visible under vault.root
-          orphan_files: list[str] -- filenames in vault but not referenced
-              by any DB memory (stems that don't match a DB memory ID)
-          broken_links: list[tuple[str, str]] -- (wikilink_target_stem,
-              file_path) that resolve to no DB memory (wikilinks in vault
-              files pointing to non-existent memories)
-        """
-        store = self.memory.store
-        vault = store.vault
-        if vault is None:
-            return {"ok": True, "db_memory_count": 0, "vault_file_count": 0,
-                    "orphan_files": [], "broken_links": []}
-        from app.memory.vault_audit import audit_vault
-        return await audit_vault(store, vault)
-

@@ -607,6 +607,14 @@ class TaskRuntime:
                 return
 
             if task.requires_tools:
+                # M1 FAVOURITE RECALL: "mujhe X pasand hai" stores the
+                # preference; "mera favourite song chala do" plays what was
+                # stored instead of searching generic filler words. Maya's
+                # demo moment, on VYOM's permanent memory.
+                if profile.intent == "play_media":
+                    override = await self._media_preference_query(task)
+                    if override:
+                        task.metadata["media_query_override"] = override
                 if self.action_engine is None or not self.action_engine.supports(profile.intent):
                     raise RuntimeError("No registered action workflow can satisfy this tool request")
                 task.assigned_model = "local-tool-planner-v1"
@@ -1494,6 +1502,62 @@ class TaskRuntime:
             f"{memory.title}: {(memory.summary or memory.content).split(':', 1)[-1].strip()}"
             for memory in sorted(latest.values(), key=lambda item: item.created_at)  # type: ignore[attr-defined]
         ]
+
+    #: "mujhe <X> gaana/song pasand hai" — X BEFORE the keyword.
+    _MUSIC_PREF_BEFORE = re.compile(
+        r"(?:mujhe|mera|meri|main|hum)\s+(.{2,70}?)\s+(?:gaana|gana|song|music|artist)"
+        r"\s+(?:pasand|favourite|favorite)", re.I)
+    #: "favourite song <X> (hai/set karo)" — X AFTER the keyword.
+    _MUSIC_PREF_AFTER = re.compile(
+        r"(?:favourite|favorite|pasandida)\s+(?:song|gaana|gana|music|artist)\s+"
+        r"(?:hai\s*)?(?:set\s*)?(?:karo\s*)?(.{2,70}?)(?:\s+(?:hai|set|karo|batao))?\s*[.!?।]*$", re.I)
+    #: Recall only when the utterance asks to PLAY, not when merely stating.
+    _MEDIA_PLAY_VERB = re.compile(
+        r"chalao|chala|bajao|baja|lagao|laga|play|sunao|sunana|lagwa", re.I)
+
+    async def _media_preference_query(self, task: Task) -> str | None:
+        """Store or recall the Boss's favourite music for play_media.
+
+        Returns the YouTube search query to use, or None (normal flow)."""
+        text = (task.user_request or "").strip()
+        if not text:
+            return None
+        from app.memory.schemas import MemoryEntry, MemoryProvenance, MemoryQuery, MemoryType
+
+        for pattern in (self._MUSIC_PREF_BEFORE, self._MUSIC_PREF_AFTER):
+            match = pattern.search(text)
+            if match and self.memory_store is not None:
+                favourite = match.group(1).strip(" .,!?:;।\"'")
+                # "favourite song chala do" is a PLAY request, not a stored
+                # name - never save command words as the favourite itself.
+                if not favourite or self._MEDIA_PLAY_VERB.match(favourite) or re.match(
+                        r"^(?:hai|karo|kar|do|set|batao)\b", favourite, re.I):
+                    continue
+                await self.memory_manager.remember(MemoryEntry(
+                    type=MemoryType.PREFERENCE,
+                    title=f"Boss ka favourite music: {favourite}",
+                    content=favourite,
+                    summary=f"Favourite song/artist: {favourite}",
+                    entities=["music"],
+                    provenance=[MemoryProvenance(type="user_statement", reference="voice")],
+                ))
+                task.metadata["preference_saved"] = favourite
+                return None  # statement saved; playing happens on command
+
+        if self._MEDIA_PLAY_VERB.search(text) and self.memory_retriever is not None:
+            results = await self.memory_retriever.search(MemoryQuery(
+                types={MemoryType.PREFERENCE}, text="favourite favorite pasand song gaana music artist", limit=5))
+            for result in results:
+                memory = result.memory
+                if re.search(r"gaana|gana|song|music|artist|favourite|favorite",
+                             f"{memory.title} {memory.content}", re.I):
+                    task.metadata["preference_recalled"] = memory.content
+                    if getattr(self, "event_bus", None) is not None:
+                        await self._emit(task, EventType.MEMORY_RETRIEVED,
+                                         "Boss ka favourite yaad rakha hai — wahi chala raha hoon",
+                                         {"memory_id": memory.id})
+                    return memory.content.strip()
+        return None
 
     async def _capture_conversational_facts(self, task: Task) -> list[str]:
         """Write durable facts the user STATED into memory.

@@ -187,9 +187,40 @@ class MigrationManager:
         validation_expected=(1,),
     )
 
+    KANBAN_BATCH_REVIEW = Migration(
+        version=10,
+        name="kanban_batch_review_v1",
+        statements=(
+            # A video-prompted gap check against VYOM's own kanban batch
+            # dispatch (create_batch already existed - see
+            # app/kanban/store.py): several videos this session described
+            # an agent that reviews its OWN completed work at the end of
+            # every batch and proposes lesson updates, rather than each
+            # task finishing in isolation with nothing looking across the
+            # whole batch afterwards. batch_id groups cards created by
+            # the same create_batch() call so BatchReviewer
+            # (app/adaptive/batch_reviewer.py) can find "every card that
+            # belongs to this batch" once the last one finishes, without
+            # scanning by a timestamp window (which would be both fuzzy
+            # and racy against unrelated single-card creates happening at
+            # the same moment). NULL for cards created via the older
+            # single-card create() path - those were never part of a
+            # batch and are correctly excluded from review.
+            "ALTER TABLE kanban_cards ADD COLUMN batch_id TEXT",
+            "CREATE INDEX IF NOT EXISTS idx_kanban_batch ON kanban_cards(batch_id)",
+            "CREATE TABLE IF NOT EXISTS batch_reviews ("
+            "id TEXT PRIMARY KEY, batch_id TEXT NOT NULL, reviewed_at TEXT NOT NULL, "
+            "card_count INTEGER NOT NULL, succeeded_count INTEGER NOT NULL, "
+            "failed_count INTEGER NOT NULL, findings_json TEXT NOT NULL)",
+            "CREATE INDEX IF NOT EXISTS idx_batch_reviews_batch ON batch_reviews(batch_id)",
+        ),
+        validation_query="SELECT COUNT(*) FROM pragma_table_info('kanban_cards') WHERE name='batch_id'",
+        validation_expected=(1,),
+    )
+
     def __init__(self, database, migrations: list[Migration] | None = None):
         self.database = database
-        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY, self.KNOWLEDGE_BASE, self.MESSAGING, self.KNOWLEDGE_NAMESPACE, self.KNOWLEDGE_CONTRADICTION, self.KNOWLEDGE_LIFECYCLE], key=lambda item: item.version)
+        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY, self.KNOWLEDGE_BASE, self.MESSAGING, self.KNOWLEDGE_NAMESPACE, self.KNOWLEDGE_CONTRADICTION, self.KNOWLEDGE_LIFECYCLE, self.KANBAN_BATCH_REVIEW], key=lambda item: item.version)
         self.last_error: str | None = None
 
     async def ensure_table(self) -> None:

@@ -1340,7 +1340,10 @@ class ActionEngine:
         that Chrome marks a tab as producing audio or that the page exposes
         a Pause control. Navigation or a changed title alone never passes.
         """
-        query = self._extract_media_query(task.user_request)
+        # A stored favourite (from "mujhe X pasand hai") beats generic
+        # extraction — task_runtime sets this when the Boss asked for
+        # "favourite" and memory had the answer.
+        query = task.metadata.get("media_query_override") or self._extract_media_query(task.user_request)
         search_url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
         observations: list[dict[str, Any]] = []
 
