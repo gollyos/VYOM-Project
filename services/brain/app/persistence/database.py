@@ -696,6 +696,28 @@ class Database:
                 ON kanban_cards(board, status);
             CREATE INDEX IF NOT EXISTS idx_kanban_created
                 ON kanban_cards(created_at);
+
+            -- Agent-to-agent messaging - the single-Brain scoped
+            -- equivalent of Hermes's own tools/bot_relay.py
+            -- message_agent: one kanban worker (a real OS subprocess,
+            -- see app/kanban/worker.py) can leave a message for another
+            -- worker to read, e.g. "I finished the research, here's
+            -- what I found" so a downstream card can build on an
+            -- upstream card's real output instead of only the board's
+            -- final result field. Recipient identifies as a card_id;
+            -- delivered=0 rows are what GET /api/kanban/messages
+            -- returns, and a poller marks them delivered=1 after
+            -- reading (never deleted, so history is inspectable).
+            CREATE TABLE IF NOT EXISTS agent_messages (
+                id TEXT PRIMARY KEY,
+                from_card_id TEXT NOT NULL,
+                to_card_id TEXT NOT NULL,
+                content TEXT NOT NULL,
+                delivered INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_agent_messages_recipient
+                ON agent_messages(to_card_id, delivered);
             """
         )
         await self.connection.commit()

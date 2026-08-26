@@ -59,3 +59,32 @@ async def fail_card(card_id: str, request: Request, payload: dict) -> dict:
 async def dispatcher_status(request: Request) -> dict:
     dispatcher = request.app.state.kanban_dispatcher
     return {"active_workers": dispatcher.active_worker_count(), "max_concurrent_workers": dispatcher.max_concurrent_workers}
+
+
+@router.post("/messages")
+async def send_message(request: Request, payload: dict) -> dict:
+    """Agent-to-agent messaging between kanban workers - the
+    single-Brain equivalent of Hermes's message_agent. Called by a
+    worker (see app/kanban/worker.py --message-to) or directly for
+    testing/manual coordination."""
+    store = request.app.state.agent_message_store
+    message_id = await store.send(
+        from_card_id=payload["from_card_id"], to_card_id=payload["to_card_id"], content=payload["content"],
+    )
+    return {"message_id": message_id}
+
+
+@router.get("/messages/{card_id}/inbox")
+async def get_inbox(card_id: str, request: Request, mark_delivered: bool = True) -> dict:
+    """Undelivered messages waiting for card_id. A worker polls this
+    for messages sent by other workers."""
+    store = request.app.state.agent_message_store
+    messages = await store.inbox(card_id, mark_delivered=mark_delivered)
+    return {"count": len(messages), "messages": messages}
+
+
+@router.get("/messages/{card_id}/history")
+async def get_message_history(card_id: str, request: Request, limit: int = 100) -> dict:
+    store = request.app.state.agent_message_store
+    messages = await store.history(card_id, limit=min(max(limit, 1), 500))
+    return {"count": len(messages), "messages": messages}

@@ -36,7 +36,7 @@ from app.persistence.conversation_store import ConversationStore
 from app.adaptive.curator import Curator, CuratorRunStore
 from app.adaptive.dialectic_reasoner import DialecticReasoner
 from app.plugins.registry import PluginRegistry
-from app.kanban.store import KanbanStore
+from app.kanban.store import KanbanStore, AgentMessageStore
 from app.kanban.dispatcher import KanbanDispatcher
 from app.providers import ProviderRegistry, create_provider_registry
 from app.providers.response_cache import ResponseCache
@@ -1109,6 +1109,7 @@ def create_app(
             Path(os.getenv("VYOM_PLUGINS_DIR", str(PROJECT_ROOT / "data" / "plugins"))),
         )
         kanban_store = KanbanStore(database)
+        agent_message_store = AgentMessageStore(database)
         kanban_dispatcher = KanbanDispatcher(
             kanban_store, base_url=f"http://{selected_settings.host}:{selected_settings.port}",
         )
@@ -1605,6 +1606,7 @@ def create_app(
         application.state.curator_run_store = curator_run_store
         application.state.plugin_registry = plugin_registry
         application.state.kanban_store = kanban_store
+        application.state.agent_message_store = agent_message_store
         application.state.kanban_dispatcher = kanban_dispatcher
         application.state.performance_store = performance_store
         application.state.event_bus = event_bus

@@ -213,3 +213,54 @@ def _pid_alive_windows(pid: int) -> bool:
         return False
     except Exception:
         return False
+
+
+class AgentMessageStore:
+    """Agent-to-agent messaging between kanban workers - the
+    single-Brain scoped equivalent of Hermes's tools/bot_relay.py
+    message_agent. A worker (identified by its card_id) leaves a
+    message for another card's worker to read on its next poll."""
+
+    def __init__(self, database: Database) -> None:
+        self.database = database
+
+    async def send(self, *, from_card_id: str, to_card_id: str, content: str) -> str:
+        connection = self.database.require_connection()
+        message_id = f"msg_{uuid4().hex}"
+        await connection.execute(
+            "INSERT INTO agent_messages(id, from_card_id, to_card_id, content, delivered, created_at) "
+            "VALUES (?, ?, ?, ?, 0, ?)",
+            (message_id, from_card_id, to_card_id, content, utc_now().isoformat()),
+        )
+        await connection.commit()
+        return message_id
+
+    async def inbox(self, card_id: str, *, mark_delivered: bool = True) -> list[dict]:
+        """Undelivered messages for `card_id`, oldest first. Marks them
+        delivered unless mark_delivered=False (e.g. a dry-run peek)."""
+        connection = self.database.require_connection()
+        rows = await (await connection.execute(
+            "SELECT id, from_card_id, to_card_id, content, created_at FROM agent_messages "
+            "WHERE to_card_id = ? AND delivered = 0 ORDER BY created_at ASC",
+            (card_id,),
+        )).fetchall()
+        messages = [dict(row) for row in rows]
+        if mark_delivered and messages:
+            ids = [m["id"] for m in messages]
+            placeholders = ",".join("?" for _ in ids)
+            await connection.execute(
+                f"UPDATE agent_messages SET delivered = 1 WHERE id IN ({placeholders})", tuple(ids)
+            )
+            await connection.commit()
+        return messages
+
+    async def history(self, card_id: str, *, limit: int = 100) -> list[dict]:
+        """Every message sent OR received by card_id, including
+        delivered ones - the inspectable audit trail."""
+        connection = self.database.require_connection()
+        rows = await (await connection.execute(
+            "SELECT id, from_card_id, to_card_id, content, delivered, created_at FROM agent_messages "
+            "WHERE from_card_id = ? OR to_card_id = ? ORDER BY created_at DESC LIMIT ?",
+            (card_id, card_id, limit),
+        )).fetchall()
+        return [dict(row) for row in rows]
