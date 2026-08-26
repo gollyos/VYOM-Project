@@ -1,1 +1,0 @@
-{"stored_at": 1787732660.1197681, "response": {"text": "\u00a1Hola!", "structured": {}, "usage": {"input_tokens": 357, "output_tokens": 3, "total_tokens": 360, "estimated_cost": null, "raw": {"promptTokenCount": 357, "candidatesTokenCount": 3, "totalTokenCount": 360, "promptTokensDetails": [{"modality": "TEXT", "tokenCount": 357}], "serviceTier": "standard"}}, "tool_calls": []}}

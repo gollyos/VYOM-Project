@@ -15,6 +15,9 @@ services/brain/data/*.db-shm
 services/brain/data/*.db-wal
 services/brain/data/*.jsonl
 services/brain/data/screenshots/
+services/brain/data/response-cache/
+services/brain/data/secrets/
+services/brain/data/skills/
 .wwebjs_auth/
 services/brain/data/video-jobs/
 services/brain/whatsapp_connector/node_modules/
