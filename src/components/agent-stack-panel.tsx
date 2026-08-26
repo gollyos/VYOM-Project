@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   CirclePlus,
   Database,
+  GitBranch,
   Layers,
   Plug,
   RefreshCw,
@@ -14,6 +15,7 @@ import {
   Sparkles,
   Wrench,
   X,
+  Zap,
 } from "lucide-react";
 
 const BRAIN = (import.meta.env.VITE_VYOM_BRAIN_URL as string | undefined) ?? "http://127.0.0.1:7788";
@@ -77,6 +79,36 @@ type Lesson = {
   created_at: string;
 };
 type LessonsResponse = { lessons: Lesson[]; count: number };
+
+type KanbanCard = {
+  id: string;
+  board: string;
+  title: string;
+  goal: string;
+  status: "pending" | "claimed" | "in_progress" | "completed" | "blocked" | "failed";
+  worker_pid: number | null;
+  completed_at?: string | null;
+  error?: string | null;
+};
+type KanbanCardsResponse = { count: number; cards: KanbanCard[] };
+type KanbanStatusResponse = { active_workers: number; max_concurrent_workers: number };
+
+type PluginInfo = { name: string; version: string; description: string; hooks: string[] };
+type PluginsResponse = { loaded: PluginInfo[]; errors: Record<string, string> };
+
+type CuratorRun = {
+  id: string;
+  started_at: string;
+  completed_at?: string | null;
+  status: string;
+  summary: {
+    knowledge_lint?: { totals?: { contradicted?: number; stale?: number; orphans?: number } } | null;
+    stale_automations?: Array<{ id: string; name: string }>;
+    dialectic_findings?: Array<{ subject: string; predicate: string; value: string; confidence: number }>;
+  };
+};
+type CuratorRunsResponse = { count: number; runs: CuratorRun[] };
+
 
 type RouterBiasModel = {
   success_rate?: number | null;
@@ -195,6 +227,14 @@ export function AgentStackPanel() {
   const [routerBias, setRouterBias] = useState<RouterBiasResponse>({ attached: false, models: {} });
   const [learningError, setLearningError] = useState<string | null>(null);
 
+  // Kanban / Plugins / Curator - the Hermes-parity autonomy features
+  const [kanbanCards, setKanbanCards] = useState<KanbanCard[]>([]);
+  const [kanbanStatus, setKanbanStatus] = useState<KanbanStatusResponse>({ active_workers: 0, max_concurrent_workers: 0 });
+  const [plugins, setPlugins] = useState<PluginsResponse>({ loaded: [], errors: {} });
+  const [curatorRuns, setCuratorRuns] = useState<CuratorRun[]>([]);
+  const [autonomyError, setAutonomyError] = useState<string | null>(null);
+  const [curatorBusy, setCuratorBusy] = useState(false);
+
   // Refresh only while the drawer is open.
   const refreshTimer = useRef<number | null>(null);
 
@@ -226,18 +266,48 @@ export function AgentStackPanel() {
     }
   }, []);
 
+  const loadAutonomy = useCallback(async () => {
+    setAutonomyError(null);
+    try {
+      const [cardsResp, statusResp, pluginsResp, curatorResp] = await Promise.all([
+        getJson<KanbanCardsResponse>("/api/kanban/cards?limit=10"),
+        getJson<KanbanStatusResponse>("/api/kanban/status"),
+        getJson<PluginsResponse>("/api/plugins"),
+        getJson<CuratorRunsResponse>("/api/curator/runs?limit=5"),
+      ]);
+      setKanbanCards(cardsResp.cards ?? []);
+      setKanbanStatus(statusResp);
+      setPlugins(pluginsResp);
+      setCuratorRuns(curatorResp.runs ?? []);
+    } catch (error) {
+      setAutonomyError(error instanceof Error ? error.message : "Could not reach the Brain autonomy APIs");
+    }
+  }, []);
+
+  const runCuratorNow = useCallback(async () => {
+    setCuratorBusy(true);
+    try {
+      await fetch(`${apiBase()}/api/curator/run-now`, { method: "POST" });
+      await loadAutonomy();
+    } catch {
+      // loadAutonomy's own error state already surfaces reachability issues
+    } finally {
+      setCuratorBusy(false);
+    }
+  }, [loadAutonomy]);
+
   const refreshAll = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadServers(), loadLearning()]);
+    await Promise.all([loadServers(), loadLearning(), loadAutonomy()]);
     setLoading(false);
-  }, [loadServers, loadLearning]);
+  }, [loadServers, loadLearning, loadAutonomy]);
 
   // Load data the first time the drawer opens, then keep it warm.
   useEffect(() => {
     if (!open || refreshTimer.current !== null) return;
     void (async () => {
       setLoading(true);
-      await Promise.all([loadServers(), loadLearning()]);
+      await Promise.all([loadServers(), loadLearning(), loadAutonomy()]);
       setLoading(false);
     })();
     refreshTimer.current = window.setInterval(() => {
@@ -249,7 +319,7 @@ export function AgentStackPanel() {
         refreshTimer.current = null;
       }
     };
-  }, [open, loadServers, loadLearning, refreshAll]);
+  }, [open, loadServers, loadLearning, loadAutonomy, refreshAll]);
 
   async function searchKnowledge(event: FormEvent) {
     event.preventDefault();
@@ -655,6 +725,123 @@ export function AgentStackPanel() {
                       )}
                     </li>
                   ))}
+                </ul>
+              )}
+            </section>
+
+            <section className="cap-card" aria-label="Autonomous multi-agent stack">
+              <header className="cap-card-header">
+                <span className="cap-card-icon cap-card-icon-learning">
+                  <GitBranch size={14} />
+                </span>
+                <div>
+                  <h4>Autonomous Agents</h4>
+                  <p>Kanban workers, plugins, and the self-review Curator - live from the running Brain.</p>
+                </div>
+              </header>
+
+              {autonomyError && (
+                <p className="cap-error">
+                  <AlertCircle size={11} /> {autonomyError}
+                </p>
+              )}
+
+              <div className="cap-subhead">
+                Kanban Workers{" "}
+                <span className="cap-count">
+                  {kanbanStatus.active_workers}/{kanbanStatus.max_concurrent_workers} active
+                </span>
+              </div>
+              {kanbanCards.length === 0 ? (
+                <p className="cap-empty">No kanban cards yet. Created via POST /api/kanban/cards.</p>
+              ) : (
+                <ul className="cap-lesson-list">
+                  {kanbanCards.map((card) => (
+                    <li key={card.id} className="cap-lesson">
+                      <div className="cap-lesson-title">
+                        <strong>{card.title}</strong>
+                        <span className={`cap-badge ${card.status === "completed" ? "cap-badge-fresh" : card.status === "failed" || card.status === "blocked" ? "cap-badge-stale" : ""}`}>
+                          {card.status}
+                          {card.worker_pid ? ` · pid ${card.worker_pid}` : ""}
+                        </span>
+                      </div>
+                      {card.error && <p className="cap-router-reason">{card.error}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="cap-subhead">
+                Plugins <span className="cap-count">{plugins.loaded.length}</span>
+              </div>
+              {plugins.loaded.length === 0 ? (
+                <p className="cap-empty">No plugins loaded. Drop one into data/plugins/&lt;name&gt;/.</p>
+              ) : (
+                <ul className="cap-lesson-list">
+                  {plugins.loaded.map((plugin) => (
+                    <li key={plugin.name} className="cap-lesson">
+                      <div className="cap-lesson-title">
+                        <strong>
+                          {plugin.name} <span className="cap-muted">v{plugin.version}</span>
+                        </strong>
+                        <span className="cap-muted">{plugin.hooks.join(", ") || "no hooks"}</span>
+                      </div>
+                      <p>{plugin.description}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {Object.keys(plugins.errors).length > 0 && (
+                <ul className="cap-lesson-list">
+                  {Object.entries(plugins.errors).map(([name, error]) => (
+                    <li key={name} className="cap-lesson">
+                      <div className="cap-lesson-title">
+                        <strong>{name}</strong>
+                        <span className="cap-badge cap-badge-stale">failed to load</span>
+                      </div>
+                      <p className="cap-router-reason">{error}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="cap-subhead">
+                Curator Runs <span className="cap-count">{curatorRuns.length}</span>
+                <button
+                  type="button"
+                  className="cap-icon-button"
+                  title="Run curator now"
+                  onClick={() => void runCuratorNow()}
+                  disabled={curatorBusy}
+                  style={{ marginLeft: "auto" }}
+                >
+                  <Zap size={12} className={curatorBusy ? "cap-spin" : ""} />
+                </button>
+              </div>
+              {curatorRuns.length === 0 ? (
+                <p className="cap-empty">
+                  No curator runs yet. It self-triggers when idle, or run it now with the button above.
+                </p>
+              ) : (
+                <ul className="cap-lesson-list">
+                  {curatorRuns.map((run) => {
+                    const findings = run.summary.dialectic_findings?.length ?? 0;
+                    const staleAutomations = run.summary.stale_automations?.length ?? 0;
+                    const contradicted = run.summary.knowledge_lint?.totals?.contradicted ?? 0;
+                    return (
+                      <li key={run.id} className="cap-lesson">
+                        <div className="cap-lesson-title">
+                          <strong>{formatDate(run.started_at)}</strong>
+                          <span className="cap-muted">{run.status}</span>
+                        </div>
+                        <p>
+                          {findings} learned fact{findings === 1 ? "" : "s"} · {staleAutomations} paused automation
+                          {staleAutomations === 1 ? "" : "s"} · {contradicted} contradiction
+                          {contradicted === 1 ? "" : "s"}
+                        </p>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </section>
