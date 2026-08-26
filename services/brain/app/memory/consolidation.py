@@ -126,7 +126,13 @@ def split_clauses(utterance: str) -> list[str]:
 _FACT_PATTERNS: list[tuple[str, str, str]] = [
     # Identity - English and Hindi/Hinglish
     (r"\bmy name is\s+([A-Za-z\u0900-\u0963\u0966-\u097F][\w\u0900-\u0963\u0966-\u097F .'-]{1,40})", "identity", "User name"),
-    (r"\bi am\s+([A-Z][\w.'-]{1,30})\b", "identity", "User name"),
+    # Marked "manual_case_check" (checked in the extraction loop below,
+    # NOT via regex [A-Z]) because the whole pattern list is matched
+    # with re.IGNORECASE - under that flag, [A-Z] silently matches
+    # lowercase too, so "I am also good" captured "also" as a name.
+    # is_correction phrasing like "I am not X" is excluded too.
+    ("MANUAL_CASE_CHECK:" + r"\bi am\s+([\w.'-]{1,30})\b(?!\s+(?:good|fine|well|okay|ok|great|happy|sad|tired|busy|here|ready|not))",
+     "identity", "User name"),
     (r"मेरा नाम\s*(?:है)?\s*([\u0900-\u0963\u0966-\u097F\w .'-]{2,40})", "identity", "User name"),
     (r"\bmera naam\s*(?:hai)?\s*([\w .'-]{2,40})", "identity", "User name"),
     # Business / company / website
@@ -242,8 +248,16 @@ def extract_durable_facts(utterance: str) -> list[dict]:
         if len(clause) < 4:
             continue
         for pattern, kind, title in _FACT_PATTERNS:
-            match = _re.search(pattern, clause, _re.IGNORECASE)
+            manual_case_check = pattern.startswith("MANUAL_CASE_CHECK:")
+            real_pattern = pattern[len("MANUAL_CASE_CHECK:"):] if manual_case_check else pattern
+            match = _re.search(real_pattern, clause, _re.IGNORECASE)
             if not match:
+                continue
+            if manual_case_check and not match.group(1)[:1].isupper():
+                # Under IGNORECASE, [A-Z]-shaped intent still matched
+                # lowercase - a genuine name after "I am" is capitalized
+                # in real input ("I am Gunjan"), so a lowercase capture
+                # ("I am also good" -> "also") is filler, not a name.
                 continue
             value = _clean_value(match.group(1))
             if not value or len(value) > 120:

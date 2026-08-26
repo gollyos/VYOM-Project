@@ -546,6 +546,19 @@ _CONVERSATIONAL_PATTERNS = (
     "kaise ho", "kya haal", "tum kaun ho", "kya kar sakte ho",
     "nice", "great", "cool", "okay", "hmm",
 )
+#: Meta-commentary ABOUT the conversation itself ("I'm not saying
+#: everything that stays on topic", "main topic") is small talk about
+#: how the user is talking, not a request for VYOM to do anything - but
+#: it commonly runs past _MAX_CONVERSATIONAL_WORDS (real sentences
+#: about a topic are rarely under 7 words) and has no action verb
+#: either, so without this it fell through to the tool-calling mission,
+#: where the model itself hallucinated an unrelated memory_search call
+#: ("मैं सारी बातें नहीं बोल रहा हूं जो मेन टॉपिक रहते हैं" ->
+#: memory_search(query="Our solar system")) - a real production bug.
+_META_CONVERSATIONAL_PATTERNS = (
+    "main topic", "mein topic", "मेन टॉपिक", "मुख्य विषय",
+    "topic pe", "topic par", "on topic", "off topic",
+)
 #: A goal this short with no verb is almost always conversational filler.
 _MAX_CONVERSATIONAL_WORDS = 7
 
@@ -572,6 +585,8 @@ def is_conversational(goal: str) -> bool:
     if is_general_knowledge_query(goal):
         return False
     if any(pattern in lowered for pattern in _CONVERSATIONAL_PATTERNS):
+        return True
+    if any(pattern in lowered for pattern in _META_CONVERSATIONAL_PATTERNS):
         return True
     # Short utterance with no actionable verb anywhere.
     action_words = (

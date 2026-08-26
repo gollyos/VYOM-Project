@@ -18,6 +18,19 @@ def _normalize_subject(subject: str) -> str:
     return re.sub(r"\s+", " ", subject.strip().lower())
 
 
+#: Common short words that pass the `len(t) > 2` token filter below but
+#: carry no real subject signal - counting them meant a query like
+#: "Gunjan's preferences AND business details" LIKE-matched any subject
+#: merely CONTAINING "and" as a substring (e.g. "formation and evolution
+#: of the Solar System"), surfacing completely unrelated stored facts.
+#: A real production bug: this is what made VYOM answer a Hindi
+#: personal-memory question with unrelated old Solar System research.
+_SUBJECT_SEARCH_STOPWORDS = frozenset({
+    "and", "the", "for", "are", "was", "were", "has", "have", "you",
+    "your", "its", "his", "her", "our", "not", "but", "with", "from",
+})
+
+
 class KnowledgeStore:
     """Structured fact storage layered on the EXISTING Database/migration
     pattern - a new `knowledge_facts` table (added via a real
@@ -122,7 +135,10 @@ class KnowledgeStore:
         subject before falling back to full memory search. When `domain`
         is given, restrict to that agent's wiki."""
         connection = self.database.require_connection()
-        tokens = [t for t in re.findall(r"[a-z0-9]+", text.lower()) if len(t) > 2]
+        tokens = [
+            t for t in re.findall(r"[a-z0-9]+", text.lower())
+            if len(t) > 2 and t not in _SUBJECT_SEARCH_STOPWORDS
+        ]
         if not tokens:
             return []
         clauses = " OR ".join("subject_key LIKE ?" for _ in tokens)
