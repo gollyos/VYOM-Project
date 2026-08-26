@@ -34,6 +34,18 @@
     "active": true,
     "targets": ["nsis"],
     "icon": ["icons/icon.ico"],
+    "resources": {
+      "bundled/python-runtime/": "runtime/python/",
+      "bundled/node-runtime/": "runtime/node/",
+      "../services/brain/app/": "brain/app/",
+      "../services/brain/plugins/": "brain/plugins/",
+      "../services/brain/pyproject.toml": "brain/pyproject.toml",
+      "../services/brain/.env.example": "brain/.env.example",
+      "../services/brain/whatsapp_connector/connector.js": "brain/whatsapp_connector/connector.js",
+      "../services/brain/whatsapp_connector/package.json": "brain/whatsapp_connector/package.json",
+      "../services/brain/whatsapp_connector/node_modules/": "brain/whatsapp_connector/node_modules/",
+      "../config/": "config/"
+    },
     "windows": {
       "nsis": {
         "installMode": "currentUser",

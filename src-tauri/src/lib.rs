@@ -19,15 +19,22 @@ fn install_tls_crypto_provider() {
 // means the user maintains exactly one file for both processes.
 // `CARGO_MANIFEST_DIR` is baked in at compile time as this crate's
 // absolute path (`src-tauri/`), so this resolves correctly regardless of
-// the process's working directory in both dev and release builds.
-// `dotenvy::from_path` never overwrites a variable already present in the
-// environment, matching python-dotenv's `override=False` behavior.
-fn load_local_env_file() {
+// the process's working directory in DEV builds. A bundled installed
+// build has no such checkout on disk at all - resolve the SAME file via
+// the app's own resource directory instead (resources/brain/.env, next
+// to the bundled brain/app the Brain itself runs from).
+fn load_local_env_file(app: &tauri::AppHandle) {
     let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let candidates = [
+    let mut candidates = vec![
         manifest_dir.join("../services/brain/.env"),
         manifest_dir.join("../.env"),
     ];
+    if let Ok(resource_env) = app
+        .path()
+        .resolve("brain/.env", tauri::path::BaseDirectory::Resource)
+    {
+        candidates.push(resource_env);
+    }
     for candidate in candidates {
         if candidate.is_file() {
             let _ = dotenvy::from_path(&candidate);
@@ -37,7 +44,6 @@ fn load_local_env_file() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    load_local_env_file();
     // tokio-tungstenite intentionally disables rustls' default crypto backend.
     // Select one before any TLS client configuration is constructed.
     install_tls_crypto_provider();
@@ -76,6 +82,7 @@ pub fn run() {
             desktop::close_vyom_window,
         ])
         .setup(|app| {
+            load_local_env_file(app.handle());
             if app.get_webview_window("main").is_none() {
                 tauri::WebviewWindowBuilder::from_config(
                     app.handle(),
@@ -83,7 +90,7 @@ pub fn run() {
                 )?
                 .build()?;
             }
-            brain::ensure_brain_running(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
+            brain::ensure_brain_running(app.handle(), std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
             desktop::install_tray(app)?;
             desktop::install_close_to_tray(app);
             #[cfg(desktop)]

@@ -57,6 +57,8 @@ class KnowledgeService:
             if prev_value.strip().lower() != fact.value.strip().lower():
                 existing.contradicted = True
                 existing.contradiction_count += 1
+                existing.consistent_reconfirmations = 0
+                existing.value_changed_at = utc_now()
                 prior = list(existing.metadata.get("prior_values", []))
                 prior.append({
                     "value": prev_value,
@@ -65,6 +67,13 @@ class KnowledgeService:
                     "conflicted_at": utc_now().isoformat(),
                 })
                 existing.metadata["prior_values"] = prior[-5:]
+            elif existing.contradicted:
+                # Same value as an OPEN contradiction: one more source
+                # agreeing with the current value, moving it toward
+                # auto-resolution instead of staying flagged forever.
+                existing.consistent_reconfirmations += 1
+                if existing.consistent_reconfirmations >= KnowledgeFact.CONTRADICTION_AUTO_RESOLVE_THRESHOLD:
+                    existing.contradicted = False
             existing.value = fact.value
             existing.confidence = max(existing.confidence, fact.confidence)
             if fact.source_url:
@@ -156,6 +165,12 @@ class KnowledgeService:
                 reason="no facts known for this subject",
             )
 
+        # Rank by DECAYED confidence, not stored confidence - a fact
+        # confirmed yesterday should outrank one with a nominally
+        # higher confidence but untouched for a year (effective_confidence
+        # never mutates the stored value; it only reorders what recall()
+        # returns first).
+        facts.sort(key=lambda f: f.effective_confidence(), reverse=True)
         stalest = max(facts, key=lambda f: f.last_confirmed_at)
         is_stale = self.store.is_stale(stalest, self.fresh_after_days)
         return KnowledgeRecallResult(

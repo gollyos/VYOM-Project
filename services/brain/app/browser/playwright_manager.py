@@ -15,6 +15,17 @@ EDGE_CANDIDATE_PATHS = [
 ]
 
 
+def _looks_like_missing_browser(error: Exception) -> bool:
+    """True when a chromium.launch() failure is Playwright's own
+    'browser not installed, run playwright install' error, as opposed
+    to a genuinely different failure (e.g. a permissions problem, an
+    already-running-browser lock) that a Chromium download would not
+    fix and should surface as-is instead of being masked by a doomed
+    download attempt."""
+    message = str(error).lower()
+    return "executable doesn't exist" in message or "playwright install" in message
+
+
 class PlaywrightManager:
     def __init__(self):
         self._playwright: Any = None
@@ -55,8 +66,46 @@ class PlaywrightManager:
         launch_options: dict[str, Any] = {"headless": self.headless}
         if executable:
             launch_options["executable_path"] = executable
-        self._browser = await self._playwright.chromium.launch(**launch_options)
+        try:
+            self._browser = await self._playwright.chromium.launch(**launch_options)
+        except Exception as error:
+            # Every real Windows machine ships Edge (EDGE_CANDIDATE_PATHS
+            # above), which is the common path and needs no download at
+            # all - this branch only fires on the genuinely rare machine
+            # where Edge is missing/uninstalled AND Playwright's own
+            # bundled Chromium was never fetched (a fresh VYOM install
+            # deliberately ships WITHOUT it, to keep the installer small -
+            # see scripts/prepare-bundled-runtimes.sh). Rather than fail
+            # the task outright, fetch it once, exactly like a browser
+            # extension prompting for a one-time permission the first
+            # time it is actually needed.
+            if executable or not _looks_like_missing_browser(error):
+                raise
+            await self._install_chromium()
+            self._browser = await self._playwright.chromium.launch(headless=self.headless)
         return self._browser
+
+    async def _install_chromium(self) -> None:
+        """One-time `playwright install chromium` using the SAME
+        interpreter VYOM itself is running under (sys.executable), so
+        this works identically whether VYOM is running from the
+        bundled embedded Python or a system one - never assumes a
+        `playwright` CLI is on PATH, which an embedded runtime does
+        not add."""
+        import asyncio
+        import sys
+
+        process = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "playwright", "install", "chromium",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )
+        output, _ = await process.communicate()
+        if process.returncode != 0:
+            raise RuntimeError(
+                "Could not download a browser automatically (no Edge found and "
+                "the one-time Chromium download failed): "
+                + output.decode("utf-8", errors="replace")[-500:]
+            )
 
     # A default Playwright page announces itself as HeadlessChrome with no
     # locale, which many sites answer with an interstitial instead of the

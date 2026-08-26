@@ -567,6 +567,12 @@ def create_app(
         whatsapp_connector = WhatsAppConnector(
             connector_dir=Path(__file__).resolve().parent.parent / "whatsapp_connector",
             auth_data_dir=data_dir / "whatsapp-auth",
+            # VYOM_NODE_BIN points at the bundled portable Node runtime
+            # when the installed app sets it (src-tauri spawns the Brain
+            # with this env var pointing at resources/runtime/node/node.exe)
+            # - falls back to "node" on PATH for dev-mode runs that never
+            # went through scripts/prepare-bundled-runtimes.sh.
+            node_bin=os.getenv("VYOM_NODE_BIN", "node"),
         )
         # Telegram authenticates with a single bot token (from @BotFather),
         # not OAuth. It's read from TELEGRAM_BOT_TOKEN if set, otherwise

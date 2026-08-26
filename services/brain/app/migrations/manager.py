@@ -164,9 +164,32 @@ class MigrationManager:
         validation_expected=(1,),
     )
 
+    KNOWLEDGE_LIFECYCLE = Migration(
+        version=9,
+        name="knowledge_lifecycle_v1",
+        statements=(
+            # The reel-prompted memory-lifecycle gap: a contradiction flag
+            # never auto-resolved (a fact stayed "contradicted" forever
+            # even after the world settled and every later source agreed
+            # again), and there was no distinction between "this subject
+            # was looked at again" (last_confirmed_at) and "the VALUE
+            # actually changed" (new: value_changed_at). See
+            # app/knowledge/schemas.py KnowledgeFact for the full design
+            # note. value_changed_at backfills to first_learned_at for
+            # existing rows - the honest "we don't know when it last
+            # changed before this column existed, only when it was first
+            # learned" default.
+            "ALTER TABLE knowledge_facts ADD COLUMN value_changed_at TEXT",
+            "ALTER TABLE knowledge_facts ADD COLUMN consistent_reconfirmations INTEGER NOT NULL DEFAULT 0",
+            "UPDATE knowledge_facts SET value_changed_at = first_learned_at WHERE value_changed_at IS NULL",
+        ),
+        validation_query="SELECT COUNT(*) FROM pragma_table_info('knowledge_facts') WHERE name='value_changed_at'",
+        validation_expected=(1,),
+    )
+
     def __init__(self, database, migrations: list[Migration] | None = None):
         self.database = database
-        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY, self.KNOWLEDGE_BASE, self.MESSAGING, self.KNOWLEDGE_NAMESPACE, self.KNOWLEDGE_CONTRADICTION], key=lambda item: item.version)
+        self.migrations = sorted(migrations or [self.BASELINE, self.ADAPTIVE, self.BRAIN_GRAPH, self.REMOTE_DELIVERY, self.KNOWLEDGE_BASE, self.MESSAGING, self.KNOWLEDGE_NAMESPACE, self.KNOWLEDGE_CONTRADICTION, self.KNOWLEDGE_LIFECYCLE], key=lambda item: item.version)
         self.last_error: str | None = None
 
     async def ensure_table(self) -> None:

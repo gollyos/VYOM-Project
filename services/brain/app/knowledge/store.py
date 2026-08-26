@@ -56,24 +56,30 @@ class KnowledgeStore:
             """
             INSERT INTO knowledge_facts(
                 id, subject, subject_key, predicate, value, source_url, source_title,
-                confidence, first_learned_at, last_confirmed_at, confirmations,
-                task_id, memory_id, domain, contradicted, contradiction_count, fact_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                confidence, first_learned_at, last_confirmed_at, value_changed_at,
+                confirmations, task_id, memory_id, domain, contradicted, contradiction_count,
+                consistent_reconfirmations, fact_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 subject=excluded.subject, subject_key=excluded.subject_key,
                 predicate=excluded.predicate, value=excluded.value,
                 source_url=excluded.source_url, source_title=excluded.source_title,
                 confidence=excluded.confidence, last_confirmed_at=excluded.last_confirmed_at,
+                value_changed_at=excluded.value_changed_at,
                 confirmations=excluded.confirmations, memory_id=excluded.memory_id,
                 domain=excluded.domain, contradicted=excluded.contradicted,
-                contradiction_count=excluded.contradiction_count, fact_json=excluded.fact_json
+                contradiction_count=excluded.contradiction_count,
+                consistent_reconfirmations=excluded.consistent_reconfirmations,
+                fact_json=excluded.fact_json
             """,
             (
                 fact.id, fact.subject, subject_key, fact.predicate, fact.value,
                 fact.source_url, fact.source_title, fact.confidence,
                 fact.first_learned_at.isoformat(), fact.last_confirmed_at.isoformat(),
+                fact.value_changed_at.isoformat(),
                 fact.confirmations, fact.task_id, fact.memory_id, fact.domain,
-                fact.contradicted, fact.contradiction_count, payload,
+                fact.contradicted, fact.contradiction_count,
+                fact.consistent_reconfirmations, payload,
             ),
         )
         await connection.commit()

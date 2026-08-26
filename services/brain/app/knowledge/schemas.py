@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, ClassVar
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -41,6 +41,16 @@ class KnowledgeFact(BaseModel):
     confidence: float = Field(default=0.6, ge=0, le=1)
     first_learned_at: datetime = Field(default_factory=utc_now)
     last_confirmed_at: datetime = Field(default_factory=utc_now)
+    #: When the VALUE itself last actually changed (distinct from
+    #: last_confirmed_at, which advances on every re-confirmation even
+    #: when the value is unchanged). This is the missing "which newer
+    #: thing replaced this, and when" the reel's memory-lifecycle
+    #: critique names: last_confirmed_at alone cannot answer "how long
+    #: has the CURRENT value specifically been true", only "how
+    #: recently was this subject looked at". Defaults to
+    #: first_learned_at so a fact's very first value counts as having
+    #: "changed" at creation.
+    value_changed_at: datetime = Field(default_factory=utc_now)
     confirmations: int = 1
     task_id: str | None = None
     memory_id: str | None = None  # links to the MemoryEntry that carries this fact for FTS/embedding recall
@@ -52,10 +62,43 @@ class KnowledgeFact(BaseModel):
     #: is never silently dropped.
     contradicted: bool = False
     contradiction_count: int = 0
+    #: How many re-confirmations in a row have agreed with the CURRENT
+    #: value since the last contradiction. A fact stays "contradicted"
+    #: forever otherwise, even after the world settles and every
+    #: subsequent research pass agrees - which trains the user to
+    #: distrust lint's contradiction list once it fills with
+    #: long-since-resolved noise. Reset to 0 on every new contradiction;
+    #: auto-clears `contradicted` once it reaches
+    #: CONTRADICTION_AUTO_RESOLVE_THRESHOLD agreeing re-confirmations.
+    consistent_reconfirmations: int = 0
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     def as_sentence(self) -> str:
         return f"{self.subject} {self.predicate} {self.value}".strip()
+
+    #: Re-confirmations agreeing with the CURRENT value needed to
+    #: auto-clear a contradiction flag. Not "the disagreement never
+    #: happened" (contradiction_count and prior_values in metadata
+    #: still carry that history permanently) - only "this is no longer
+    #: an OPEN conflict needing review", the same distinction a real
+    #: wiki draws between an edit-war flag and its resolution.
+    CONTRADICTION_AUTO_RESOLVE_THRESHOLD: ClassVar[int] = 3
+
+    def effective_confidence(self, *, half_life_days: float = 180.0) -> float:
+        """Confidence for RETRIEVAL RANKING, decayed by how long it has
+        been since this fact was last confirmed - without mutating the
+        stored `confidence` (the design-guide finding this follows:
+        exposing recency to ranking is nearly free and catches facts
+        the world may have quietly outdated even though nothing has
+        actively contradicted them yet, e.g. 'the deploy pipeline runs
+        on the shared runner pool' from six months ago). A fact
+        re-confirmed yesterday keeps full confidence; one untouched for
+        a full half-life is worth half its stored confidence in
+        ranking, though it is never treated as false outright - lint's
+        own `stale` check is the harder signal for that."""
+        age_days = max(0.0, (utc_now() - self.last_confirmed_at).total_seconds() / 86400)
+        decay = 0.5 ** (age_days / half_life_days)
+        return self.confidence * decay
 
 
 class KnowledgeRecallResult(BaseModel):

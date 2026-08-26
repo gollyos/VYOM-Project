@@ -2,6 +2,10 @@ node_modules/
 dist/
 .vyom-build-check/
 src-tauri/target/
+# Prepared runtime bundles (embedded Python + portable Node) - large
+# binaries fetched/prepared by scripts/prepare-bundled-runtimes.* , not
+# committed. See that script for exact versions and how to regenerate.
+src-tauri/bundled/
 
 __pycache__/
 *.py[cod]
