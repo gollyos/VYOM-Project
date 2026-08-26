@@ -1295,8 +1295,11 @@ class ActionEngine:
         # Long voice transcripts often start with a complaint/question and
         # put the actual imperative in the final clause. Searching the whole
         # transcript produces irrelevant results, so retain the last clause
-        # that actually names media.
-        query = (media_clauses[-1] if media_clauses else raw).strip(" .,!?:;।")
+        # that actually names media - and when NO clause names media, still
+        # use only the LAST clause (the imperative), never the whole
+        # conversation: "kya kar rahe ho... kesariya chala do" must search
+        # "kesariya", not the entire exchange.
+        query = (media_clauses[-1] if media_clauses else (clauses[-1] if clauses else raw)).strip(" .,!?:;।")
         patterns = (
             r"^(?:ek\s+kaam\s+karo|एक\s+काम\s+करो)\s*",
             r"(?:\b(?:mere\s+liye|for\s+me)\b|मेरे\s+(?:लिए|को))",
@@ -1313,7 +1316,22 @@ class ActionEngine:
         for pattern in patterns:
             query = re.sub(pattern, " ", query, flags=re.I)
         query = re.sub(r"\s+", " ", query).strip(" .,!?:;।")
-        return query or "Bollywood song"
+        # GENERIC-ONLY GUARD. "mera favourite song chala do" strips down to
+        # "mera favourite song" - searching those LITERAL words on YouTube
+        # returns random videos, not anything the user wants. Possessive and
+        # generic filler words are never part of a song's identity; remove
+        # them, and if nothing concrete remains, search trending music
+        # rather than the user's own sentence.
+        query = re.sub(
+            r"\b(?:mera|meri|mere|my|a|an|koi|any|ek|favourite|favorite|pasandida|"
+            r"song|gaana|gana|music|bollywood)\b",
+            " ", query, flags=re.I,
+        )
+        query = re.sub(r"\s+", " ", query).strip(" .,!?:;।")
+        # Trailing Hindi possessive particle ("Arijit Singh ka" -> "Arijit
+        # Singh") - it binds to the removed "gaana", never to the artist.
+        query = re.sub(r"\s+(?:ka|ki|ke)$", "", query, flags=re.I)
+        return query or "trending Bollywood songs"
 
     async def _play_media(self, task: Task, context) -> ExecutionResult:
         """Search, start and verify media in the real visible browser.
