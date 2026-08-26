@@ -99,6 +99,34 @@ export function VyomExperience() {
     };
   }, [runtimeInfo]);
 
+  // TODAY'S FREE-TIER BUDGET, on the same line as everything else real.
+  // The user lived with VYOM dying at noon from invisible quota burn; the
+  // remaining allowance is now always visible (tightest model wins, since
+  // the router spreads traffic across all of them).
+  const [quotaLeft, setQuotaLeft] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const readQuota = async () => {
+      try {
+        const base = import.meta.env.VITE_VYOM_BRAIN_URL || "http://127.0.0.1:7788";
+        const data = await fetch(`${base}/api/quota`, { signal: AbortSignal.timeout(2000) }).then((r) => r.json());
+        if (cancelled) return;
+        const models = Object.values(data?.models ?? {}) as Array<{ daily_limit?: number; daily_remaining?: number }>;
+        if (models.length) {
+          const tightest = Math.min(
+            ...models.map((m) => (m.daily_limit ? (m.daily_remaining ?? 0) / m.daily_limit : 1)),
+          );
+          setQuotaLeft(Math.round(tightest * 100));
+        }
+      } catch {
+        /* quota endpoint is optional; absence shows nothing */
+      }
+    };
+    void readQuota();
+    const timer = window.setInterval(readQuota, 60_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [brainConnection]);
+
   // VYOM speaks a RESULT, not a running commentary. Every interim
   // response used to be spoken, which is why it repeated "on it" while a
   // mission was still working. Progress belongs on the canvas; the voice
@@ -442,6 +470,11 @@ export function VyomExperience() {
                 ? "Voice ready · text fallback"
                 : "Brain offline · local fallback"}
           <i>·</i>
+          {quotaLeft !== null && (
+            <span className={`quota-chip ${quotaLeft <= 15 ? "quota-low" : ""}`} title="Today's free-tier budget left (tightest model)">
+              budget {quotaLeft}%
+            </span>
+          )}
           {activeTaskId ? (
             <button className="cancel-task" type="button" onClick={cancelActiveTask}>Cancel task</button>
           ) : (

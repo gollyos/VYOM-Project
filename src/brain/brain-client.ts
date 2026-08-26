@@ -12,6 +12,11 @@ export class BrainClient {
   private reconnectTimer: number | null = null;
   private reconnectAttempt = 0;
   private destroyed = false;
+  // RECONNECT CURSOR. A disconnect used to silently drop every event the
+  // Brain published while the UI was away - "task gayab" after a network
+  // blip. The Brain's /ws/events?since= replays everything after the last
+  // event this client saw; without the cursor that replay never runs.
+  private lastEventId: string | null = null;
   private eventListeners = new Set<(event: BrainEvent) => void>();
   private connectionListeners = new Set<(state: BrainConnectionState) => void>();
 
@@ -94,7 +99,10 @@ export class BrainClient {
   private connect() {
     if (this.destroyed || this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) return;
     this.emitConnection(this.reconnectAttempt ? "reconnecting" : "connecting");
-    const socket = new WebSocket(websocketUrl(this.baseUrl));
+    const url = this.lastEventId
+      ? `${websocketUrl(this.baseUrl)}?since=${encodeURIComponent(this.lastEventId)}`
+      : websocketUrl(this.baseUrl);
+    const socket = new WebSocket(url);
     this.socket = socket;
     socket.onopen = () => {
       this.reconnectAttempt = 0;
@@ -103,7 +111,10 @@ export class BrainClient {
     socket.onmessage = (message) => {
       try {
         const event = JSON.parse(String(message.data)) as BrainEvent;
-        if (event.schema_version === 1) this.eventListeners.forEach((listener) => listener(event));
+        if (event.schema_version === 1) {
+          if (event.event_id) this.lastEventId = event.event_id;
+          this.eventListeners.forEach((listener) => listener(event));
+        }
       } catch {
         // Ignore invalid or future protocol messages without destabilizing the visual runtime.
       }

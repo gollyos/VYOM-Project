@@ -1545,6 +1545,18 @@ button {
   color: #303b39;
 }
 
+/* Today's free-tier budget, always visible in the runtime note. Turns
+   amber only when the tightest model is nearly spent - the honest
+   signal that VYOM is about to lean on its siblings. */
+.quota-chip {
+  color: #4c5c59;
+  letter-spacing: 0.04em;
+}
+
+.quota-chip.quota-low {
+  color: #d0a44a;
+}
+
 .cancel-task {
   padding: 0;
   border: 0;
