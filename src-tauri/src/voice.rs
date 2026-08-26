@@ -268,14 +268,28 @@ audio; the runtime shows progress visually and will send you the result. Never s
 cannot do. You do not know its capabilities. Never say you are unable to browse, code, read \
 files, or control the computer. (3) Never invent numbers, names, statuses, metrics or results. \
 (4) When given text prefixed with SPEAK:, read exactly that text aloud, naturally, and add \
-nothing. (5) Only pure social conversation (greetings, thanks) may be answered directly, in \
-one short sentence."
+nothing. (5) STAY SILENT unless the user has said something that is clearly, unambiguously \
+addressed to you - a real word or sentence, not a breath, cough, background noise, silence, \
+or an ambiguous fragment. When genuinely uncertain whether the audio contained real speech \
+directed at you, say NOTHING rather than guessing. (6) Never volunteer affection, opinions, \
+compliments, or observations the user did not ask for ('I love you', 'that's great', 'good job', \
+etc.) - you are not a companion chatbot and unprompted remarks are a bug, not personality. \
+(7) Only when the user has just said an actual greeting or thanks may you answer directly, in \
+one short sentence, and only in direct response to their words - never proactively."
                 }]
             },
             "realtimeInputConfig": {
                 "automaticActivityDetection": {
                     "disabled": false,
-                    "startOfSpeechSensitivity": "START_SENSITIVITY_HIGH",
+                    // HIGH start-sensitivity treated ANY ambient sound (breathing,
+                    // background noise, a TV in another room) as the user starting
+                    // to speak, which then let the model generate an unprompted
+                    // reply ("I love you", "also very good") to audio that was
+                    // never a real command. LOW requires a clearer speech onset
+                    // before a turn even starts. (There is no MEDIUM value in the
+                    // Live API - only HIGH/LOW/UNSPECIFIED(=HIGH); verified against
+                    // https://ai.google.dev/api/live before picking this.)
+                    "startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
                     // END_SENSITIVITY_HIGH + a 320ms silence window ended the
                     // user's turn on any brief pause - a breath, a moment of
                     // thought, code-switching between Hindi/English/Gujarati
