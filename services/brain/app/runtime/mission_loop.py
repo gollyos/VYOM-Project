@@ -270,6 +270,7 @@ class MissionLoop:
         grounding_required = needs_fresh_evidence(goal)
         grounded = False
         grounding_challenged = False
+        inability_challenged = False
         # Repetition guard: an identical call repeated with the same
         # arguments is not progress. Without this a planner that could not
         # satisfy a goal spent its entire model budget (15 calls, ~60s)
@@ -413,6 +414,29 @@ class MissionLoop:
 
                     if require_tool_use and not mission.completed:
                         if claims_inability(response.text):
+                            # HUMAN-LIKE PERSISTENCE. A person who "can't"
+                            # still looks for another way before giving up;
+                            # VYOM failed the mission on the model's FIRST
+                            # refusal, which is why it mostly said 'ye nahi
+                            # kar sakta'. One bounded escalation: forbid the
+                            # surrender, demand either a tool call (any
+                            # route: browser, desktop, terminal, research)
+                            # or the SPECIFIC missing capability. Only a
+                            # second refusal fails the mission - and names
+                            # what to build next.
+                            if not inability_challenged:
+                                inability_challenged = True
+                                history.append({"role": "model", "parts": [{"text": response.text[:400]}]})
+                                history.append({"role": "user", "parts": [{"text":
+                                    "You claimed you cannot do this. Giving up before trying an available "
+                                    "tool is not acceptable. Reconsider the tools above: is there ANY "
+                                    "combination that achieves the goal - even partially, even via a "
+                                    "different route? Either call a tool now, or state in ONE short line "
+                                    "exactly which capability is missing."}]})
+                                await self._emit(
+                                    mission.mission_id, EventType.TASK_PROGRESS,
+                                    "First refusal received; pushing back once before accepting it", {})
+                                continue
                             mission.status = "failed"
                             await self._emit(
                                 mission.mission_id, EventType.TASK_PROGRESS,
