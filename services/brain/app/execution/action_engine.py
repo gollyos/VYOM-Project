@@ -1717,7 +1717,14 @@ class ActionEngine:
         calculation = parse_arithmetic_chain(task.user_request) or parse_arithmetic(task.user_request)
 
         if calculation and (app_id in (None, "calculator")):
-            return await self._calculator_interaction(task, context, calculation)
+            # DIRECT ARITHMETIC. The old path drove the real Windows
+            # Calculator app through UI automation - honest theatre that
+            # FAILED whenever Calculator would not open ("2+2?" became
+            # "No visible window matching 'Calculator'"). Evaluating the
+            # expression in code is not a claim, it IS the computation:
+            # instant, offline, zero quota, and cannot fail on window
+            # state. Deterministic math does not need a GUI witness.
+            return self._direct_calculation(task, calculation)
 
         if app_id is None:
             # "ab search box me VYOM type karo" names no application: it
@@ -1774,6 +1781,45 @@ class ActionEngine:
     @staticmethod
     def _digits(number: float) -> str:
         return str(int(number)) if float(number).is_integer() else str(number)
+
+    def _direct_calculation(self, task: Task, calculation) -> ExecutionResult:
+        """Evaluate parsed arithmetic deterministically, in code.
+
+        Accepts the binary tuple (left, op, right) or the chain
+        [(operand, op-after), ..., (last, None)]; chains evaluate strictly
+        left to right, like any spoken sequence."""
+        from app.runtime.task_classifier import evaluate_chain
+        from app.schemas.results import UsageRecord
+
+        chain = calculation if isinstance(calculation, list) else None
+        if chain is not None:
+            value = evaluate_chain(list(chain))
+            expression = " ".join(
+                f"{operand:g} {operator}" if operator else f"{operand:g}"
+                for operand, operator in chain
+            )
+        else:
+            left, operator, right = calculation
+            try:
+                value = {"+": left + right, "-": left - right, "*": left * right, "/": left / right}[operator]
+            except ZeroDivisionError:
+                value = None
+            expression = f"{left:g} {operator} {right:g}"
+        if value is None:
+            return ExecutionResult(
+                response=f"{expression} has no answer (division by zero or unparsable sequence).",
+                structured_data={"error": "uncomputable"},
+                evidence=["deterministic_local_evaluation"],
+                usage=UsageRecord(total_tokens=0, estimated_cost=0),
+            )
+        shown = int(value) if float(value).is_integer() else round(value, 6)
+        response = f"{expression} = {shown}"
+        return ExecutionResult(
+            response=response,
+            structured_data={"expression": expression, "value": shown, "computed_locally": True},
+            evidence=[f"deterministic arithmetic: {response}", "no application driven, no model call"],
+            usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
 
     async def _calculator_interaction(self, task: Task, context, calculation) -> ExecutionResult:
         # `calculation` is either a binary (left, operator, right) tuple or
