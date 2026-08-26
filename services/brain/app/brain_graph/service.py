@@ -119,6 +119,8 @@ class BrainGraphService:
                 for payload in await self._read_json_rows(table, json_column):
                     self._project_payload(table, payload, nodes, candidate_edges)
 
+            await self._project_memory_relationships(nodes, candidate_edges)
+
             self._project_registries(nodes, candidate_edges)
 
             # Every durable item belongs to the one VYOM Brain. Specific
@@ -425,6 +427,37 @@ class BrainGraphService:
         ):
             if data.get(field):
                 self._link(edges, memory_id, _canonical(kind, data[field]), relation, f"memory.{field}")
+
+    async def _project_memory_relationships(self, nodes: dict[str, BrainNode], edges: list[BrainEdge]) -> None:
+        """Bring the real memory-to-memory RELATED_TO links (see
+        app/memory/auto_linker.py + MemoryManager._auto_link) into the
+        unified Brain Graph, so the frontend's single native graph view
+        shows the cross-linked memory web alongside everything else -
+        not a second, disconnected graph. Reads memory_relationships
+        directly rather than through MemoryStore because the projection
+        runs from a raw connection, matching every other _project_*
+        method's pattern in this file."""
+        connection = self.database.require_connection()
+        cursor = await connection.execute(
+            "SELECT source_id, target_id, relation, confidence FROM memory_relationships"
+        )
+        for row in await cursor.fetchall():
+            source_id = _canonical("memory", row["source_id"])
+            target_id = _canonical("memory", row["target_id"])
+            if source_id not in nodes or target_id not in nodes:
+                # Either side may be a highly-sensitive memory, which
+                # _project_memory deliberately never adds as a node -
+                # its relationships must not leak it back in as an edge.
+                continue
+            try:
+                relation = BrainRelation(row["relation"])
+            except ValueError:
+                relation = BrainRelation.RELATED_TO
+            edges.append(self._edge(
+                source_id, target_id, relation,
+                provenance="memory_relationships (auto-linked)",
+                confidence=float(row["confidence"]),
+            ))
 
     def _project_crm(self, data, nodes, edges):
         kind = str(data.get("record_type") or "crm")

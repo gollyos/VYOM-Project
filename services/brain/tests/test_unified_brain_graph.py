@@ -19,6 +19,7 @@ from app.memory.schemas import (
     MemoryProvenance,
     MemoryType,
     ProvenanceType,
+    RelationType,
     Sensitivity,
     VerificationState,
 )
@@ -191,3 +192,77 @@ async def test_cognitive_resolution_receives_linked_brain_context(database: Data
     assert result.resolved and result.source == "memory"
     assert result.hits[0]["id"] == memory.id
     assert result.hits[0]["connections"][0]["id"] == f"task:{task.id}"
+
+
+@pytest.mark.asyncio
+async def test_memory_auto_links_appear_as_related_to_edges_in_brain_graph(database: Database):
+    """The unified Brain Graph must show the SAME cross-linked memory
+    web as the vault's [[wikilinks]] - a user opening the native
+    frontend graph view should see memories that share a real subject
+    connected with a RELATED_TO edge, not a second disconnected graph
+    only visible via the markdown files."""
+    manager = await _memory_manager(database)
+    first = await manager.remember(MemoryEntry(
+        id="mem_luxora_kickoff",
+        type=MemoryType.SEMANTIC,
+        title="Luxora Designs project kickoff",
+        content="Luxora Designs project kickoff",
+        summary="Luxora Designs project kickoff",
+        entities=["Luxora Designs"],
+        provenance=[MemoryProvenance(type=ProvenanceType.USER_STATEMENT)],
+    ))
+    second = await manager.remember(MemoryEntry(
+        id="mem_luxora_invoice",
+        type=MemoryType.SEMANTIC,
+        title="Luxora Designs invoice sent",
+        content="Luxora Designs invoice sent",
+        summary="Luxora Designs invoice sent",
+        entities=["Luxora Designs"],
+        provenance=[MemoryProvenance(type=ProvenanceType.USER_STATEMENT)],
+    ))
+
+    service = BrainGraphService(database)
+    await service.refresh()
+    graph = await service.graph(f"memory:{first.id}", depth=1, include_core_edges=False)
+    node_ids = {node.id for node in graph.nodes}
+    assert f"memory:{second.id}" in node_ids
+    assert any(edge.relation == BrainRelation.RELATED_TO for edge in graph.edges)
+
+
+@pytest.mark.asyncio
+async def test_highly_sensitive_memory_relationship_never_leaks_an_edge(database: Database):
+    """A RELATED_TO row involving a HIGHLY_SENSITIVE memory must not
+    surface as an edge just because the relationship row itself exists
+    in memory_relationships - _project_memory already excludes the
+    sensitive memory as a node, and the relationship projection must
+    respect that exclusion rather than re-adding it via an edge."""
+    manager = await _memory_manager(database)
+    sensitive = await manager.remember(MemoryEntry(
+        id="mem_secret_luxora",
+        type=MemoryType.SEMANTIC,
+        title="Luxora Designs secret contract terms",
+        content="Luxora Designs secret contract terms",
+        summary="Luxora Designs secret contract terms",
+        entities=["Luxora Designs"],
+        sensitivity=Sensitivity.HIGHLY_SENSITIVE,
+        provenance=[MemoryProvenance(type=ProvenanceType.USER_STATEMENT)],
+    ))
+    normal = await manager.remember(MemoryEntry(
+        id="mem_normal_luxora",
+        type=MemoryType.SEMANTIC,
+        title="Luxora Designs project kickoff",
+        content="Luxora Designs project kickoff",
+        summary="Luxora Designs project kickoff",
+        entities=["Luxora Designs"],
+        provenance=[MemoryProvenance(type=ProvenanceType.USER_STATEMENT)],
+    ))
+    # Force a relationship row even though auto-linking wouldn't create
+    # one for a highly-sensitive memory - the projection's own
+    # exclusion is what this test actually verifies.
+    await manager.relationships.connect(sensitive.id, normal.id, RelationType.RELATED_TO)
+
+    service = BrainGraphService(database)
+    await service.refresh()
+    graph = await service.graph(f"memory:{normal.id}", depth=2, include_core_edges=False)
+    node_ids = {node.id for node in graph.nodes}
+    assert f"memory:{sensitive.id}" not in node_ids

@@ -1,11 +1,12 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowUp, Mic, MicOff, RotateCw } from "lucide-react";
+import { AlertCircle, ArrowUp, Mic, MicOff, RotateCw, Share2 } from "lucide-react";
 import { BrandMark } from "./brand-mark";
 import { NeuralBiome } from "./neural-biome";
 import { OnboardingOverlay } from "./onboarding-overlay";
 import { UIComposer } from "@/composer/ui-composer";
 import { AgentStackPanel } from "./agent-stack-panel";
 import { ConnectionsPanel } from "./connections-panel";
+import { BrainGraphView } from "./brain-graph-view";
 import { WindowControls } from "./window-controls";
 import { newCorrelationId, trace } from "@/core/trace";
 import { STATE_VISUALS } from "@/core/vyom-state";
@@ -26,6 +27,7 @@ export function VyomExperience() {
   const [query, setQuery] = useState("");
   const [time, setTime] = useState("");
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [showBrainGraph, setShowBrainGraph] = useState(false);
   const {
     state: composerState,
     response,
@@ -340,6 +342,17 @@ export function VyomExperience() {
 
       <AgentStackPanel />
       <ConnectionsPanel />
+
+      <button
+        type="button"
+        className={`brain-graph-toggle ${showBrainGraph ? "brain-graph-toggle-active" : ""}`}
+        onClick={() => setShowBrainGraph(true)}
+        aria-label="Open VYOM's native Brain Graph"
+      >
+        <Share2 size={13} />
+        <span>Brain Graph</span>
+      </button>
+      {showBrainGraph && <BrainGraphView onClose={() => setShowBrainGraph(false)} />}
 
       <section className="interaction-dock">
         {pendingWork.length > 0 && (
