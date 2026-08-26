@@ -410,7 +410,9 @@ def test_skill_registry_loads_grouped_imports(tmp_path: Path):
 # --- VYOM core independence ------------------------------------------------------------
 
 
-async def test_vyom_core_starts_with_all_external_capabilities_disabled(tmp_path: Path):
+async def test_vyom_core_starts_with_all_external_capabilities_disabled(
+    tmp_path: Path, monkeypatch,
+):
     """Disable Defuddle + codebase-memory + Composio in config; the
     Brain must still boot and answer core commands."""
     import yaml
@@ -435,7 +437,8 @@ async def test_vyom_core_starts_with_all_external_capabilities_disabled(tmp_path
             artifacts_root=tmp_path / "art", backup_root=tmp_path / "bk",
             external_capabilities_config_path=config_path,
         )
-        with TestClient(create_app(settings)) as client:
+        monkeypatch.setattr("app.main.get_settings", lambda: settings)
+        with TestClient(create_app()) as client:
             assert client.get("/healthz").json()["alive"] is True
             assert client.get("/readyz").status_code in (200, 503)
             state = client.app.state

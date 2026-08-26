@@ -1600,7 +1600,7 @@ def create_app(
         # All optional: VYOM Core boots and works with every external
         # capability disabled (regression-tested).
         external_capabilities_config = yaml.safe_load(
-            settings.external_capabilities_config_path.read_text(encoding="utf-8")
+            selected_settings.external_capabilities_config_path.read_text(encoding="utf-8")
         ) or {}
         external_intake = ExternalCapabilityIntake(capability_registry)
         backend_router = CapabilityBackendRouter()
