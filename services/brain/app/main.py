@@ -11,7 +11,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, conversation as conversation_api, crm, curator as curator_api, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discord as discord_api, discovery as discovery_api, email as email_api, extension as extension_api, facebook as facebook_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, kanban as kanban_api, knowledge as knowledge_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, plugins as plugins_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api, twitter as twitter_api, linkedin as linkedin_api, meta_ads as meta_ads_api, whatsapp as whatsapp_api, search as search_api
+from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, conversation as conversation_api, crm, curator as curator_api, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discord as discord_api, discovery as discovery_api, email as email_api, extension as extension_api, facebook as facebook_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, kanban as kanban_api, knowledge as knowledge_api, learn as learn_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, plugins as plugins_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api, twitter as twitter_api, linkedin as linkedin_api, meta_ads as meta_ads_api, whatsapp as whatsapp_api, search as search_api
 from app.agency.service import AgencyService, DisconnectedLeadResearchProvider
 from app.agents.evaluator import AgentEvaluator
 from app.agents.factory import AgentFactory
@@ -38,6 +38,7 @@ from app.adaptive.dialectic_reasoner import DialecticReasoner
 from app.plugins.registry import PluginRegistry
 from app.kanban.store import KanbanStore, AgentMessageStore
 from app.kanban.dispatcher import KanbanDispatcher
+from app.skills.learn import LearnService
 from app.providers import ProviderRegistry, create_provider_registry
 from app.providers.response_cache import ResponseCache
 from app.routing.model_registry import ModelRegistry
@@ -644,6 +645,7 @@ def create_app(
                 available=bool(provider and provider.configured),
             )
         skill_registry = SkillRegistry(selected_settings.skills_root)
+        learn_service = LearnService(skill_registry)
         skill_registry.load()
         for registered_skill in skill_registry.list():
             capability_discovery.from_skill(registered_skill)
@@ -1631,6 +1633,7 @@ def create_app(
         application.state.capability_registry = capability_registry
         application.state.capability_discovery = capability_discovery
         application.state.skill_registry = skill_registry
+        application.state.learn_service = learn_service
         application.state.skill_builder = skill_builder
         application.state.skill_executor = skill_executor
         application.state.teachable_skills = teachable_skills
@@ -1941,6 +1944,7 @@ def create_app(
     application.include_router(curator_api.router)
     application.include_router(plugins_api.router)
     application.include_router(kanban_api.router)
+    application.include_router(learn_api.router)
     application.include_router(approvals.router)
     application.include_router(models.router)
     application.include_router(tools.router)
