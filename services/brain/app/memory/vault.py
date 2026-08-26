@@ -66,10 +66,17 @@ class MemoryVault:
             return None
         return self.root / self.layer_for(memory) / memory.type.value / self._filename(memory)
 
-    def write(self, memory: MemoryEntry) -> None:
+    def write(self, memory: MemoryEntry, *, related: list[MemoryEntry] | None = None) -> None:
         """Mirror one memory to the vault. Failures are swallowed: the
         database commit already succeeded, and a broken mirror must never
-        fail the write that produced it."""
+        fail the write that produced it.
+
+        `related` (optional) is the resolved set of memories this one
+        has a real RELATED_TO relationship with (see
+        app/memory/auto_linker.py + MemoryManager._auto_link) - when
+        given, they render as an Obsidian-compatible [[wikilink]]
+        section so the vault is an actual cross-linked knowledge graph,
+        not a pile of isolated files."""
         if self.root is None or memory.sensitivity == Sensitivity.HIGHLY_SENSITIVE:
             return
         path = self.path_for(memory)
@@ -77,7 +84,7 @@ class MemoryVault:
             return
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(self.render(memory), encoding="utf-8")
+            path.write_text(self.render(memory, related=related), encoding="utf-8")
         except OSError:
             pass
 
@@ -92,7 +99,7 @@ class MemoryVault:
             pass
 
     @staticmethod
-    def render(memory: MemoryEntry) -> str:
+    def render(memory: MemoryEntry, *, related: list[MemoryEntry] | None = None) -> str:
         frontmatter = [
             "---",
             f"id: {memory.id}",
@@ -133,7 +140,21 @@ class MemoryVault:
             "",
             provenance_lines or "- (none recorded)",
             "",
-            f"*Summary: {memory.summary}*",
-            "",
         ]
+        if related:
+            # Obsidian-standard [[target]] wikilink syntax, one per
+            # line so both Obsidian's own graph view AND a plain grep
+            # for "[[" find every cross-reference. The link target is
+            # the SAME slug--id stem _filename() produces (without the
+            # .md extension), which is what makes it resolve inside
+            # Obsidian - a vault opened there will show this as a real
+            # graph, not text that merely looks like Markdown.
+            body.append("## Related")
+            body.append("")
+            for other in related:
+                stem = MemoryVault._filename(other)[:-3]  # strip ".md"
+                body.append(f"- [[{stem}|{other.title}]]")
+            body.append("")
+        body.append(f"*Summary: {memory.summary}*")
+        body.append("")
         return "\n".join(frontmatter + body)

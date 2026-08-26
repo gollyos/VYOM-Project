@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from .auto_linker import find_link_candidates
 from .consolidation import MemoryConsolidator
 from .provenance import explain_provenance
 from .relationships import RelationshipManager
 from .retrieval import MemoryRetriever
-from .schemas import MemoryEntry, MemoryQuery, MemorySearchResult, VerificationState
+from .schemas import MemoryEntry, MemoryQuery, MemorySearchResult, RelationType, VerificationState
 from .store import MemoryStore
 
 
@@ -18,7 +19,55 @@ class MemoryManager:
         self.consolidator = MemoryConsolidator()
 
     async def remember(self, memory: MemoryEntry) -> MemoryEntry:
-        return await self.store.save(memory)
+        saved = await self.store.save(memory)
+        await self._auto_link(saved)
+        return saved
+
+    async def _auto_link(self, memory: MemoryEntry) -> None:
+        """Connect a newly-saved memory to real, concretely related
+        memories (see auto_linker.py) - this is what turns the
+        markdown vault from isolated files into an actual knowledge
+        graph, and what a later vault re-render shows as
+        [[wikilinks]]. Best-effort: a linking failure must never fail
+        the save that already succeeded."""
+        try:
+            candidates = await self.retriever.search(MemoryQuery(text=memory.title, limit=40))
+            others = [hit.memory for hit in candidates if hit.memory.id != memory.id]
+            linked = find_link_candidates(memory, others)
+            existing = await self.store.relationships(memory.id, relation=RelationType.RELATED_TO.value)
+            already_linked_ids = {rel.target_id for rel in existing} | {rel.source_id for rel in existing}
+            for other in linked:
+                if other.id in already_linked_ids:
+                    continue
+                await self.relationships.connect(memory.id, other.id, RelationType.RELATED_TO)
+            if linked:
+                # Re-render BOTH files so the link is visible from
+                # either side (Obsidian shows backlinks automatically
+                # from a single directed edge, but this vault is
+                # plain markdown read by tools that don't compute
+                # backlinks - each file states its own outgoing links
+                # explicitly instead of relying on a reader to infer
+                # them).
+                if self.store.vault is not None and self.store.vault.enabled:
+                    all_related = await self.store.relationships(memory.id, relation=RelationType.RELATED_TO.value)
+                    self.store.vault.write(memory, related=await self._resolve_related(all_related, memory.id))
+                    for other in linked:
+                        other_related = await self.store.relationships(other.id, relation=RelationType.RELATED_TO.value)
+                        self.store.vault.write(other, related=await self._resolve_related(other_related, other.id))
+        except Exception:
+            pass
+
+    async def _resolve_related(self, relationships, memory_id: str) -> list[MemoryEntry]:
+        other_ids = [
+            rel.target_id if rel.source_id == memory_id else rel.source_id
+            for rel in relationships
+        ]
+        resolved = []
+        for other_id in other_ids:
+            other = await self.store.get(other_id, touch=False)
+            if other is not None:
+                resolved.append(other)
+        return resolved
 
     async def search(self, query: MemoryQuery) -> list[MemorySearchResult]:
         return await self.retriever.search(query)

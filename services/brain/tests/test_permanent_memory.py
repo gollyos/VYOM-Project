@@ -119,6 +119,34 @@ async def test_highly_sensitive_memories_never_reach_plaintext(tmp_path: Path, d
     assert vault.path_for(memory) is None or not vault.path_for(memory).exists()
 
 
+# -- C2b: auto-linked knowledge graph (Obsidian [[wikilinks]]) --------------
+
+
+async def test_vault_renders_related_memories_as_wikilinks(tmp_path: Path, database):
+    """The user's 'khudki Wikipedia jaisa Obsidian, cross-linked' request:
+    a memory with a real relationship must render an Obsidian-standard
+    [[stem|Title]] wikilink, not just sit as an isolated file."""
+    vault = MemoryVault(tmp_path / "vault")
+    store = MemoryStore(database, vault=vault)
+    a = await store.save(_memory(title="Luxora Designs project kickoff"))
+    b = await store.save(_memory(title="Luxora Designs invoice sent"))
+
+    vault.write(a, related=[b])
+    text = vault.path_for(a).read_text(encoding="utf-8")
+    assert "## Related" in text
+    assert "[[" in text and "]]" in text
+    assert b.id in text  # the wikilink target embeds the real memory id
+
+
+async def test_vault_omits_related_section_when_nothing_is_linked(tmp_path: Path, database):
+    vault = MemoryVault(tmp_path / "vault")
+    store = MemoryStore(database, vault=vault)
+    memory = await store.save(_memory(title="Isolated note"))
+    vault.write(memory)
+    text = vault.path_for(memory).read_text(encoding="utf-8")
+    assert "## Related" not in text
+
+
 # -- C3: FTS + instant retrieval at scale -----------------------------------
 
 
