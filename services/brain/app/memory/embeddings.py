@@ -65,10 +65,10 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
     Brain; on any failure (no key, network, quota) it falls back to the
     local provider, so availability never regresses."""
 
-    name = "gemini-text-embedding-004"
+    name = "gemini-embedding-001"
     available = True
 
-    def __init__(self, api_key: str | None, model: str = "text-embedding-004",
+    def __init__(self, api_key: str | None, model: str = "gemini-embedding-001",
                  fallback: EmbeddingProvider | None = None):
         self._api_key = api_key
         self._model = model

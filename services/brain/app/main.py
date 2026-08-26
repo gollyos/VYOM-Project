@@ -667,6 +667,19 @@ def create_app(
         agent_factory = AgentFactory(agent_registry, agent_evaluator)
         agent_lifecycle = AgentLifecycle(agent_registry)
         agent_runtime = AgentRuntime(agent_registry, agent_lifecycle, skill_executor)
+
+        # -- Multi-agent orchestrator --------------------------------------
+        from app.agents.multi_agent_orchestrator import MultiAgentOrchestrator
+        multi_agent_orchestrator = MultiAgentOrchestrator(
+            agent_registry=agent_registry,
+            agent_runtime=agent_runtime,
+            event_bus=event_bus,
+        )
+
+        # Self-monitoring, proactive, meta-learning, trust scoring, and heartbeat
+        # are initialized AFTER the adaptive stack below (they depend on
+        # adaptive_experience_store). See the block after adaptive_learner.
+
         for registered_agent in agent_registry.list():
             capability_discovery.from_agent(registered_agent)
         for capability_id, name, description, tags in (
@@ -1468,6 +1481,10 @@ def create_app(
         adaptive_learner = AdaptiveLearner(
             adaptive_experience_store, adaptive_strategy_engine, improvement_engine=improvement_engine,
         )
+        # Wire adaptive learner into memory manager so that user
+        # corrections are actually recorded and affect future behavior.
+        # Without this, record_user_correction() was dead code.
+        memory_manager.adaptive_learner = adaptive_learner
         adaptive_context_service = AdaptiveContextService(
             adaptive_experience_store, task_store=task_store, goal_store=goal_store,
             automation_store=automation_store, device_registry=device_registry,
@@ -1476,6 +1493,40 @@ def create_app(
             event_bus, adaptive_learner, task_store,
             auto_promoter=SkillAutoPromoter(adaptive_experience_store, teachable_skills),
         )
+
+        # -- Self-monitoring -----------------------------------------------
+        from app.observability.self_monitor import SelfMonitor
+        self_monitor = SelfMonitor(
+            task_store=task_store,
+            experience_store=adaptive_experience_store,
+        )
+
+        # -- Proactive intelligence (anticipation engine) ------------------
+        from app.proactive.intelligence import ProactiveEngine as AnticipationEngine
+        anticipation_engine = AnticipationEngine(
+            task_store=task_store,
+            experience_store=adaptive_experience_store,
+        )
+
+        # -- Meta-Learning (9 loops from Jarvis architecture) ---------------
+        from app.adaptive.meta_learning import MetaLearningManager
+        meta_learning = MetaLearningManager()
+
+        # -- Trust Scoring -------------------------------------------------
+        from app.memory.trust_scoring import TrustScorer
+        trust_scorer = TrustScorer()
+
+        # -- Autonomous Heartbeat Cycles -----------------------------------
+        from app.adaptive.heartbeat import HeartbeatEngine
+        heartbeat_engine = HeartbeatEngine(
+            task_store=task_store,
+            experience_store=adaptive_experience_store,
+            memory_manager=memory_manager,
+            meta_learning=meta_learning,
+        )
+
+        # Wire self-monitor into adaptive learner for correction tracking
+        adaptive_learner.self_monitor = self_monitor
 
         # -- Phase 15 structured-intelligence stack -------------------------
         namespace_router = NamespaceMemoryRouter(memory_manager)
@@ -1497,7 +1548,27 @@ def create_app(
             capability_registry=capability_registry,
             brain_graph=brain_graph,
         )
-        self_improvement = SafeSelfImprovement(project_root=project_root)
+        # Provide a real runner so the self-improvement loop can
+        # actually execute git/pytest commands in an isolated branch.
+        # Without this, every execute() call short-circuits to blocked.
+        import asyncio as _asyncio
+        async def _self_improvement_runner(command: str, cwd: Path) -> dict:
+            try:
+                proc = await _asyncio.create_subprocess_shell(
+                    command, cwd=str(cwd),
+                    stdout=_asyncio.subprocess.PIPE,
+                    stderr=_asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await proc.communicate()
+                return {
+                    "ok": proc.returncode == 0,
+                    "output": (stdout.decode(errors="replace") + stderr.decode(errors="replace"))[:4000],
+                }
+            except Exception as exc:
+                return {"ok": False, "output": str(exc)[:400]}
+        self_improvement = SafeSelfImprovement(
+            project_root=project_root, runner=_self_improvement_runner,
+        )
         universal_workbench = UniversalWorkbench(learner=adaptive_learner)
         learned_router = LearnedRouter(adaptive_learner)
         model_router.learned_router = learned_router  # evidence bias only; router stays authoritative
@@ -1647,6 +1718,8 @@ def create_app(
         application.state.agent_factory = agent_factory
         application.state.agent_lifecycle = agent_lifecycle
         application.state.agent_runtime = agent_runtime
+        application.state.multi_agent_orchestrator = multi_agent_orchestrator
+        # These are wired in the adaptive stack block below.
         application.state.improvement_engine = improvement_engine
         application.state.intelligence_engine = intelligence_engine
         application.state.secret_vault = secret_vault
@@ -1823,6 +1896,11 @@ def create_app(
         application.state.namespace_router = namespace_router
         application.state.resolution_chain = resolution_chain
         application.state.self_improvement = self_improvement
+        application.state.self_monitor = self_monitor
+        application.state.anticipation_engine = anticipation_engine
+        application.state.meta_learning = meta_learning
+        application.state.trust_scorer = trust_scorer
+        application.state.heartbeat_engine = heartbeat_engine
         application.state.universal_workbench = universal_workbench
         application.state.learned_router = learned_router
         application.state.cognitive_runtime = cognitive_runtime
@@ -1984,6 +2062,8 @@ def create_app(
     application.include_router(whatsapp_api.router)
     application.include_router(search_api.router)
     application.include_router(memory.router)
+    from app.api import memory_viz
+    application.include_router(memory_viz.router)
     application.include_router(brain_graph_api.router)
     application.include_router(skills.router)
     application.include_router(agents.router)

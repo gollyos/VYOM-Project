@@ -2040,7 +2040,12 @@ class TaskRuntime:
                 continue
             if self.action_engine.supports(intent):
                 intents.add(intent)
-        return parts if len(intents) >= 2 else []
+        # Two clauses that resolve to the same tool intent (e.g.
+        # "open Chrome" + "search YouTube" both → web_browse) still
+        # form a genuine mission: the user expects TWO actions.
+        # The old check (len(intents) >= 2) required two DISTINCT
+        # intents, which silently dropped compound browser goals.
+        return parts if len(parts) >= 2 and intents else []
 
     async def _run_mission(
         self,
@@ -2232,7 +2237,11 @@ class TaskRuntime:
         result = ExecutionResult(
             response=summary,
             structured_data={"mission": task.metadata["mission"],
-                             "steps": [item.structured_data for item in collected]},
+                             # The verifier reads 'observations' but the mission
+                             # loop writes 'steps'. Both keys carry the same
+                             # per-step data so either reader finds it.
+                             "steps": [item.structured_data for item in collected],
+                             "observations": [item.structured_data for item in collected]},
             ui_composition=composition,
             evidence=[evidence for item in collected for evidence in (item.evidence or [])] or lines,
             usage=UsageRecord(total_tokens=0, estimated_cost=0),

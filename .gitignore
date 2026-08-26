@@ -28,3 +28,12 @@ services/brain/data/video-jobs/
 services/brain/whatsapp_connector/node_modules/
 services/brain/data/whatsapp-auth/
 services/brain/plugins/task_logger/task_log.txt
+
+# Runtime logs and error files (root-level brain logs)
+brain-*.log
+brain-final.err
+brain-phase*.log
+brain-recovery.log
+
+# Brain internal data that shouldn't be committed
+services/brain/data/logs/

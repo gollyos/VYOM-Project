@@ -57,11 +57,16 @@ class TraceEvent(BaseModel):
 @router.post("/trace")
 async def append_trace(event: TraceEvent) -> dict:
     """Append one hop of a user command to the trace log."""
+    # The caller-supplied detail dict is written directly to disk —
+    # without redaction this is the one sink where a secret (API key,
+    # OAuth token, password) could persist in plaintext.  All other
+    # log sinks go through redact_mapping(); this endpoint must too.
+    from app.security.redaction import redact_mapping
     record = {
         "at": datetime.now(timezone.utc).isoformat(),
         "correlation_id": event.correlation_id,
         "stage": event.stage,
-        **{key: value for key, value in event.detail.items() if key not in {"at", "stage"}},
+        **{key: value for key, value in redact_mapping(event.detail).items() if key not in {"at", "stage"}},
     }
     async with _TRACE_LOCK:
         TRACE_PATH.parent.mkdir(parents=True, exist_ok=True)

@@ -223,9 +223,10 @@ class Phase10Engine:
             f"exposure {report.total_exposure_pct:.1f}%, largest sector {report.largest_sector or 'n/a'} "
             f"({report.largest_sector_pct:.1f}%), concentration (HHI) {concentration}. "
             + ("Within configured risk limits." if report.passed else "Risk limits breached: " + "; ".join(report.reasons))
+            + " (Using local-fixture simulated prices, not live market data.)"
         )
         objects = [
-            {"id": "risk-summary", "type": "verified-result", "title": f"{portfolio.name} risk", "eyebrow": "Live risk read", "tone": tone, "frame": _frame(10, 14, 44), "statement": statement, "evidence": [f"positions:{len(portfolio.positions)}"], "timestamp": datetime.now(timezone.utc).isoformat()},
+            {"id": "risk-summary", "type": "verified-result", "title": f"{portfolio.name} risk", "eyebrow": "Risk read (local-fixture data)", "tone": tone, "frame": _frame(10, 14, 44), "statement": statement, "evidence": [f"positions:{len(portfolio.positions)}"], "timestamp": datetime.now(timezone.utc).isoformat()},
             {"id": "exposure", "type": "comparison-table", "title": "Sector exposure", "eyebrow": "% of total value", "tone": "neutral", "frame": _frame(58, 14, 38), "headers": ["Sector", "% of portfolio"], "rows": [[sector, pct] for sector, pct in exposure.by_sector.items()] or [["Unclassified", exposure.unclassified_sector_value]]},
         ]
         composition = _composition(f"portfolio-risk-{task.id}", "brain-context", "Portfolio risk", statement, objects)

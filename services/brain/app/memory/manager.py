@@ -12,9 +12,10 @@ from .store import MemoryStore
 
 
 class MemoryManager:
-    def __init__(self, store: MemoryStore, retriever: MemoryRetriever):
+    def __init__(self, store: MemoryStore, retriever: MemoryRetriever, adaptive_learner=None):
         self.store = store
         self.retriever = retriever
+        self.adaptive_learner = adaptive_learner
         self.relationships = RelationshipManager(store)
         self.consolidator = MemoryConsolidator()
 
@@ -107,7 +108,7 @@ class MemoryManager:
         memory.updated_at = datetime.now(timezone.utc)
         return await self.store.save(memory)
 
-    async def correct(self, memory_id: str, replacement: MemoryEntry) -> MemoryEntry:
+    async def correct(self, memory_id: str, replacement: MemoryEntry, user_correction: str | None = None) -> MemoryEntry:
         previous = await self.store.get(memory_id, touch=False)
         if not previous:
             raise KeyError(memory_id)
@@ -115,4 +116,18 @@ class MemoryManager:
         previous.confidence = min(previous.confidence, 0.1)
         await self.store.save(previous)
         replacement.supersedes = previous.id
-        return await self.store.save(replacement)
+        saved = await self.store.save(replacement)
+        # Wire into adaptive learning: user corrections have the highest
+        # learning weight (rule 11/12) and supersede inferred assumptions.
+        # Without this, corrections were forgotten — the same mistake
+        # would be repeated next time because the learner never saw it.
+        if self.adaptive_learner is not None and user_correction:
+            try:
+                await self.adaptive_learner.record_user_correction(
+                    goal=previous.title or "memory correction",
+                    domain=previous.tags[0] if previous.tags else "general",
+                    correction=user_correction,
+                )
+            except Exception:
+                pass  # learning failure must never block the correction itself
+        return saved

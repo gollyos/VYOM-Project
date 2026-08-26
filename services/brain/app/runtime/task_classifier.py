@@ -305,10 +305,35 @@ _ACTION_IMPERATIVES = (
     "scroll karo", "scroll kar", "scroll down", "scroll up", "scroll",
     "likho", "likh do", "type karo", "type kar", "type",
     "enter dabao", "enter mar", "दबाओ", "लिखो", "टाइप करो", "स्क्रॉल",
+    # Send / email verbs. Without these, 'email bhej gunjan ko' fell
+    # through to requests_external_action=False, which stripped all
+    # action tools from the general planner — the model literally had
+    # no send_email tool available and told the user it can't do that.
+    "bhej", "bhejo", "bhej do", "भेज", "भेजो", "भेज दो",
+    "mail karo", "mail kar do",
+    # Search / find verbs. 'browser me search karo' has no match in
+    # the existing list, so it got observation-only tools and the
+    # planner said it couldn't search.
+    "search karo", "search kar do", "khoj", "khojo", "khoj do",
+    "dhoondho", "dhoondh", "dhoondh do", "ढूंढो", "ढूंढ",
+    # Generic action verb 'karo' (do/make) — 'calculate karo',
+    # 'update karo', 'fix karo' all end with this.
+    "karo", "kar do", "करो", "कर दो",
+    # Play / media verbs.
+    "play karo", "play kar do",
+    # Create / build verbs.
+    "banao", "bana do", "बनाओ", "बना दो",
+    # Download / upload.
+    "download karo", "upload karo",
+    # Remind.
+    "yaad dila", "yaad dila do", "remind karo",
 )
 
 #: English imperatives: a sentence that opens with the verb itself.
-_LEADING_ACTION_VERBS = ("open", "close", "launch", "play", "start", "navigate", "visit", "goto", "go to")
+#: Without 'send' and 'search', requests_external_action() returned
+#: False for 'send an email to X' and 'search for Y', which stripped
+#: all action tools from the general planner.
+_LEADING_ACTION_VERBS = ("open", "close", "launch", "play", "start", "navigate", "visit", "goto", "go to", "send", "search", "calculate", "download", "upload", "remind")
 
 
 def requests_external_action(text: str) -> bool:
@@ -830,7 +855,7 @@ class TaskClassifier:
         # approved, instead of falling through to "general" and hitting
         # "No registered consequential workflow exists for this approved
         # request" after the user already approved sending it.
-        if "send" in text and "email" in text and "approved outreach" not in text and "the approved email" not in text:
+        if ("send" in text or "bhej" in text or "bhejo" in text or "भेज" in text or "mail" in text) and "email" in text and "approved outreach" not in text and "the approved email" not in text:
             return TaskProfile(
                 domain=TaskDomain.COMMUNICATION, complexity=2, deterministic=True,
                 intent="send_email", needs={"tools"}, privacy="highly_sensitive",
