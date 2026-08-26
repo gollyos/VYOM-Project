@@ -18,6 +18,7 @@ services/brain/data/screenshots/
 services/brain/data/response-cache/
 services/brain/data/secrets/
 services/brain/data/skills/
+services/brain/data/memory-vault/
 .wwebjs_auth/
 services/brain/data/video-jobs/
 services/brain/whatsapp_connector/node_modules/
