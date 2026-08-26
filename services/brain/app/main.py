@@ -34,6 +34,7 @@ from app.persistence.model_performance_store import ModelPerformanceStore
 from app.persistence.task_store import TaskStore
 from app.persistence.conversation_store import ConversationStore
 from app.adaptive.curator import Curator, CuratorRunStore
+from app.adaptive.dialectic_reasoner import DialecticReasoner
 from app.plugins.registry import PluginRegistry
 from app.kanban.store import KanbanStore
 from app.kanban.dispatcher import KanbanDispatcher
@@ -1116,6 +1117,8 @@ def create_app(
             run_store=curator_run_store,
             knowledge_service=knowledge_service,
             automation_store=automation_store,
+            conversation_store=conversation_store,
+            dialectic_reasoner=DialecticReasoner(conversation_store, knowledge_service),
             event_bus=event_bus,
         )
         automation_events = AutomationEventEngine(automation_store, automation_scheduler, event_bus)

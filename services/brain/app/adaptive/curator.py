@@ -93,6 +93,8 @@ class Curator:
         run_store: CuratorRunStore,
         knowledge_service=None,
         automation_store=None,
+        conversation_store=None,
+        dialectic_reasoner=None,
         event_bus=None,
         min_idle_minutes: float = DEFAULT_MIN_IDLE_MINUTES,
         interval_hours: float = DEFAULT_INTERVAL_HOURS,
@@ -102,6 +104,8 @@ class Curator:
         self.run_store = run_store
         self.knowledge_service = knowledge_service
         self.automation_store = automation_store
+        self.conversation_store = conversation_store
+        self.dialectic_reasoner = dialectic_reasoner
         self.event_bus = event_bus
         self.min_idle_minutes = min_idle_minutes
         self.interval_hours = interval_hours
@@ -159,7 +163,7 @@ class Curator:
         """Runs one review pass and records it. Public so it can also be
         triggered manually (e.g. a 'run curator now' API/CLI action) for
         testing or an impatient user, not only via the idle loop."""
-        summary: dict = {"knowledge_lint": None, "stale_automations": []}
+        summary: dict = {"knowledge_lint": None, "stale_automations": [], "dialectic_findings": []}
 
         if self.knowledge_service is not None:
             try:
@@ -176,6 +180,21 @@ class Curator:
                 ][:10]
             except Exception as error:
                 summary["automation_check_error"] = str(error)[:300]
+
+        # DIALECTIC REASONING (Honcho-style). Distinct from knowledge_lint
+        # above (which only audits EXISTING facts): this actively derives
+        # NEW facts from the raw conversation transcript that were never
+        # explicitly told to memory - preferences, recurring topics - the
+        # "understanding that goes beyond what was explicitly stated".
+        if self.dialectic_reasoner is not None:
+            try:
+                findings = await self.dialectic_reasoner.run()
+                summary["dialectic_findings"] = [
+                    {"subject": f.subject, "predicate": f.predicate, "value": f.value, "confidence": f.confidence}
+                    for f in findings
+                ]
+            except Exception as error:
+                summary["dialectic_reasoning_error"] = str(error)[:300]
 
         run_id = await self.run_store.record(status="completed", summary=summary)
         summary["run_id"] = run_id
