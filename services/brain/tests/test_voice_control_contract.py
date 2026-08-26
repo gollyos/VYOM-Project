@@ -164,6 +164,7 @@ def test_opening_a_media_page_is_not_playback():
     "mere liye ek achcha sa silent song start kar do.",
     "मेरे लिए कोई अच्छा गाना चला दो",
     "Ek achcha sa Bollywood song play kar do.",
+    "VYOM, Chrome kholo aur YouTube pe lofi play karo",
     ("मेरे को नहीं जानना कि तुम क्या कर रहे हो। मेरे को डायरेक्ट मेरे को "
      "सॉन्ग बजाना है तो मैं एक बॉलीवुड अच्छा सा सॉन्ग चला दूं।"),
 ])
@@ -174,6 +175,18 @@ def test_song_requests_route_to_the_verified_media_workflow(utterance):
     profile = TaskClassifier().classify(utterance)
     assert profile.intent == "play_media", utterance
     assert profile.deterministic and profile.needs == {"tools"}
+
+
+def test_owner_lofi_command_extracts_only_the_requested_media():
+    from app.execution.action_engine import ActionEngine
+
+    query = ActionEngine._extract_media_query(
+        "VYOM, Chrome kholo aur YouTube pe lofi play karo"
+    )
+    assert query == "lofi"
+    frame = derive_goal_frame("VYOM, Chrome kholo aur YouTube pe lofi play karo")
+    kinds = {effect["kind"] for effect in frame.effects}
+    assert {"app_launch", "media_playing"} <= kinds
 
 
 def test_media_intent_requires_real_playback_evidence():

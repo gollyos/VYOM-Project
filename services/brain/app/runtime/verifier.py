@@ -658,6 +658,8 @@ def derive_goal_frame(request: str) -> GoalFrame:
         if _re.search(r"\b(?:song|music|gaana|gana|track|video|गाना|संगीत)\b",
                       text, _re.IGNORECASE):
             frame.require("media_playing")
+        elif _re.search(r"\b(?:youtube|lofi)\b", text, _re.IGNORECASE):
+            frame.require("media_playing")
 
     return frame
 

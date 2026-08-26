@@ -1126,6 +1126,8 @@ class TaskClassifier:
             r"\b(?:song|music|gaana|gana|track|bhajan|video)\b|सॉन्ग|गाना|संगीत|भजन|वीडियो",
             media_text, re.I,
         )
+        if not media_named:
+            media_named = re.search(r"\b(?:youtube|lofi)\b", media_text, re.I)
         play_order = re.search(
             r"\b(?:play|start|chalao|chala\s*do|bajao|baja\s*do|laga\s*do)\b"
             r"|चलाओ|चलाना|चला\s*(?:दो|दूं)|बजाओ|बजाना|बजा\s*दो|लगा\s*दो",

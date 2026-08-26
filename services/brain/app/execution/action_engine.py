@@ -1301,6 +1301,9 @@ class ActionEngine:
         # "kesariya", not the entire exchange.
         query = (media_clauses[-1] if media_clauses else (clauses[-1] if clauses else raw)).strip(" .,!?:;।")
         patterns = (
+            r"^(?:hey\s+)?vyom\b[\s,]*",
+            r"\b(?:chrome|browser)\s+(?:kholo|khol\s*do|open|launch)\b(?:\s+(?:aur|and))?",
+            r"\byoutube\b(?:\s+(?:pe|par|me|mein|on))?",
             r"^(?:ek\s+kaam\s+karo|एक\s+काम\s+करो)\s*",
             r"(?:\b(?:mere\s+liye|for\s+me)\b|मेरे\s+(?:लिए|को))",
             r"(?:डायरेक्ट|direct)",
