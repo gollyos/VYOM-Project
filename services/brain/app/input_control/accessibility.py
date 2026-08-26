@@ -201,11 +201,28 @@ class NativeAccessibilityController:
     def _find_window(self, wanted: str):
         for window in self._desktop().windows():
             try:
-                if not window.is_visible():
-                    continue
                 title = window.window_text().lower()
-                if title and wanted in title:
+                if not title or wanted not in title:
+                    continue
+                if window.is_visible():
                     return window
+                # A window that MATCHES but is minimized is not "not
+                # found" - it is legitimately open, just needing to be
+                # restored before it can be driven. Windows Calculator
+                # (and other UWP apps) commonly launches minimized/
+                # cloaked depending on how it was started, and pywinauto
+                # reports is_visible()=False for a minimized window even
+                # though the app is genuinely running. Restoring it here
+                # is what turns "app is open but hidden" into a usable
+                # target, instead of silently failing the whole request.
+                try:
+                    if window.is_minimized():
+                        window.restore()
+                        time.sleep(0.2)
+                        if window.is_visible():
+                            return window
+                except Exception:
+                    pass
             except Exception:
                 continue
         return None
