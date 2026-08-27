@@ -21,10 +21,26 @@ from app.tools.result import EvidenceItem, ToolResult, ToolStatus
 
 logger = logging.getLogger(__name__)
 
-# Default natural voices for VYOM
+# Default natural voices for VYOM (Indian & International)
 DEFAULT_VOICES = {
-    "hi": "hi-IN-SwaraNeural",        # Hindi / Hinglish female (natural, expressive)
+    "hi": "hi-IN-SwaraNeural",        # Hindi / Hinglish female
     "hi-male": "hi-IN-MadhurNeural",   # Hindi / Hinglish male
+    "bn": "bn-IN-TanishaaNeural",      # Bengali
+    "ta": "ta-IN-PallaviNeural",       # Tamil
+    "te": "te-IN-ShrutiNeural",        # Telugu
+    "mr": "mr-IN-AarohiNeural",        # Marathi
+    "gu": "gu-IN-DhwaniNeural",        # Gujarati
+    "kn": "kn-IN-SapnaNeural",         # Kannada
+    "ml": "ml-IN-SobhanaNeural",       # Malayalam
+    "pa": "pa-IN-GurpreetNeural",      # Punjabi
+    "ur": "ur-IN-GulNeural",           # Urdu
+    "es": "es-ES-ElviraNeural",        # Spanish
+    "fr": "fr-FR-DeniseNeural",        # French
+    "de": "de-DE-KatjaNeural",         # German
+    "ja": "ja-JP-NanamiNeural",        # Japanese
+    "zh": "zh-CN-XiaoxiaoNeural",      # Chinese
+    "ar": "ar-SA-ZariyahNeural",       # Arabic
+    "ru": "ru-RU-SvetlanaNeural",      # Russian
     "en-in": "en-IN-NeerjaNeural",     # Indian English female
     "en-us": "en-US-AriaNeural",       # US English female
     "en-gb": "en-GB-SoniaNeural",      # British English female
@@ -32,16 +48,44 @@ DEFAULT_VOICES = {
 
 
 def detect_voice_for_text(text: str, preferred_gender: str = "female") -> str:
-    """Intelligently pick an appropriate voice for Hindi/Hinglish vs English."""
-    # Check for Devanagari Unicode block
-    has_devanagari = bool(re.search(r"[\u0900-\u097F]", text))
+    """Intelligently pick an appropriate voice for Indian and Global languages."""
+    # Script Detection
+    if re.search(r"[\u0900-\u097F]", text):  # Devanagari (Hindi / Marathi / Sanskrit)
+        return DEFAULT_VOICES["hi-male"] if preferred_gender == "male" else DEFAULT_VOICES["hi"]
+    if re.search(r"[\u0980-\u09FF]", text):  # Bengali / Assamese
+        return DEFAULT_VOICES["bn"]
+    if re.search(r"[\u0B80-\u0BFF]", text):  # Tamil
+        return DEFAULT_VOICES["ta"]
+    if re.search(r"[\u0C00-\u0C7F]", text):  # Telugu
+        return DEFAULT_VOICES["te"]
+    if re.search(r"[\u0A80-\u0AFF]", text):  # Gujarati
+        return DEFAULT_VOICES["gu"]
+    if re.search(r"[\u0C80-\u0CFF]", text):  # Kannada
+        return DEFAULT_VOICES["kn"]
+    if re.search(r"[\u0D00-\u0D7F]", text):  # Malayalam
+        return DEFAULT_VOICES["ml"]
+    if re.search(r"[\u0A00-\u0A7F]", text):  # Gurmukhi / Punjabi
+        return DEFAULT_VOICES["pa"]
+    if re.search(r"[\u0600-\u06FF\u0750-\u077F\uFB50-\uFEFF]", text):  # Arabic / Urdu
+        return DEFAULT_VOICES["ur"]
+    if re.search(r"[\u3040-\u30FF]", text):  # Japanese Kana
+        return DEFAULT_VOICES["ja"]
+    if re.search(r"[\u4E00-\u9FFF]", text):  # Chinese CJK
+        return DEFAULT_VOICES["zh"]
+    if re.search(r"[\u0400-\u04FF]", text):  # Cyrillic / Russian
+        return DEFAULT_VOICES["ru"]
     
     # Check for common Hinglish keywords
-    hinglish_words = {"karo", "karna", "hoga", "hain", "karo", "bhai", "namaste", "shukriya", "achha", "theek"}
+    hinglish_words = {
+        "karo", "karna", "krna", "kr", "kro", "hoga", "hogi", "hain", "hai", "hu", "hoon", "ho",
+        "bhai", "yaar", "namaste", "shukriya", "achha", "accha", "theek", "thik", "sahi", "kya",
+        "kyun", "kyu", "kaise", "kaisa", "kaisi", "batao", "bolo", "suno", "samjho", "samjha",
+        "mera", "meri", "mere", "aap", "tum", "hum", "main", "mai", "mujhe", "mujhko", "apna",
+        "chalo", "chala", "chalao", "band", "shuru", "rakho", "dikhao", "dekho", "haan", "nahi",
+        "nahin", "mat", "lekin", "kyunki", "dost", "boss", "jan", "jaan"
+    }
     words = set(re.findall(r"\b\w+\b", text.lower()))
-    is_hinglish = bool(words & hinglish_words)
-
-    if has_devanagari or is_hinglish:
+    if bool(words & hinglish_words):
         return DEFAULT_VOICES["hi-male"] if preferred_gender == "male" else DEFAULT_VOICES["hi"]
     return DEFAULT_VOICES["en-in"]
 

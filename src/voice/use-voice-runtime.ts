@@ -48,7 +48,7 @@ function isTauriRuntime() {
 // real spoken request was answered by the conversational voice model
 // alone - which has no tools. That single function was why speaking to
 // VYOM produced talk instead of action.
-const CONVERSATIONAL_ONLY = /^(hi|hey|hello|yo|thanks|thank you|thankyou|ok|okay|cool|nice|great|hmm+|uh+|um+|namaste|shukriya|theek hai|thik hai)[\s.!,?]*$/i;
+const CONVERSATIONAL_ONLY = /^(hi|hey|hello|yo|thanks|thank you|thankyou|ok|okay|cool|nice|great|good|hmm+|uh+|um+|ah+|oh+|namaste|shukriya|theek hai|thik hai|what|why|huh|bye|bye bye|baby|no|nope|yes|yeah|haan|nahin|nahi|si|sí|vaca|behavior|behaviour|nothing|nothing here|sorry)[\s.!,?]*$/i;
 
 // How long the transcript must stop changing before it counts as a
 // finished utterance. 700ms was shorter than an ordinary mid-sentence
@@ -69,7 +69,7 @@ const INTERRUPT_DISPATCH_SETTLE_MS = 220;
 // from speakers can be picked up by the microphone and cause a self-loop
 // or duplicate answer. Suppress mic input for 2.5s after audio stops.
 const ECHO_TAIL_GUARD_MS = 2500;
-const BARGE_IN_LEVEL_THRESHOLD = 0.048;
+const BARGE_IN_LEVEL_THRESHOLD = 0.22;
 
 const INTERRUPT_TOKENS = new Set([
   "stop", "cancel", "halt", "abort", "enough", "ruko", "ruk", "ja", "jao",
@@ -144,7 +144,13 @@ function isSameUtterance(current: Utterance, next: string) {
 function isDispatchable(transcript: string) {
   const clean = transcript.trim();
   if (clean.length < 2) return false;
-  return !CONVERSATIONAL_ONLY.test(clean);
+  if (CONVERSATIONAL_ONLY.test(clean)) return false;
+  // Ambient-noise fragments the STT hears (a TV in another room, a stray
+  // syllable, coughs) rarely contain a real word, while every actual
+  // command does ("chrome kholo", "gaana chalao", "mausam batao").
+  // Require at least one Devanagari run or a 3+ letter Latin word before
+  // the transcript may become a Brain task.
+  return /[\u0900-\u097F]{2,}|[a-zà-ÿ]{3,}/i.test(clean);
 }
 
 /**
@@ -348,7 +354,7 @@ export function useVoiceRuntime({ onCommand }: VoiceRuntimeOptions): VoiceRuntim
         setOutputTranscript("");
         setState("Listening");
       }
-      if (stateRef.current === "Speaking" && now - speakingStartedAtRef.current > 260) {
+      if (stateRef.current === "Speaking" && now - speakingStartedAtRef.current > 450) {
         interruptPlayback();
       }
     }

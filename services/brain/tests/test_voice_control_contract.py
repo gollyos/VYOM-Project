@@ -388,6 +388,69 @@ async def test_media_workflow_searches_clicks_and_verifies_before_success(monkey
     assert "youtube.com/results?search_query=" in calls[1][1]["url"]
 
 
+@pytest.mark.asyncio
+async def test_media_workflow_retries_when_unrelated_audio_is_playing(monkeypatch):
+    """Relevance gate: a playing tab that is NOT the asked-for media (a
+    Chrome session-restore leftover, or a click that hit the Shorts
+    shelf) triggers ONE re-navigate + re-click, and only the correct
+    playback passes. Reconstructed from the 2026-08-28 live run where
+    "YouTube pe lofi play karo" reported success while a restored
+    '440 Volt WhatsApp status' short was the thing actually heard."""
+    from types import SimpleNamespace
+
+    from app.execution.action_engine import ActionEngine
+    from app.schemas.tasks import Task
+
+    calls = []
+    result_clicks = 0
+
+    class FakeExecutor:
+        async def invoke(self, tool, inputs, context):
+            nonlocal result_clicks
+            calls.append((tool, dict(inputs)))
+            action = inputs["action"]
+            if action == "app_open":
+                return SimpleNamespace(success=True, error=None, structured_output={})
+            if action == "browser_page_type":
+                return SimpleNamespace(
+                    success=True, error=None,
+                    structured_output={"success": True, "summary": "Navigated",
+                                       "title_after": "lofi - YouTube"},
+                )
+            if action == "browser_first_result":
+                result_clicks += 1
+                return SimpleNamespace(
+                    success=True, error=None,
+                    structured_output={"success": True, "summary": "Opened first result",
+                                       "title_after": "lofi hip hop radio - YouTube"},
+                )
+            first_pass = result_clicks == 1
+            if first_pass:
+                state = {"playing": True, "title": "440 Volt WhatsApp status dance - YouTube",
+                         "source": "browser-tab-audio-state",
+                         "playing_tabs": ["440 Volt WhatsApp status dance - YouTube - Audio playing"]}
+            else:
+                state = {"playing": True, "title": "lofi hip hop radio - YouTube",
+                         "source": "browser-tab-audio-state",
+                         "playing_tabs": ["lofi hip hop radio - YouTube - Audio playing"]}
+            return SimpleNamespace(success=True, error=None, structured_output=state)
+
+    async def no_sleep(_delay):
+        return None
+
+    monkeypatch.setattr("app.execution.action_engine.asyncio.sleep", no_sleep)
+    engine = ActionEngine.__new__(ActionEngine)
+    engine.executor = FakeExecutor()
+    result = await engine._play_media(
+        Task(goal="play lofi", user_request="YouTube pe lofi play karo"),
+        context=object(),
+    )
+    assert result_clicks == 2, "unrelated audio must trigger exactly one re-click"
+    assert result.structured_data["playing"] is True
+    assert "lofi" in result.structured_data["title"].lower()
+    assert "440" not in result.structured_data["title"].lower()
+
+
 def test_a_conversational_utterance_declares_no_world_effect():
     """Conversation must be untouched by goal verification."""
     assert not derive_goal_frame("you can hear me?")

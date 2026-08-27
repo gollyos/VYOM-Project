@@ -45,6 +45,9 @@ TOOL_INTENTS = {
     # App-Password) — see EmailTool. L2-gated by PermissionEngine before
     # this intent is ever reached.
     "send_email",
+    # Free, keyless Open-Meteo lookups - one deterministic call instead
+    # of a multi-step model mission for "aaj mausam kaisa hai".
+    "weather_current", "weather_forecast",
 }
 
 # Spoken/typed application names -> app_id in the Application Registry.
@@ -74,6 +77,7 @@ INTENT_CAPABILITY = {
     "browser_page_read": "desktop.execute", "browser_page_click": "desktop.execute",
     "browser_first_result": "desktop.execute", "browser_page_type": "desktop.execute",
     "browser_page_scroll": "desktop.execute", "play_media": "desktop.execute",
+    "weather_current": "weather.execute", "weather_forecast": "weather.execute",
     "browser_profile_open": "desktop.execute", "recover_visibility": "desktop.execute",
     "shop_compare": "browser.execute",
     "run_command": "terminal.execute", "run_tests": "terminal.execute",
@@ -268,6 +272,10 @@ class ActionEngine:
                 return await self._browser_page_scroll(task, context)
             if profile.intent == "play_media":
                 return await self._play_media(task, context)
+            if profile.intent == "weather_current":
+                return await self._weather_lookup(task, context, action="current")
+            if profile.intent == "weather_forecast":
+                return await self._weather_lookup(task, context, action="forecast")
             if profile.intent == "capability_query":
                 return await self._capability_query(task, context)
             if profile.intent == "ui_interact":
@@ -1414,8 +1422,11 @@ class ActionEngine:
                 or "No playable YouTube result was visible")
 
         after: dict[str, Any] = {}
-        for _ in range(4):
-            await asyncio.sleep(0.8)
+        # A watch page (or its pre-roll ad) can take several seconds to
+        # spin up audio after the result click; 4x0.8s regularly gave up
+        # before Chrome reported any playback evidence at all.
+        for _ in range(8):
+            await asyncio.sleep(1.2)
             state_result = await self.executor.invoke(
                 "desktop", {"action": "browser_media_state"}, context)
             after = state_result.structured_output or {}
@@ -1428,34 +1439,100 @@ class ActionEngine:
                 break
 
         # If autoplay was blocked but the real page exposes a Play button,
-        # make one bounded recovery click and observe the state again.
+        # click it and observe again. One click was not enough when the
+        # player was still initializing (the click landed before the video
+        # element existed), so retry within a bounded loop instead.
         if after.get("playing") is False and after.get("source") == "page-play-control":
-            recovery = await self.executor.invoke(
-                "desktop", {"action": "browser_page_click", "target": "Play"}, context)
-            recovery_data = recovery.structured_output or {}
+            for attempt in range(1, 4):
+                recovery = await self.executor.invoke(
+                    "desktop", {"action": "browser_page_click", "target": "Play"}, context)
+                recovery_data = recovery.structured_output or {}
+                observations.append({
+                    "call": "browser_page_click",
+                    "inputs": {"target": "Play", "attempt": attempt},
+                    "ok": recovery.success and bool(recovery_data.get("success")),
+                    "output": recovery_data, "error": recovery.error,
+                })
+                await asyncio.sleep(1.5)
+                state_result = await self.executor.invoke(
+                    "desktop", {"action": "browser_media_state"}, context)
+                after = state_result.structured_output or {}
+                observations.append({
+                    "call": "browser_media_state",
+                    "inputs": {"phase": "recovery", "attempt": attempt},
+                    "ok": state_result.success, "output": after,
+                    "error": state_result.error,
+                })
+                if after.get("playing") is True:
+                    break
+
+        def _clean_title(raw: str) -> str:
+            lowered = str(raw or "").lower()
+            for suffix in (" - google chrome", " - audio playing", " - youtube"):
+                lowered = lowered.split(suffix)[0]
+            return lowered.strip()
+
+        def _titles(clicked: dict, state: dict) -> tuple[str, str]:
+            return _clean_title(clicked.get("title_after")), _clean_title(state.get("title"))
+
+        def _relevant(query: str, clicked_title: str, playback_title: str) -> bool:
+            # No titles observable -> cannot judge relevance; playback
+            # evidence alone decides (the pre-existing behaviour).
+            if not (clicked_title or playback_title):
+                return True
+            if clicked_title and playback_title and (
+                clicked_title in playback_title or playback_title in clicked_title
+            ):
+                return True
+            title = playback_title or clicked_title
+            tokens = [
+                token for token in re.split(r"\s+", query.lower())
+                if len(token) >= 3 and not token.startswith("-")
+            ]
+            if not tokens:
+                return True
+            return any(token in title for token in tokens)
+
+        clicked_title, playback_title = _titles(clicked, after)
+        if after.get("playing") is True and not _relevant(query, clicked_title, playback_title):
+            # RELEVANCE RECOVERY. "Playing" is not enough - it must be the
+            # ASKED-FOR media. Two real-world paths land here: a click that
+            # hit YouTube's Shorts shelf overlay instead of the result, and
+            # a Chrome session-restore tab already playing while the
+            # requested video opened silently (the first "playing" tab then
+            # names the WRONG video). One bounded retry: navigate back to
+            # the search, click the first result again, re-observe.
+            retry_nav = await self.executor.invoke(
+                "desktop", {
+                    "action": "browser_page_type", "field": "address",
+                    "value": search_url, "enter": True,
+                }, context)
+            retry_click = await self.executor.invoke(
+                "desktop", {"action": "browser_first_result"}, context)
+            retry_clicked = retry_click.structured_output or {}
             observations.append({
-                "call": "browser_page_click", "inputs": {"target": "Play"},
-                "ok": recovery.success and bool(recovery_data.get("success")),
-                "output": recovery_data, "error": recovery.error,
+                "call": "browser_first_result", "inputs": {"phase": "relevance-retry"},
+                "ok": retry_click.success and bool(retry_clicked.get("success")),
+                "output": retry_clicked, "error": retry_click.error,
+                "navigation_ok": retry_nav.success,
             })
-            await asyncio.sleep(1.0)
-            state_result = await self.executor.invoke(
-                "desktop", {"action": "browser_media_state"}, context)
-            after = state_result.structured_output or {}
-            observations.append({
-                "call": "browser_media_state", "inputs": {"phase": "recovery"},
-                "ok": state_result.success, "output": after,
-                "error": state_result.error,
-            })
+            for _ in range(6):
+                await asyncio.sleep(1.2)
+                state_result = await self.executor.invoke(
+                    "desktop", {"action": "browser_media_state"}, context)
+                after = state_result.structured_output or {}
+                observations.append({
+                    "call": "browser_media_state", "inputs": {"phase": "relevance-retry"},
+                    "ok": state_result.success, "output": after,
+                    "error": state_result.error,
+                })
+                if after.get("playing") is True:
+                    break
+            clicked_title, playback_title = _titles(retry_clicked, after)
 
         before_titles = set(before.get("playing_tabs") or [])
         after_titles = set(after.get("playing_tabs") or [])
         new_playback = bool(after_titles - before_titles)
-        clicked_title = str(clicked.get("title_after") or "").lower()
-        playback_title = str(after.get("title") or "").lower()
-        for suffix in (" - google chrome", " - audio playing"):
-            clicked_title = clicked_title.split(suffix)[0]
-            playback_title = playback_title.split(suffix)[0]
         clicked_matches_playback = bool(
             clicked_title and playback_title
             and (clicked_title in playback_title or playback_title in clicked_title)
@@ -1464,6 +1541,11 @@ class ActionEngine:
             raise RuntimeError(
                 "YouTube opened a result, but Chrome did not expose any playback evidence. "
                 "The task was not marked complete because opening a page is not playing a song.")
+        if not _relevant(query, clicked_title, playback_title):
+            raise RuntimeError(
+                "Something is playing, but it is not what was asked for "
+                f"(wanted '{query}', heard '{playback_title[:60] or clicked_title[:60]}'); "
+                "the task was not marked complete on unrelated audio.")
         if before.get("playing") is True and not new_playback and not clicked_matches_playback:
             raise RuntimeError(
                 "Audio was already playing in another browser tab, but the requested song "
@@ -1482,6 +1564,74 @@ class ActionEngine:
                 str(clicked.get("summary") or "Opened a YouTube result"),
                 f"playback evidence: {after.get('source')}",
                 f"playing title: {title[:100]}",
+            ],
+        )
+
+    # Words that never belong to a place name in a weather request. What
+    # survives this strip IS the location ("aaj Delhi ka mausam batao" ->
+    # "Delhi"); nothing surviving means auto-locate from the public IP.
+    _WEATHER_LOCATION_STRIP = re.compile(
+        r"(?i)^(?:aaj|abhi|current|currently|today|tonight|tomorrow|kal|parso|agle|next|"
+        r"week|weeks|day|days|din|weather|mausam|temperature|forecast|prediction|"
+        r"baarish|barish|rain|garmi|thand|humidity|wind|kaisa|kaisi|kaise|kitna|kitni|"
+        r"hai|hain|hoga|hogi|hoge|rahega|kya|batao|bata|bataiye|bataen|dikhao|tell|show|"
+        r"me|my|the|in|at|of|and|or|ka|ki|ke|se|liye|mein|me|please|plz|vyom|hey|hi|"
+        r"hello|how|what|is|it|like|outside|going|a|an|the|full|report|status|now)$"
+    )
+
+    @classmethod
+    def _extract_weather_location(cls, request: str) -> str | None:
+        words = [
+            word for word in (
+                token.strip(" .,!?:;।'\"") for token in (request or "").split()
+            )
+            if word and not cls._WEATHER_LOCATION_STRIP.match(word)
+        ]
+        if not words:
+            return None
+        location = " ".join(words)
+        return location if len(location.replace(" ", "")) >= 3 else None
+
+    async def _approximate_location(self) -> str:
+        """City from the machine's public IP; free keyless ip-api lookup."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(
+                    "http://ip-api.com/json/",
+                    params={"fields": "status,city"},
+                )
+                data = response.json()
+                if data.get("status") == "success" and data.get("city"):
+                    return str(data["city"])
+        except Exception:
+            pass
+        return "Delhi"
+
+    async def _weather_lookup(self, task: Task, context, *, action: str) -> ExecutionResult:
+        """One free Open-Meteo call, spoken as a Hinglish-friendly answer."""
+        location = self._extract_weather_location(task.user_request)
+        located_by = "user-request"
+        if location is None:
+            location = await self._approximate_location()
+            located_by = "ip-geolocation"
+        result = await self.executor.invoke(
+            "weather", {"action": action, "location": location}, context)
+        data = result.structured_output or {}
+        if not result.success:
+            raise RuntimeError(result.error or "Weather lookup failed")
+        summary = str(result.summary or "Weather lookup complete")
+        if action == "current" and data.get("temperature_c") is not None:
+            summary = (
+                f"{data.get('location')}: abhi {data.get('temperature_c')} degree, "
+                f"{data.get('condition')}"
+                + (f", humidity {data.get('humidity_percent')}%" if data.get("humidity_percent") is not None else "")
+            )
+        return self._page_result(
+            task, summary,
+            {**data, "action": action, "located_by": located_by, "summary": summary},
+            evidence=[
+                f"Open-Meteo {action} for {data.get('location')} ({located_by})",
+                str(result.summary or ""),
             ],
         )
 

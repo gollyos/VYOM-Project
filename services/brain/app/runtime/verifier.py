@@ -409,6 +409,15 @@ class PostconditionVerifier:
             "it is not known whether anything is actually playing"
         )
 
+    def _check_tool_evidence(self, context: dict) -> tuple[bool, str]:
+        """Informational tools (weather, ...) must return REAL data, not an
+        empty success - "answered" means live fields exist to speak from."""
+        facts = context.get("facts") or {}
+        if facts:
+            detail = str(context.get("summary") or "").strip()
+            return True, detail[:160] or f"tool returned {len(facts)} live field(s)"
+        return False, "the tool returned no data to answer with"
+
     def _check_page_action(self, context: dict) -> tuple[bool, str]:
         """A click/scroll on the visible page really happened.
 
@@ -523,6 +532,8 @@ GOAL_POSTCONDITIONS: dict[str, str] = {
     "browser_page_scroll": "page_action",
     "browser_page_type": "control_value",
     "play_media": "media_playing",
+    "weather_current": "tool_evidence",
+    "weather_forecast": "tool_evidence",
     "browser_page_read": "observation",
     "recover_visibility": "window_visible",
     "web_browse": "requested_target",
@@ -864,6 +875,17 @@ class GoalVerifier:
                 return {"playing": data.get("playing"), "title": data.get("title")}
             return {}
 
+        if kind == "tool_evidence":
+            for output in outputs_of("weather"):
+                facts = {
+                    key: output.get(key)
+                    for key in ("location", "temperature_c", "condition", "days")
+                    if output.get(key) is not None
+                }
+                if facts:
+                    return {"facts": facts, "summary": str(output.get("summary") or "")}
+            return None
+
         return declared or None
 
     @staticmethod
@@ -893,6 +915,15 @@ class GoalVerifier:
             return {"summary": str(summary),
                     "title_before": data.get("title_before"),
                     "title_after": data.get("title_after")}
+        if kind == "tool_evidence":
+            facts = {
+                key: data.get(key)
+                for key in ("location", "temperature_c", "condition", "days")
+                if data.get(key) is not None
+            }
+            if not facts:
+                return None
+            return {"facts": facts, "summary": str(data.get("summary") or "")}
         if kind == "tab_closed":
             if not data.get("page"):
                 return None

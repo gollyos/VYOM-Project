@@ -15,6 +15,8 @@ class Database:
         self.connection = await aiosqlite.connect(self.path)
         self.connection.row_factory = aiosqlite.Row
         await self.connection.execute("PRAGMA journal_mode=WAL")
+        await self.connection.execute("PRAGMA busy_timeout=10000")
+        await self.connection.execute("PRAGMA synchronous=NORMAL")
         await self.connection.execute("PRAGMA foreign_keys=ON")
         await self.connection.executescript(
             """

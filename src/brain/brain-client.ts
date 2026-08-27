@@ -7,9 +7,10 @@ function websocketUrl(httpUrl: string) {
 }
 
 export class BrainClient {
-  private readonly baseUrl = (import.meta.env.VITE_VYOM_BRAIN_URL || DEFAULT_BRAIN_URL).replace(/\/$/, "");
+  private readonly baseUrl: string;
   private socket: WebSocket | null = null;
   private reconnectTimer: number | null = null;
+  private pingTimer: number | null = null;
   private reconnectAttempt = 0;
   private destroyed = false;
   // RECONNECT CURSOR. A disconnect used to silently drop every event the
@@ -20,8 +21,12 @@ export class BrainClient {
   private eventListeners = new Set<(event: BrainEvent) => void>();
   private connectionListeners = new Set<(state: BrainConnectionState) => void>();
 
+  constructor(customUrl?: string) {
+    this.baseUrl = (customUrl || (import.meta.env.VITE_VYOM_BRAIN_URL as string | undefined) || DEFAULT_BRAIN_URL).replace(/\/$/, "");
+  }
+
   async health() {
-    const response = await fetch(`${this.baseUrl}/health`, { signal: AbortSignal.timeout(1800) });
+    const response = await fetch(`${this.baseUrl}/health`, { signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error("Brain health check failed");
     return response.json() as Promise<{ status: string; service: string }>;
   }
@@ -86,10 +91,25 @@ export class BrainClient {
   destroy() {
     this.destroyed = true;
     if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);
+    if (this.pingTimer) window.clearInterval(this.pingTimer);
     this.socket?.close();
     this.socket = null;
     this.eventListeners.clear();
     this.connectionListeners.clear();
+  }
+
+  // Immediate reconnect attempt when the socket is down. The runtime's
+  // offline health-poll calls this the moment /health answers, so a Brain
+  // that came back (slow cold boot, Tauri supervisor respawn) is picked up
+  // within one poll interval instead of the next backoff tick.
+  retryNow() {
+    if (this.destroyed) return;
+    if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) return;
+    if (this.reconnectTimer) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.connect();
   }
 
   private emitConnection(state: BrainConnectionState) {
@@ -107,10 +127,23 @@ export class BrainClient {
     socket.onopen = () => {
       this.reconnectAttempt = 0;
       this.emitConnection("online");
+      if (this.pingTimer) window.clearInterval(this.pingTimer);
+      this.pingTimer = window.setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+          try {
+            socket.send("ping");
+          } catch {
+            // best-effort
+          }
+        }
+      }, 15000);
     };
     socket.onmessage = (message) => {
       try {
-        const event = JSON.parse(String(message.data)) as BrainEvent;
+        const raw = String(message.data);
+        if (raw === "pong") return;
+        const event = JSON.parse(raw) as BrainEvent & { type?: string };
+        if (event.type === "heartbeat") return;
         if (event.schema_version === 1) {
           if (event.event_id) this.lastEventId = event.event_id;
           this.eventListeners.forEach((listener) => listener(event));
@@ -121,6 +154,10 @@ export class BrainClient {
     };
     socket.onerror = () => socket.close();
     socket.onclose = () => {
+      if (this.pingTimer) {
+        window.clearInterval(this.pingTimer);
+        this.pingTimer = null;
+      }
       if (this.socket === socket) this.socket = null;
       if (this.destroyed) return;
       this.emitConnection("offline");

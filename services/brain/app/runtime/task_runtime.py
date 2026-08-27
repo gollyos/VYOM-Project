@@ -705,9 +705,7 @@ class TaskRuntime:
                     await self.task_store.save(task)
                     result = ExecutionResult(
                         response=(
-                            "I didn't catch a complete request there - it didn't "
-                            "parse into anything I can act on. Could you say it "
-                            "again?"
+                            "Main theek se samajh nahi paaya — kya aap ise ek baar phir se bol sakte hain?"
                         ),
                         structured_data={"gate": "stt_noise"},
                         evidence=["utterance contained no recognisable request word"],
@@ -799,6 +797,16 @@ class TaskRuntime:
                 await self._emit(task, EventType.MEMORY_RETRIEVED,
                                  f"Recalled {len(recalled)} stored fact(s)", {"memory": recalled[:3]})
                 await self.task_store.save(task)
+
+            if self.conversation_store is not None:
+                try:
+                    turns = await self.conversation_store.history("desktop:primary", limit=4)
+                    if turns:
+                        task.metadata["recent_conversation"] = [
+                            {"role": t.role, "content": t.content} for t in turns if t.content
+                        ]
+                except Exception:
+                    pass
 
             routing = await self.model_router.route(task, profile)
             task.routing = routing

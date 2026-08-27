@@ -241,6 +241,15 @@ def claims_inability(text: str) -> bool:
 #: Callable contracts over the EXISTING tool registry. Each maps onto a
 #: real registered tool; this is not a second tool system.
 TOOL_CONTRACTS: dict[str, dict] = {
+    "weather_lookup": {
+        "tool": "weather",
+        "description": "Look up current weather or a multi-day forecast for a city using the free Open-Meteo API.",
+        "parameters": {"type": "object", "properties": {
+            "action": {"type": "string", "enum": ["current", "forecast"],
+                        "description": "current conditions or a multi-day forecast"},
+            "location": {"type": "string", "description": "City name, e.g. 'Mumbai' or 'New York'."},
+            "days": {"type": "integer", "description": "Forecast days (1-16), for action=forecast."}}},
+    },
     "filesystem_list": {
         "tool": "filesystem",
         "description": "List the entries of a directory on this computer.",

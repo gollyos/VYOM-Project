@@ -1,33 +1,33 @@
 """Tests for the per-task execution-visibility decision
 (app/execution/visibility.py). VYOM decides BEFORE executing a task
 whether to run it in the BACKGROUND (headless browser, invisible backend
-work — an email send, a calculation) or VISUALLY on the user's screen (a
-real, on-screen browser window / real OS mouse the user can watch). This
-is the LangGraph sub-agent 'which execution mode fits this task' pattern
-applied to VYOM's task lifecycle.
+work) or VISUALLY on the user's screen (a real, on-screen browser
+window / real OS mouse the user can watch).
 
-The classifier is deliberately rule-based and CONSERVATIVE: it errs
-toward BACKGROUND unless the user explicitly asked to see/watch/open
-something, which is the safe (non-disruptive) direction. These tests pin
-that behaviour and the realistic phrasings a user actually types.
+Since the Aug-2026 window-stability pass the classifier errs toward
+VISUAL by default: an invisible action the owner cannot see was the
+root cause of "chrome kholo" complaints where nothing appeared on
+screen. Explicit background markers ("in the background", "quietly")
+still force BACKGROUND; these tests pin that behaviour and the
+realistic phrasings a user actually types.
 """
 from __future__ import annotations
 
 from app.execution.visibility import TaskVisibility, classify_visibility
 
 
-# -- background: the default, safe direction --------------------------------
+# -- visual: the default, see-the-work direction ------------------------------
 
-def test_send_email_is_background():
-    assert classify_visibility("send an email to test@example.com with subject hi") == TaskVisibility.BACKGROUND
-
-
-def test_backend_calculation_is_background():
-    assert classify_visibility("run the monthly sales calculation for this quarter") == TaskVisibility.BACKGROUND
+def test_send_email_is_visual():
+    assert classify_visibility("send an email to test@example.com with subject hi") == TaskVisibility.VISUAL
 
 
-def test_data_fetch_is_background():
-    assert classify_visibility("get me the TSLA stock price") == TaskVisibility.BACKGROUND
+def test_backend_calculation_is_visual():
+    assert classify_visibility("run the monthly sales calculation for this quarter") == TaskVisibility.VISUAL
+
+
+def test_data_fetch_is_visual():
+    assert classify_visibility("get me the TSLA stock price") == TaskVisibility.VISUAL
 
 
 def test_empty_or_blank_request_is_background():

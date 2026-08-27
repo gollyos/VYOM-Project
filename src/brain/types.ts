@@ -3,6 +3,7 @@ import type { UIComposition } from "@/composer/ui-schema";
 export type BrainConnectionState = "connecting" | "online" | "offline" | "reconnecting";
 
 export type BrainEventType =
+  | "heartbeat"
   | "task_created"
   | "task_understanding"
   | "task_planning"

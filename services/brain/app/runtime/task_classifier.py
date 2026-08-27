@@ -129,55 +129,110 @@ def is_interrupt_command(text: str) -> bool:
 #: how to hear, it is not a request yet.
 _AUDIBLE_VOCABULARY = frozenset({
     # English function + question words
-    "the", "a", "an", "is", "are", "was", "do", "does", "did", "can", "could",
-    "you", "me", "my", "i", "we", "it", "this", "that", "what", "where", "when",
-    "why", "how", "who", "which", "please", "now", "today", "open", "close",
-    "launch", "start", "stop", "cancel", "find", "search", "read", "write",
-    "show", "tell", "list", "play", "run", "make", "create", "delete", "move",
-    "on", "in", "at", "for", "to", "from", "with", "not", "no", "yes", "ok",
-    # Greetings are audible - "Hello." is a conversation opener, not noise
-    # (the replay showed it falling into the re-ask gate).
-    "hello", "hi", "hey", "namaste", "goodbye", "bye",
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+    "do", "does", "did", "can", "could", "would", "should", "will", "shall", "may", "might",
+    "you", "me", "my", "i", "we", "us", "our", "it", "its", "this", "that", "these", "those",
+    "what", "where", "when", "why", "how", "who", "which", "whose", "whom", "please", "now",
+    "today", "tomorrow", "yesterday", "open", "close", "launch", "start", "stop", "cancel",
+    "find", "search", "read", "write", "show", "tell", "list", "play", "run", "make", "create",
+    "delete", "move", "on", "in", "at", "for", "to", "from", "with", "about", "not", "no", "yes",
+    "ok", "okay", "help", "issue", "problem", "error", "disconnect", "connect", "status", "fix",
+    # Greetings are audible
+    "hello", "hi", "hey", "namaste", "goodbye", "bye", "thanks", "thank", "welcome",
     "screen", "window", "windows", "file", "files", "folder", "directory",
     "browser", "chrome", "app", "application", "tab", "tabs", "profile",
     "song", "music", "video", "calculator", "notepad", "explorer", "terminal",
     "settings", "name", "website", "business", "memory", "remember", "task",
-    "project", "code", "test", "build", "status", "system", "pc", "desktop",
+    "project", "code", "test", "build", "system", "pc", "desktop",
     "battery", "network", "internet", "phone", "call", "message", "email",
     "calendar", "meeting", "price", "news", "latest", "update", "version",
     "client", "told", "said", "date", "ago", "history", "old",
-    # Hindi/Hinglish function + command words (romanised and Devanagari)
-    "kya", "kyu", "kyun", "kaise", "kaisa", "kab", "kaun", "konsa", "kaunsa",
-    "kholo", "khol", "kholo", "khol", "kholiye", "band", "karo", "kar", "karo",
-    "kijiye", "chala", "chalao", "bajao", "baja", "dekho", "dikhao", "dikh",
-    "hai", "hain", "nahi", "nahin", "mera", "meri", "mere", "me", "mein", "se",
-    "ko", "ki", "ka", "ke", "naam", "kaam", "abhi", "bas", "ruko", "chhodo",
-    "bataya", "bola", "yaad", "purana", "tareekh", "tarikh",
-    "wala", "wale", "achha", "achchha", "koi", "accha", "thik", "theek", "aur",
-    "yaar", "bhai", "ji", "nahi", "haan", "han", "matlab", "phone", "gana",
-    "gaana", "bhajan", "बंद", "क्या", "क्यों", "कैसे", "कब", "कौन", "खोलो",
-    "करो", "कीजिए", "चलाओ", "बजाओ", "दिखाओ", "है", "नहीं", "मेरा", "मेरी",
-    "नाम", "काम", "अभी", "रुको", "छोड़ो", "वाला", "कोई", "प्रोफाइल", "टैब",
-    "स्क्रीन", "गाना",
+    # Hindi/Hinglish Pronouns & References
+    "tum", "aap", "hum", "main", "mai", "me", "mujhe", "mujhko", "mera", "meri", "mere",
+    "humara", "hamara", "hamari", "hamare", "aapka", "aapki", "aapke", "aapne", "tumne",
+    "tumhara", "tumhari", "tumhare", "usne", "unhone", "unka", "unki", "unke", "iska",
+    "iski", "iske", "isko", "usko", "ise", "use", "inhe", "unhe", "yeh", "ye", "woh",
+    "wo", "voh", "kisi", "sab", "sabka", "sabko", "kuch", "kuchh", "apna", "apni", "apne",
+    # Hindi/Hinglish Verbs & Command Words
+    "kya", "kyu", "kyun", "kaise", "kaisa", "kaisi", "kab", "kaun", "kon", "konsa", "kaunsa",
+    "kholo", "khol", "kholiye", "band", "karo", "kar", "kr", "kro", "krna", "karna", "kare",
+    "karenge", "karega", "karegi", "karu", "karun", "karoon", "karte", "karti", "karta",
+    "kiya", "kiye", "ki", "kijiye", "chala", "chalao", "chalana", "chal", "chalo", "chalu",
+    "bajao", "baja", "bajana", "dekho", "dekh", "dekhna", "dikhao", "dikha", "dikh", "dikhana",
+    "batao", "bata", "batana", "bataye", "batayen", "batayi", "bolo", "bol", "bolna", "bole",
+    "suno", "sun", "sunna", "samjho", "samjh", "samajh", "samajhna", "samjhao", "samjha",
+    "likho", "likh", "likhna", "padho", "padh", "padhna", "sunao", "suna", "sunana",
+    "rakho", "rakh", "rakhna", "hatao", "hata", "hatana", "badlo", "badal", "badalna",
+    "le", "lo", "lena", "liya", "liye", "de", "do", "dena", "diya", "diye",
+    "aao", "aa", "aana", "aaya", "aayi", "aaye", "jao", "ja", "jana", "gaya", "gayi", "gaye",
+    "socho", "soch", "sochna", "pucho", "puch", "puchna", "bhejo", "bhej", "bhejna",
+    "shuru", "suru", "ruk", "ruko", "rukiye", "chhodo", "chodo", "bas", "abhi", "baad", "pehle",
+    # Hindi/Hinglish Particles, States, Qualifiers & Conversational terms
+    "hai", "hain", "ho", "hu", "hoon", "hoga", "hogi", "hoge", "honge", "hota", "hoti", "hote",
+    "nahi", "nahin", "na", "mat", "haan", "han", "to", "toh", "bhi", "hi", "he", "aur", "ya",
+    "kyunki", "kyuki", "lekin", "magar", "par", "pe", "agar", "jaise", "waise", "aise", "waisa", "aisa",
+    "kitna", "kitne", "kitni", "kaha", "kahan", "kisko", "kisse", "isse", "usse",
+    "haal", "baat", "cheet", "baatcheet", "madad", "dikkat", "pareshani", "pareshaani",
+    "theek", "thik", "sahi", "galat", "achha", "accha", "achchha", "badhiya", "mast", "bura",
+    "dost", "yaar", "bhai", "bhaiya", "sir", "boss", "ji", "sahab", "saheb",
+    "shukriya", "dhanyawad", "pranam", "swagat", "subah", "shaam", "raat", "din",
+    "kal", "parso", "thoda", "kam", "jyada", "zyada", "bohot", "bahut", "sirf", "matlab",
+    "gana", "gaana", "bhajan", "sangeet", "awaz", "awaaz", "audio", "video",
+    # Devanagari Vocabulary
+    "बंद", "क्या", "क्यों", "कैसे", "कब", "कौन", "खोलो", "करो", "करना", "कर",
+    "कीजिए", "चलाओ", "चालू", "बजाओ", "दिखाओ", "देखो", "बताओ", "बोलो", "सुनो",
+    "समझो", "समझ", "है", "हैं", "हो", "हूँ", "नहीं", "मेरा", "मेरी", "मेरे",
+    "हमारा", "आपका", "आपकी", "तुम", "आप", "हम", "मैं", "मुझे", "मुझको",
+    "नाम", "काम", "अभी", "रुको", "छोड़ो", "हटाओ", "बदलो", "लिखो", "पढ़ो",
+    "सुनाओ", "रखो", "लो", "दो", "आओ", "जाओ", "सोचो", "पूछो", "भेजो",
+    "तो", "भी", "ही", "ना", "मत", "हाँ", "क्योंकि", "लेकिन", "मगर", "पर", "पे",
+    "अगर", "और", "या", "जैसे", "वैसे", "ऐसे", "कैसा", "कैसी", "कितना", "कितने",
+    "कहाँ", "हाल", "बात", "चीत", "मदद", "दिक्कत", "परेशानी", "ठीक", "सही",
+    "गलत", "अच्छा", "बढ़िया", "मस्त", "दोस्त", "यार", "भाई", "शुक्रिया", "धन्यवाद",
+    "नमस्ते", "सुबह", "शाम", "रात", "दिन", "आज", "कल", "थोड़ा", "ज्यादा", "बहुत",
+    "गाना", "संगीत", "आवाज", "स्क्रीन", "टैब", "प्रोफाइल", "कोई", "वाला",
 })
+
+
+_MULTILINGUAL_SCRIPT_REGEX = _re_module.compile(
+    r"[\u0900-\u0D7F"  # Indian scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada, Malayalam)
+    r"\u0600-\u06FF\u0750-\u077F\uFB50-\uFEFF"  # Arabic / Urdu / Persian
+    r"\u0400-\u04FF"  # Cyrillic / Russian
+    r"\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF"  # Chinese CJK, Japanese Kana, Korean Hangul
+    r"\u00C0-\u024F]"  # Latin Extended / Accented (Spanish, French, German, Portuguese, Italian, Turkish)
+)
+
+_MULTILINGUAL_GLOBAL_MARKERS = (
+    # Questions & greetings in Indian & International languages
+    "?", "kya", "what", "kaun", "kon", "why", "kyu", "kyun", "kaise", "how",
+    "batao", "tell", "help", "dikkat", "issue", "problem", "solve", "disconnect", "connect",
+    # Global Greetings & Common markers (Spanish, French, German, Italian, Arabic, Russian, Chinese, Japanese)
+    "hola", "bonjour", "hallo", "guten", "ciao", "privet", "namaste", "namaskar", "vanakkam", "namaskara",
+    "kem", "khobor", "ela", "sat", "adaab", "salam", "shukran", "merci", "gracias", "danke", "grazie",
+    "arigato", "spasibo", "nihao", "konnichiwa", "por", "que", "qui", "comment", "pourquoi", "wie", "was",
+    "wo", "donde", "quando", "chi", "cosa", "perche"
+)
 
 
 def looks_like_stt_noise(text: str) -> bool:
     """True when nothing in the transcript is a word a real request
     contains. Conservative by construction - a single recognised token
-    (or any question marker, number, URL or email) keeps the ordinary
+    or any multilingual script, question marker, number, URL or email keeps the ordinary
     route."""
     cleaned = (text or "").strip()
-    if len(cleaned) < 3:
+    if len(cleaned) < 2:
         return True
+    # Any Indian or international non-ASCII script is immediate evidence of real speech
+    if _MULTILINGUAL_SCRIPT_REGEX.search(cleaned):
+        return False
     lowered = cleaned.lower()
     if _re_module.search(r"\d", lowered):
         return False  # numbers carry content ("25 guna 18")
     if _re_module.search(r"https?://|www\.|@\w+\.\w+", lowered):
         return False  # URLs and emails carry content
-    if any(marker in lowered for marker in ("?", "kya hai", "what is", "kaun", "why")):
-        return False  # questions are never discarded unread
-    tokens = _re_module.findall(r"[\w\u0900-\u097F]+", lowered)
+    if any(marker in lowered for marker in _MULTILINGUAL_GLOBAL_MARKERS):
+        return False  # questions & global markers are never discarded unread
+    tokens = _re_module.findall(r"[\w\u0900-\u0D7F]+", lowered)
     if len(tokens) < 2:
         # A single word is noise only when it is not a word VYOM can
         # hear at all - "hello" is one token and one greeting.
@@ -1237,6 +1292,32 @@ class TaskClassifier:
             return TaskProfile(
                 domain=TaskDomain.SYSTEM, complexity=2, criticality="normal",
                 deterministic=True, intent="play_media", needs={"tools"},
+            )
+
+        # -- current weather / forecast (free, keyless Open-Meteo) ---------
+        #
+        # Weather questions used to fall into the general mission loop: a
+        # multi-step planner mission (each step a paid, rate-limited model
+        # call) for what is a single free tool answer - and on any model
+        # hiccup the user got steps-with-no-answer. It is fully
+        # deterministic: one HTTP call, no model, instant spoken result.
+        weather_text = f"{text} {getattr(self, '_original', '')}".lower()
+        weather_named = re.search(
+            r"\b(?:weather|mausam|temperature|forecast|baarish|barish|garmi|thand)\b"
+            r"|मौसम|मोसम|तापमान|बारिश|गर्मी|ठंड",
+            weather_text, re.I,
+        )
+        if weather_named:
+            forecast_order = re.search(
+                r"\b(?:forecast|prediction|tomorrow|kal|agle|next|week|days?)\b"
+                r"|कल मौसम|अगले|बारिश होगी",
+                weather_text, re.I,
+            )
+            return TaskProfile(
+                domain=TaskDomain.SYSTEM, complexity=1, latency_priority="high",
+                deterministic=True,
+                intent="weather_forecast" if forecast_order else "weather_current",
+                needs={"tools"},
             )
 
         # -- shopping across retailers -------------------------------------

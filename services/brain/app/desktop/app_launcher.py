@@ -28,13 +28,15 @@ class ApplicationRegistry:
         "notepad": "notepad", "note pad": "notepad",
         "file explorer": "file_explorer", "explorer": "file_explorer",
         "files": "file_explorer", "my computer": "file_explorer", "this pc": "file_explorer",
-        "chrome": "chrome", "google chrome": "chrome",
+        "chrome": "chrome", "google chrome": "chrome", "browser": "chrome",
         "edge": "edge", "microsoft edge": "edge",
         "visual studio code": "vscode", "vs code": "vscode", "vscode": "vscode", "code": "vscode",
-        "windows terminal": "terminal", "terminal": "terminal",
+        "windows terminal": "terminal", "terminal": "terminal", "cmd": "terminal", "command prompt": "terminal", "powershell": "terminal",
         "paint": "paint", "ms paint": "paint",
         "settings": "settings", "setting": "settings", "control panel": "settings",
         "task manager": "task_manager",
+        "spotify": "spotify", "whatsapp": "whatsapp", "telegram": "telegram", "discord": "discord",
+        "word": "word", "excel": "excel", "powerpoint": "powerpoint",
     }
 
     #: Names Get-StartApps lists that must never be launched by a fuzzy

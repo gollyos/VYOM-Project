@@ -579,7 +579,24 @@ class NativeAccessibilityController:
             if "audio playing" in str(tab.get("title") or "").lower()
         ]
         if playing_tabs:
-            raw_title = str(playing_tabs[0].get("title") or "")
+            # Multiple tabs can produce audio at once - typically a stale
+            # session-restore Shorts tab while the requested video also
+            # started (observed live 2026-08-28: "lofi" reported as an
+            # escalator-prank short because the OLD tab was listed first).
+            # The WINDOW title names the ACTIVE tab, so prefer the playing
+            # tab the user is actually looking at.
+            chosen = playing_tabs[0]
+            for tab in playing_tabs:
+                tab_title = str(tab.get("title") or "")
+                base = re.split(
+                    r"\s+-\s+audio playing", tab_title,
+                    maxsplit=1, flags=re.IGNORECASE,
+                )[0].strip()
+                window_text = str(tab.get("window") or "")
+                if base and base in window_text:
+                    chosen = tab
+                    break
+            raw_title = str(chosen.get("title") or "")
             clean_title = re.split(
                 r"\s+-\s+audio playing(?:\s+-\s+.*)?$", raw_title,
                 maxsplit=1, flags=re.IGNORECASE,
@@ -692,6 +709,15 @@ class NativeAccessibilityController:
                 # order, where the first long hyperlink is often the
                 # YouTube logo or a subscribed-channel item in the sidebar.
                 if automation_id == "video-title":
+                    # YouTube's Shorts shelf also stamps its cards
+                    # video-title; a "play lofi" click that landed on a
+                    # #shorts card left an endless shorts feed playing
+                    # (2026-08-28). Shorts only qualify as the fallback,
+                    # never the primary pick.
+                    if re.search(r"#\s*shorts|#\s*ytshorts|\bshorts\b", lowered):
+                        if fallback is None:
+                            fallback = (name, element)
+                        continue
                     return name, element
                 if automation_id in {"logo", "channel-thumbnail"}:
                     continue

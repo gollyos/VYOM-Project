@@ -155,7 +155,27 @@ class SystemTool(BaseTool):
                 raise ToolValidationError("System target is required")
             if os.name != "nt":
                 raise ToolValidationError("Initial system actions currently support Windows only")
-            os.startfile(target)  # type: ignore[attr-defined]
+            try:
+                os.startfile(target)  # type: ignore[attr-defined]
+            except OSError:
+                alias_map = {
+                    "calculator": "calc",
+                    "calc": "calc",
+                    "chrome": "chrome",
+                    "notepad": "notepad",
+                    "explorer": "explorer",
+                    "terminal": "wt",
+                    "cmd": "cmd",
+                    "vscode": "code",
+                    "code": "code",
+                    "paint": "mspaint",
+                }
+                resolved = alias_map.get(target.lower(), target)
+                exe_path = shutil.which(resolved) or shutil.which(f"{resolved}.exe") or shutil.which(target)
+                if exe_path:
+                    os.startfile(exe_path)  # type: ignore[attr-defined]
+                else:
+                    subprocess.Popen(["cmd.exe", "/c", "start", "", target], shell=False)
             output = {"action": action, "target": target}
         elif action == "open_chrome":
             import subprocess

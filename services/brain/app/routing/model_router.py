@@ -75,7 +75,12 @@ class ModelRouter:
                 # ADD — `score += bias` had this inverted, silently
                 # rewarding failure-prone models and penalising proven
                 # ones, which made the learned-evidence layer actively
-                # harmful instead of merely inert.
+                # harmful instead of merely inert. (The apply line itself
+                # was later lost in an edit and the bias silently became a
+                # no-op — restored 2026-08-28 with the test that catches it.)
+                score -= bias
+                if bias_reason:
+                    learned_reasons.append(bias_reason)
             role = task.metadata.get("role") or profile.domain.value
             role_model = self.registry.get_for_role(role)
             if role_model is not None and role_model.model_id == model.model_id:

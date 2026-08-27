@@ -337,6 +337,23 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):
+        # Boot profiling: cold start was measured at ~95s (bundled 3.11,
+        # Aug 2026) and the desktop frontend gives up long before that.
+        # Every major lifespan block logs its duration so the slow parts
+        # are visible in data/logs/brain.log instead of guessed at.
+        import logging as _logging
+        import time as _time
+
+        _boot_logger = _logging.getLogger("vyom-brain.boot")
+        _boot_t0 = _time.perf_counter()
+        _boot_mark = _time.perf_counter()
+
+        def _boot_step(name: str) -> None:
+            nonlocal _boot_mark
+            now = _time.perf_counter()
+            _boot_logger.info("boot.phase %s took %.2fs", name, now - _boot_mark)
+            _boot_mark = now
+
         database = Database(selected_settings.database_path)
         await database.connect()
         task_store = TaskStore(database)
@@ -392,6 +409,7 @@ def create_app(
         # via to_thread, before the server starts accepting requests, so
         # no live command ever pays that cost.
         await asyncio.to_thread(application_registry.discover_installed_apps)
+        _boot_step("app-discovery")
         app_launcher = AppLauncher(application_registry)
         clipboard_controller = ClipboardController()
         notification_dispatcher = NotificationDispatcher(NotificationPolicy())
@@ -515,6 +533,7 @@ def create_app(
         integration_registry = await IntegrationRegistry.from_yaml(
             selected_settings.integration_config_path, database, secret_vault
         )
+        _boot_step("integration-registry")
         # Gmail and Sheets each get their OWN GoogleOAuthClient instance so
         # a user connecting one is never asked to also grant the other's
         # scopes (each is a separate consent screen against the SAME
@@ -1975,6 +1994,7 @@ def create_app(
         # else is parked as PAUSED for explicit review, not silently
         # re-run.
         recovery_decisions = await recovery_service.recover()
+        _boot_step("crash-recovery")
         application.state.last_recovery_decisions = [
             decision.model_dump() for decision in recovery_decisions
         ]
@@ -1983,6 +2003,7 @@ def create_app(
             if decision.action not in (RecoveryAction.RESUME, RecoveryAction.RETRY)
         }
         await runtime.resume_incomplete_tasks(skip_ids=not_safe_to_restart)
+        _boot_step("resume-incomplete-tasks")
         # Phase 13 production startup validation: configuration, database,
         # migrations, secret store, directories. Degraded mode is allowed
         # when the failures are optional; hard failures mark not-ready.
@@ -1990,14 +2011,29 @@ def create_app(
         # tool/skill/capability is already wired, so a slow or failing
         # server can never delay them and its tools land in the registry
         # before the readiness check runs.
-        mcp_connect_results = await mcp_manager.connect_all(configured_mcp_servers)
-        for outcome in mcp_connect_results:
-            if outcome.get("status") != "connected":
-                startup_warnings = getattr(application.state, "mcp_startup_warnings", [])
-                startup_warnings.append(outcome)
-                application.state.mcp_startup_warnings = startup_warnings
+        # Connect every configured MCP server AFTER the server starts
+        # serving: these are external network sessions (measured at 19.2s
+        # on an ordinary boot - the single largest slice of the ~95s cold
+        # start the desktop app sat through as "Brain disconnected"), and
+        # every built-in tool/skill/capability is already wired above. A
+        # slow or failing MCP server must never hold /health hostage;
+        # its tools land in the registry seconds later.
+        async def _connect_mcp_after_boot() -> None:
+            try:
+                results = await mcp_manager.connect_all(configured_mcp_servers)
+            except Exception as error:  # a failing connector never blocks boot
+                _boot_logger.warning("mcp background connect failed: %s", error)
+                return
+            for outcome in results:
+                if outcome.get("status") != "connected":
+                    startup_warnings = getattr(application.state, "mcp_startup_warnings", [])
+                    startup_warnings.append(outcome)
+                    application.state.mcp_startup_warnings = startup_warnings
+
+        mcp_boot_task = asyncio.create_task(_connect_mcp_after_boot())
 
         startup_report = await startup_checks.run()
+        _boot_step("startup-checks")
         application.state.startup_report = startup_report
         if startup_report.ready:
             readiness_tracker.mark_ready()
@@ -2033,7 +2069,14 @@ def create_app(
             )
             await telegram_gateway.start()
         application.state.telegram_gateway = telegram_gateway
+        _boot_step("engines-and-bridges")
+        _boot_logger.info("boot.total lifespan init complete in %.2fs", _time.perf_counter() - _boot_t0)
         yield
+        # The deferred MCP connector from boot must not race the shutdown
+        # path that disconnects those same servers below.
+        mcp_boot_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await mcp_boot_task
         if telegram_gateway is not None:
             await telegram_gateway.stop()
         await adaptive_learning_bridge.stop()

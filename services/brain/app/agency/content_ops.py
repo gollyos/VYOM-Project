@@ -267,11 +267,12 @@ class ViralContentEngine:
         md_dir.mkdir(parents=True, exist_ok=True)
         md_path = md_dir / "30day_content_calendar.md"
 
+        excel_ref = str(excel_path).replace("\\", "/")
         md_content = [
             f"# 30-Day Content & Video Calendar: {account.handle}",
             f"**Owner/Client:** {account.owner_name} | **Niche:** {account.niche}",
             f"**Upload Time:** {account.upload_time} | **Platform:** {account.platform.title()}",
-            f"**Excel Deliverable:** [{excel_path.name}](file:///{str(excel_path).replace('\\', '/')})\n",
+            f"**Excel Deliverable:** [{excel_path.name}](file:///{excel_ref})\n",
             "---",
         ]
         for it in plan_items[:7]:  # Preview first 7 days in MD

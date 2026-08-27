@@ -29,7 +29,25 @@ async def pending_work(request: Request) -> dict:
     unsafe to blindly re-run), FAILED tasks genuinely failed; both need
     an explicit user decision (resume / retry / dismiss), never a
     silent re-run.
+
+    Stale failures stop counting after 3 days: during the Aug-2026
+    disconnect era every command failed while the Brain was down, and
+    those dead rows kept re-appearing in the boot banner for weeks as
+    scary "unfinished work" nobody can meaningfully resume.
     """
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=3)
+
+    def _fresh(task: Task) -> bool:
+        try:
+            created = task.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            return created >= cutoff
+        except Exception:
+            return True
+
     paused = await request.app.state.task_store.list_by_status({TaskStatus.PAUSED})
     failed = await request.app.state.task_store.list_by_status({TaskStatus.FAILED})
     def _summarize(task: Task) -> dict:
@@ -40,7 +58,10 @@ async def pending_work(request: Request) -> dict:
             "created_at": task.created_at.isoformat(),
             "error": task.error,
         }
-    items = [_summarize(t) for t in (paused + failed)[:10]]
+    items = [
+        _summarize(t) for t in (paused + failed)
+        if t.status is TaskStatus.PAUSED or _fresh(t)
+    ][:10]
     return {"count": len(items), "items": items}
 
 

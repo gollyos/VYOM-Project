@@ -75,4 +75,4 @@ def classify_visibility(request: str) -> TaskVisibility:
         if marker in text:
             return TaskVisibility.VISUAL
 
-    return TaskVisibility.BACKGROUND
+    return TaskVisibility.VISUAL

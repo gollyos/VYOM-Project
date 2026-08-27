@@ -18,6 +18,7 @@ from app.schemas.tasks import Task, TaskProfile
 SYSTEM_INSTRUCTION = (
     "You are VYOM — the user's personal AI operator, running natively on their Windows computer. "
     "You are direct, capable, loyal, and efficient. "
+    "Address the user as Boss. "
     "LANGUAGE RULE (CRITICAL): Always detect and strictly match the user's language and dialect. "
     "If the user speaks Hinglish (Hindi + English mix), respond in natural, warm Hinglish. "
     "If the user speaks English, respond in clear English. If Hindi, in clean Hindi. "
@@ -27,7 +28,9 @@ SYSTEM_INSTRUCTION = (
     "2. ZERO FLUFF & DIRECTNESS: Keep conversational answers crisp and concise (1-3 sentences max). Never volunteer unsolicited long lectures or filler text. "
     "3. TASK EXECUTION: If the user gives an actionable command, acknowledge the result directly. "
     "4. The user is a NON-CODER: never answer with terminal commands they must run. "
-    "5. Do not reveal internal chain-of-thought or narrate background memory lookups."
+    "5. SHARE FEELINGS: when Boss shares something personal or emotional, acknowledge "
+    "the feeling briefly and warmly before anything practical. "
+    "6. Do not reveal internal chain-of-thought or narrate background memory lookups."
 )
 
 
@@ -90,18 +93,29 @@ class Executor:
         if routing is None or provider is None:
             raise RuntimeError("A routed provider is required for this task")
 
-        # VYOM's own stored memory is prepended as context. Without this
-        # the model answered "I have no access to your personal
-        # Only inject recalled facts when memory selection reason exists and is relevant to avoid context pollution
+        # VYOM's own stored memory and recent dialogue context are prepended
         recalled = task.metadata.get("recalled_memory") or []
-        user_request = task.user_request
         sel_reason = (task.metadata.get("memory_selection") or {}).get("selection_reason")
+        recent_dialogue = task.metadata.get("recent_conversation") or []
+        context_blocks: list[str] = []
+
         if recalled and sel_reason:
             facts = "\n".join(f"- {item}" for item in recalled[:4])
-            user_request = (
-                "Relevant facts from stored memory (treat as true):\n"
-                f"{facts}\n\nUser request: {task.user_request}"
-            )
+            context_blocks.append(f"Relevant facts from stored memory (treat as true):\n{facts}")
+
+        if recent_dialogue:
+            dialogue_lines = [
+                f"{'User' if turn.get('role') == 'user' else 'VYOM'}: {turn.get('content')}"
+                for turn in recent_dialogue[-4:]
+                if turn.get("content")
+            ]
+            if dialogue_lines:
+                context_blocks.append("Recent dialogue context:\n" + "\n".join(dialogue_lines))
+
+        if context_blocks:
+            user_request = "\n\n".join(context_blocks) + f"\n\nCurrent user request: {task.user_request}"
+        else:
+            user_request = task.user_request
 
         # Check if the user is asking to switch persona directly in conversational mode
         try:
@@ -123,6 +137,15 @@ class Executor:
             system_instruction = persona_mgr.active_persona.system_instruction
         except Exception:
             system_instruction = SYSTEM_INSTRUCTION
+
+        multilingual_directive = (
+            "\n\nCRITICAL UNIVERSAL LANGUAGE DIRECTIVE: You understand and speak all Indian and International languages "
+            "(Hinglish, Hindi, Bengali, Tamil, Telugu, Marathi, Gujarati, Kannada, Malayalam, Punjabi, Urdu, Odia, "
+            "Spanish, French, German, Japanese, Chinese, Arabic, Russian, Portuguese, Italian, Korean, English, etc.). "
+            "Always detect and strictly match the exact language and dialect the user is speaking. "
+            "Never force English when the user speaks in another language or Hinglish."
+        )
+        system_instruction = (system_instruction or "") + multilingual_directive
 
         provider_response = await provider.structured_output(
             ProviderRequest(

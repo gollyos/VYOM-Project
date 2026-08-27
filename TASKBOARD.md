@@ -32,6 +32,14 @@
 | 24 | Mobile Android Companion Remote Brain URL Support in Frontend | FRONTEND | done (95b715e) |
 | 25 | Reliability & Crash Resistance: multi-model Gemini fallbacks, React error boundary, safe PCM decoding & optional chaining in WS stream | FRONTEND + BRAIN | done (0b51236) |
 | 26 | JARVIS 2050: Holographic Infinite Memory, Autonomous Agency Pipeline, Cognitive Scaffolder (free-model supercharger), Dynamic Tool Synthesizer, agency+synthesize_tool intent routing | BRAIN + SUBSYSTEMS | done (9b487d5) |
+| 27 | Brain Keepalive Heartbeat, Hinglish Conversational Mirroring, & STT Noise Vocabulary Expansion | BRAIN + FRONTEND | done (verified) |
+| 28 | Universal Multilingual Communication (All Indian & International Languages), STT Script Regex, Multi-language Neural Edge-TTS & Fresh Desktop Setup Bundle | BRAIN + FRONTEND + VERIFY | done (verified) |
+| 29 | Desktop Execution Hardening: Window Stability, Indian Female Voice (Aoede), No-Cutoff Speech Delivery & Resilient App Launch Fallbacks | BRAIN + FRONTEND + VERIFY | done (verified) |
+| 30 | Brain-disconnect root cause repair: py3.11 f-string crash fix + Tauri supervisor + spawn log + frontend health re-poll + stale remote-URL clear | BRAIN + FRONTEND + VERIFY | done (this session, live: 4 restarts, boot ~4s) |
+| 31 | Fast boot: MCP connect deferred post-serve (19.2s → 0s pre-serve) + boot instrumentation | BRAIN | done (this session, live measured) |
+| 32 | Deterministic weather path (classifier intent + Open-Meteo + tool_evidence verification) | BRAIN | done (live E2E: Delhi 28.2°C answered) |
+| 33 | Media correctness: relevance gate + active-tab preference + shorts-safe first result + autoplay recovery | BRAIN | done (live E2E: lofi VERIFIED playing) |
+| 34 | Voice honesty rules + STT noise gate + Boss/SHARE-FEELINGS persona + learned-router bias no-op fix + pending-work 3-day cap | BRAIN + FRONTEND | done (1337 tests) |
 
 ## Maya-transcript backlog (28-Aug analysis; priority order)
 

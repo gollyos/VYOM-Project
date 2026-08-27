@@ -22,9 +22,21 @@ export type PendingWorkItem = {
 };
 
 function getBrainUrl(): string {
+  // The remote-Brain URL is an Android-companion feature (a browser page
+  // pointing at a PC over the network). Inside the Tauri desktop app it is
+  // always wrong - once saved, it permanently redirected the installed app
+  // away from localhost and every session showed "Brain disconnected".
+  // Desktop always talks to the local Brain; a stale saved value is wiped.
+  const isTauriDesktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
   if (typeof window !== "undefined") {
     const saved = window.localStorage.getItem("vyom_remote_brain_url");
-    if (saved && saved.trim()) return saved.trim().replace(/\/$/, "");
+    if (saved && saved.trim()) {
+      if (isTauriDesktop) {
+        window.localStorage.removeItem("vyom_remote_brain_url");
+      } else {
+        return saved.trim().replace(/\/$/, "");
+      }
+    }
   }
   return (
     (import.meta.env.VITE_VYOM_BRAIN_URL as string | undefined)?.replace(/\/$/, "") ||
@@ -220,33 +232,9 @@ export function useVyomRuntime(): RuntimeSnapshot {
       event.task_id === "system";
     if (isBackground) return;
 
-    // Per-task execution mode (background vs visual) reaches the frontend
-    // on every event as structured_payload.window_visibility. When the
-    // Brain decides a task should run in the BACKGROUND (profile.visibility
-    // = 'background', from classify_visibility), VYOM's own window minimizes
-    // so the work happens invisibly and out of the user's way; when that
-    // task ends (completed/failed/cancelled) the window is restored so the
-    // user sees the result. Guarded by windowMinimizedRef so we only
-    // minimize once and restore exactly once. Best-effort (Tauri only).
-    const windowVisibility = event.structured_payload?.window_visibility;
-    if (windowVisibility === "background" && !windowMinimizedRef.current) {
-      windowMinimizedRef.current = true;
-      void dispatchWindowVisibility("minimize");
-    }
-    if (windowMinimizedRef.current &&
-        ["task_completed", "task_failed", "task_cancelled"].includes(event.type)) {
-      windowMinimizedRef.current = false;
-      void dispatchWindowVisibility("restore");
-    }
-    // late cancellation/failure/completion event must not replace the UI
-    // state of the newer command during the create-task handoff window.
-    if (supersededTaskIdsRef.current.has(event.task_id)) {
-      if (["task_completed", "task_failed", "task_cancelled"].includes(event.type)) {
-        supersededTaskIdsRef.current.delete(event.task_id);
-      }
-      return;
-    }
-
+    // Window visibility: The main living core window stays permanently visible
+    // and stable during interaction. Automatic minimization is disabled so the app
+    // never blinks, minimizes, or pops up unpredictably while the user is talking.
     const isBackgroundTask = backgroundTaskIdsRef.current.has(event.task_id);
     if (isBackgroundTask) {
       if (["task_completed", "task_failed", "task_cancelled"].includes(event.type)) {
@@ -439,11 +427,19 @@ export function useVyomRuntime(): RuntimeSnapshot {
   }, [openComposition, returnToCalm]);
 
   useEffect(() => {
-    const client = new BrainClient();
+    const client = new BrainClient(BRAIN_URL);
     clientRef.current = client;
     const unsubscribe = client.subscribe(handleBrainEvent, setBrainConnection);
     void client.health().then(() => setBrainConnection("online")).catch(() => setBrainConnection("offline"));
+    // Offline recovery: the WS retry loop backs off to 5s, but a Brain that
+    // boots late (cold start can take a minute+) or is respawned by the
+    // Tauri supervisor should be picked up the moment /health answers, not
+    // on the next backoff tick.
+    const healthPoll = window.setInterval(() => {
+      void client.health().then(() => client.retryNow()).catch(() => undefined);
+    }, 5000);
     return () => {
+      window.clearInterval(healthPoll);
       unsubscribe();
       client.destroy();
       clearTimers();
