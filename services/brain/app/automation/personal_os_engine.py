@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Awaitable, Callable
@@ -77,6 +78,7 @@ class PersonalOSEngine:
         "deep_research", "competitor_research", "tool_discovery", "mcp_discovery",
         "booking_search", "booking_reserve", "generate_client_report",
         "generate_presentation", "prepare_client_delivery", "generate_content_plan",
+        "create_client_account", "create_specialist_agent",
     }
 
     def __init__(
@@ -249,7 +251,88 @@ class PersonalOSEngine:
             return await self._prepare_client_delivery(task, emit)
         if intent == "generate_content_plan":
             return await self._generate_content_plan(task, emit)
+        if intent == "create_client_account":
+            return await self._create_client_account(task, emit)
+        if intent == "create_specialist_agent":
+            return await self._create_specialist_agent(task, emit)
         raise RuntimeError(f"Unsupported Personal OS intent: {intent}")
+
+    async def _create_client_account(self, task: Task, emit: EventEmitter) -> ExecutionResult:
+        from app.agency.content_ops import get_viral_content_engine, AccountProfile
+        from dataclasses import asdict
+        from uuid import uuid4
+        engine = get_viral_content_engine()
+        req = task.user_request
+
+        # Extract name, niche, platform, handle
+        platform = "instagram"
+        for p in ("youtube", "twitter", "linkedin", "tiktok", "threads"):
+            if p in req.lower():
+                platform = p
+                break
+
+        # Generate clean ID and account
+        clean_name = req
+        for phrase in ("vyom,", "vyom", "ek naya client add karo", "create a new client", "add client", "naya client", "client add", "brand account banao"):
+            clean_name = re.sub(phrase, "", clean_name, flags=re.IGNORECASE)
+        clean_name = clean_name.lstrip(": ").strip()
+        account_id = f"client_{uuid4().hex[:6]}"
+        first_word = re.sub(r"[^a-zA-Z0-9]", "", clean_name.split()[0].lower()) if clean_name else "client"
+        handle = f"@{first_word}"
+        niche = clean_name or "Custom Client Niche"
+
+        profile = AccountProfile(
+            account_id=account_id,
+            owner_name=clean_name or "New Client",
+            platform=platform,
+            handle=handle,
+            niche=niche,
+            target_audience=f"Target audience for {niche}",
+            tone="High-value, professional, tailored",
+            upload_time="19:00 IST",
+        )
+        saved = engine.workspaces.create_or_update_account(profile)
+        await emit("client_account_created", f"Created new client account {saved.account_id} ({saved.handle})", asdict(saved))
+
+        return ExecutionResult(
+            response=f"New client account '{saved.owner_name}' ({saved.handle} on {saved.platform.title()}) created and isolated successfully.",
+            structured_data=asdict(saved),
+            evidence=[f"account_id:{saved.account_id}", f"platform:{saved.platform}"],
+        )
+
+    async def _create_specialist_agent(self, task: Task, emit: EventEmitter) -> ExecutionResult:
+        import re
+        from app.agents.ceo_hierarchy import get_ceo_engine
+        from dataclasses import asdict
+        ceo = get_ceo_engine()
+        req = task.user_request
+
+        clean_name = req
+        for phrase in ("vyom,", "vyom", "ek naya agent banao", "hire a new agent", "create specialist agent", "naya agent", "hire agent", "naya worker create"):
+            clean_name = re.sub(phrase, "", clean_name, flags=re.IGNORECASE)
+        clean_name = clean_name.lstrip(": ").strip()
+
+        dept = "Social Media & Viral Growth"
+        if any(k in req.lower() for k in ("trade", "finance", "stock", "crypto", "risk")):
+            dept = "Trading & Financial Intelligence"
+        elif any(k in req.lower() for k in ("lead", "sales", "crm", "scrape", "outreach")):
+            dept = "Sales, Lead Finder & CRM"
+        elif any(k in req.lower() for k in ("desktop", "code", "browser", "click", "system")):
+            dept = "Engineering & Desktop Operations"
+
+        agent = ceo.create_dynamic_agent(
+            name=clean_name or "Custom Specialist Bot",
+            department_name=dept,
+            role_description=f"Autonomous specialist for {clean_name}",
+            skills=["auto_reason", "tool_execute", "verify_output"],
+        )
+        await emit("agent_hired", f"Hired new specialist agent {agent.name} under {agent.department}", asdict(agent))
+
+        return ExecutionResult(
+            response=f"Specialist Agent '{agent.name}' ({agent.agent_id}) successfully created and assigned under {agent.department}.",
+            structured_data=asdict(agent),
+            evidence=[f"agent_id:{agent.agent_id}", f"department:{agent.department}"],
+        )
 
     async def _generate_content_plan(self, task: Task, emit: EventEmitter) -> ExecutionResult:
         from app.agency.content_ops import get_viral_content_engine

@@ -887,6 +887,10 @@ class TaskClassifier:
             return TaskProfile(domain=TaskDomain.AGENCY, complexity=3, deterministic=True, intent="prepare_client_delivery", needs={"phase8"})
         if ("content plan" in text or "social media" in text or "content calendar" in text or "reel plan" in text or "instagram plan" in text or "30 day" in text or "30-day" in text) and ("plan" in text or "calendar" in text or "generate" in text or "banao" in text or "ready" in text):
             return TaskProfile(domain=TaskDomain.AGENCY, complexity=3, deterministic=True, intent="generate_content_plan", needs={"phase8"})
+        if any(k in text for k in ("naya client", "new client", "add client", "client add", "brand account banao", "naya brand account")):
+            return TaskProfile(domain=TaskDomain.AGENCY, complexity=2, deterministic=True, intent="create_client_account", needs={"phase8"})
+        if any(k in text for k in ("naya agent", "new agent", "hire agent", "hire a new agent", "create specialist agent", "naya worker create")):
+            return TaskProfile(domain=TaskDomain.AGENCY, complexity=2, deterministic=True, intent="create_specialist_agent", needs={"phase8"})
         if "research " in text and ("market" in text or "trend" in text or "technology" in text or "product" in text or "company" in text):
             return TaskProfile(domain=TaskDomain.RESEARCH, complexity=3, deterministic=True, intent="deep_research", needs={"phase8"})
 
