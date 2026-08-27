@@ -76,7 +76,7 @@ class PersonalOSEngine:
     INTENTS = {
         "deep_research", "competitor_research", "tool_discovery", "mcp_discovery",
         "booking_search", "booking_reserve", "generate_client_report",
-        "generate_presentation", "prepare_client_delivery",
+        "generate_presentation", "prepare_client_delivery", "generate_content_plan",
     }
 
     def __init__(
@@ -247,7 +247,43 @@ class PersonalOSEngine:
             return await self._generate_presentation(task, emit)
         if intent == "prepare_client_delivery":
             return await self._prepare_client_delivery(task, emit)
+        if intent == "generate_content_plan":
+            return await self._generate_content_plan(task, emit)
         raise RuntimeError(f"Unsupported Personal OS intent: {intent}")
+
+    async def _generate_content_plan(self, task: Task, emit: EventEmitter) -> ExecutionResult:
+        from app.agency.content_ops import get_viral_content_engine
+        engine = get_viral_content_engine()
+        req = task.user_request.lower()
+
+        # Match target account from request
+        target_account = "gunjan_ai_tech"
+        if "fitness" in req or "calisthenics" in req or "gym" in req:
+            target_account = "gunjan_fitness"
+        elif "finance" in req or "trading" in req or "stock" in req:
+            target_account = "gunjan_finance"
+        elif "lifestyle" in req or "mindset" in req:
+            target_account = "gunjan_lifestyle"
+        else:
+            # Check custom client registered
+            for acc in engine.workspaces.list_accounts():
+                if acc.account_id in req or acc.owner_name.lower() in req or acc.handle.lower() in req:
+                    target_account = acc.account_id
+                    break
+
+        await emit("content_plan_started", f"Generating 30-day viral content plan for {target_account}", {"account": target_account})
+        plan = engine.generate_30day_content_plan(target_account)
+        await emit("content_plan_ready", f"30-day plan created with Excel deliverable at {plan['excel_file']}", {"excel": plan['excel_file']})
+
+        statement = (
+            f"30-Day Content Plan ready for {plan['handle']} ({plan['niche']}). "
+            f"Delivered in formatted Excel: '{Path(plan['excel_file']).name}' and Markdown calendar."
+        )
+        return ExecutionResult(
+            response=statement,
+            structured_data=plan,
+            evidence=[f"excel_exists:{Path(plan['excel_file']).exists()}", f"account:{target_account}"],
+        )
 
     # -- Research -----------------------------------------------------
 
