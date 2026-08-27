@@ -8,7 +8,7 @@
 | # | Task | Lane | Status |
 |---|---|---|---|
 | 1 | LIVE E2E: "Chrome kholo + YouTube lofi play" real window me VERIFIED_COMPLETE | VERIFY | done (2dee063) |
-| 2 | Desktop release build (`npm run desktop:build`) + installed app me voice auto-on check | VERIFY | open |
+| 2 | Desktop release build (`npm run desktop:build`) + installed app me voice auto-on check | FRONTEND + VERIFY | done (4017163) |
 | 3 | Morning briefing live: real failed/paused tasks briefing me bole | BRAIN | open |
 | 4 | Paper-trade ek real setup end-to-end (data → thesis → risk PASS → paper order) | SUBSYSTEMS | open |
 | 5 | WS replay live test: task chalate time disconnect karke events wapas aaye | VERIFY | open |
