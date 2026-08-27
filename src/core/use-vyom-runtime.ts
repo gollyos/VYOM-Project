@@ -228,7 +228,7 @@ export function useVyomRuntime(): RuntimeSnapshot {
     // task ends (completed/failed/cancelled) the window is restored so the
     // user sees the result. Guarded by windowMinimizedRef so we only
     // minimize once and restore exactly once. Best-effort (Tauri only).
-    const windowVisibility = event.structured_payload.window_visibility;
+    const windowVisibility = event.structured_payload?.window_visibility;
     if (windowVisibility === "background" && !windowMinimizedRef.current) {
       windowMinimizedRef.current = true;
       void dispatchWindowVisibility("minimize");
@@ -257,13 +257,10 @@ export function useVyomRuntime(): RuntimeSnapshot {
             ? "Background task failed"
             : "Background task cancelled";
         void dispatchNativeNotification(backgroundTitle, event.human_readable_message);
-        // FIX (Aug 2026): Rapid voice commands (e.g. two questions spoken
-        // 0.6s apart) bump the first task to background before its response
-        // arrives — causing it to be silently dropped. If voice is active
-        // and no foreground task is currently speaking, surface the result.
-        // This is what the user expects: BOTH answers come back.
+        // Rapid voice commands (e.g. two questions spoken 0.6s apart)
+        // bump the first task to background before its response arrives.
         if (event.type === "task_completed") {
-          const bgResponse = event.structured_payload.response ?? event.human_readable_message;
+          const bgResponse = event.structured_payload?.response ?? event.human_readable_message;
           if (bgResponse) void dispatchWindowVisibility("restore").catch(() => undefined);
           void dispatchNativeNotification("VYOM (earlier task)", bgResponse ?? "Completed");
         }
@@ -364,7 +361,7 @@ export function useVyomRuntime(): RuntimeSnapshot {
       case "agent_paused": setState("WaitingApproval"); break;
       case "approval_required": {
         setState("WaitingApproval");
-        const pending = event.structured_payload.approval;
+        const pending = event.structured_payload?.approval;
         if (pending) {
           setApproval({
             taskId: event.task_id,
@@ -380,7 +377,7 @@ export function useVyomRuntime(): RuntimeSnapshot {
       case "verification_failed": setState("Failed"); break;
       case "verification_passed": setState("Verifying"); break;
       case "visualization_requested": {
-        const value = event.structured_payload.composition;
+        const value = event.structured_payload?.composition;
         if (value) {
           try { openComposition(validateComposition(value), lastCommandRef.current ?? "Brain task"); } catch {
             setState("Failed");
@@ -393,20 +390,20 @@ export function useVyomRuntime(): RuntimeSnapshot {
         if (correlationRef.current) {
           trace(correlationRef.current, "brain.task_completed", {
             task_id: event.task_id,
-            response: event.structured_payload.response ?? event.human_readable_message,
+            response: event.structured_payload?.response ?? event.human_readable_message,
           });
         }
         inFlightCommandRef.current = null;
         inFlightTaskIdRef.current = null;
         setApproval(null);
-        if (event.structured_payload.task?.result?.structured_data?.clear_workspace) {
+        if (event.structured_payload?.task?.result?.structured_data?.clear_workspace) {
           setVisibleObjectIds([]);
           setComposition(null);
           compositionRef.current = null;
           setComposerPhase("calm");
         }
         setState("Completed");
-        setResponse(event.structured_payload.response ?? event.human_readable_message);
+        setResponse(event.structured_payload?.response ?? event.human_readable_message);
         setTerminalEventKey(`task_completed:${event.task_id}`);
         activeTaskRef.current = null;
         setActiveTaskId(null);
@@ -415,14 +412,14 @@ export function useVyomRuntime(): RuntimeSnapshot {
         if (correlationRef.current) {
           trace(correlationRef.current, "brain.task_failed", {
             task_id: event.task_id,
-            error: event.structured_payload.error ?? event.human_readable_message,
+            error: event.structured_payload?.error ?? event.human_readable_message,
           });
         }
         inFlightCommandRef.current = null;
         inFlightTaskIdRef.current = null;
         setApproval(null);
         setState("Failed");
-        setResponse(event.structured_payload.error ?? event.human_readable_message);
+        setResponse(event.structured_payload?.error ?? event.human_readable_message);
         setTerminalEventKey(`task_failed:${event.task_id}`);
         activeTaskRef.current = null;
         setActiveTaskId(null);

@@ -969,6 +969,7 @@ function WhiteboardCanvas({ object }: { object: WhiteboardCanvasObject }) {
 }
 
 function ObjectRenderer({ object }: { object: UIObject }) {
+  if (!object || !object.type) return null;
   switch (object.type) {
     case "status-summary": return <StatusSummary object={object} />;
     case "agent-status": return <AgentStatus object={object} />;
@@ -1012,6 +1013,7 @@ function ObjectRenderer({ object }: { object: UIObject }) {
     case "routine-sequence": return <RoutineSequence object={object} />;
     case "focus-mission": return <FocusMission object={object} />;
     case "whiteboard-canvas": return <WhiteboardCanvas object={object} />;
+    default: return null;
   }
 }
 

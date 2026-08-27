@@ -21,11 +21,25 @@ models:
     supports_tools: true
     supports_vision: true
     privacy_policy: cloud_standard
+    priority: 85
+
+  - provider: google
+    model_id: gemini-2.5-flash
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: high
+    speed_tier: fast
+    cost_tier: low
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_standard
     priority: 80
 
   - provider: google
-    model_id: gemini-flash-lite-latest
-    enabled: false
+    model_id: gemini-2.0-flash
+    enabled: true
     capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
     quality_tier: balanced
     speed_tier: fast
@@ -35,11 +49,39 @@ models:
     supports_tools: true
     supports_vision: true
     privacy_policy: cloud_standard
-    priority: 75
+    priority: 78
+
+  - provider: google
+    model_id: gemini-1.5-flash
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: balanced
+    speed_tier: fast
+    cost_tier: low
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_standard
+    priority: 76
+
+  - provider: google
+    model_id: gemini-flash-lite-latest
+    enabled: true
+    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
+    quality_tier: balanced
+    speed_tier: fast
+    cost_tier: low
+    context_tier: large
+    supports_streaming: true
+    supports_tools: true
+    supports_vision: true
+    privacy_policy: cloud_standard
+    priority: 74
 
   - provider: google
     model_id: gemini-flash-latest
-    enabled: false
+    enabled: true
     capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
     quality_tier: balanced
     speed_tier: fast

@@ -8,6 +8,7 @@ import { AgentStackPanel } from "./agent-stack-panel";
 import { ConnectionsPanel } from "./connections-panel";
 import { BrainGraphView } from "./brain-graph-view";
 import { WindowControls } from "./window-controls";
+import { ErrorBoundary } from "./error-boundary";
 import { newCorrelationId, trace } from "@/core/trace";
 import { STATE_VISUALS } from "@/core/vyom-state";
 import { useVyomRuntime } from "@/core/use-vyom-runtime";
@@ -380,11 +381,13 @@ export function VyomExperience() {
         <WindowControls />
       </header>
 
-      <UIComposer
-        composition={composition}
-        visibleObjectIds={visibleObjectIds}
-        phase={composerPhase}
-      />
+      <ErrorBoundary>
+        <UIComposer
+          composition={composition}
+          visibleObjectIds={visibleObjectIds}
+          phase={composerPhase}
+        />
+      </ErrorBoundary>
 
       <section className="core-interface" aria-live="polite" aria-atomic="true">
         <div className="state-readout">
@@ -429,8 +432,12 @@ export function VyomExperience() {
         </p>
       </section>
 
-      <AgentStackPanel />
-      <ConnectionsPanel />
+      <ErrorBoundary fallback={null}>
+        <AgentStackPanel />
+      </ErrorBoundary>
+      <ErrorBoundary fallback={null}>
+        <ConnectionsPanel />
+      </ErrorBoundary>
 
       <button
         type="button"
@@ -441,7 +448,11 @@ export function VyomExperience() {
         <Share2 size={13} />
         <span>Brain Graph</span>
       </button>
-      {showBrainGraph && <BrainGraphView onClose={() => setShowBrainGraph(false)} />}
+      {showBrainGraph && (
+        <ErrorBoundary>
+          <BrainGraphView onClose={() => setShowBrainGraph(false)} />
+        </ErrorBoundary>
+      )}
 
       <section className="interaction-dock">
         {pendingWork.length > 0 && (

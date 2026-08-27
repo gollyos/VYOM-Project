@@ -65,19 +65,23 @@ export class MicrophoneCapture {
 }
 
 function decodeBase64Pcm(value: string) {
-  const binary = window.atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  const sampleCount = Math.floor(bytes.byteLength / 2);
-  const samples = new Float32Array(sampleCount);
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  let energy = 0;
-  for (let index = 0; index < sampleCount; index += 1) {
-    const sample = view.getInt16(index * 2, true) / 0x8000;
-    samples[index] = sample;
-    energy += sample * sample;
+  try {
+    const binary = window.atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    const sampleCount = Math.floor(bytes.byteLength / 2);
+    const samples = new Float32Array(sampleCount);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let energy = 0;
+    for (let index = 0; index < sampleCount; index += 1) {
+      const sample = view.getInt16(index * 2, true) / 0x8000;
+      samples[index] = sample;
+      energy += sample * sample;
+    }
+    return { samples, level: Math.sqrt(energy / Math.max(sampleCount, 1)) };
+  } catch {
+    return { samples: new Float32Array(0), level: 0 };
   }
-  return { samples, level: Math.sqrt(energy / Math.max(sampleCount, 1)) };
 }
 
 export function pcmBufferToBase64(buffer: ArrayBuffer) {
@@ -99,34 +103,39 @@ export class PcmAudioPlayer {
   ) {}
 
   async enqueue(base64Audio: string, sampleRate: number) {
-    if (!this.context || this.context.state === "closed") {
-      this.context = new AudioContext({ latencyHint: "interactive" });
-    }
-    if (this.context.state === "suspended") await this.context.resume();
-
-    const { samples, level } = decodeBase64Pcm(base64Audio);
-    const audioBuffer = this.context.createBuffer(1, samples.length, sampleRate);
-    audioBuffer.copyToChannel(samples, 0);
-    const source = this.context.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(this.context.destination);
-
-    const startAt = Math.max(this.context.currentTime + 0.018, this.nextStartTime);
-    this.nextStartTime = startAt + audioBuffer.duration;
-    this.sources.add(source);
-    this.onLevel(level);
-    if (this.sources.size === 1) this.onStart();
-
-    source.onended = () => {
-      this.sources.delete(source);
-      source.disconnect();
-      if (this.sources.size === 0) {
-        this.nextStartTime = this.context?.currentTime ?? 0;
-        this.onLevel(0);
-        this.onIdle();
+    try {
+      if (!this.context || this.context.state === "closed") {
+        this.context = new AudioContext({ latencyHint: "interactive" });
       }
-    };
-    source.start(startAt);
+      if (this.context.state === "suspended") await this.context.resume();
+
+      const { samples, level } = decodeBase64Pcm(base64Audio);
+      if (!samples.length) return;
+      const audioBuffer = this.context.createBuffer(1, samples.length, sampleRate);
+      audioBuffer.copyToChannel(samples, 0);
+      const source = this.context.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(this.context.destination);
+
+      const startAt = Math.max(this.context.currentTime + 0.018, this.nextStartTime);
+      this.nextStartTime = startAt + audioBuffer.duration;
+      this.sources.add(source);
+      this.onLevel(level);
+      if (this.sources.size === 1) this.onStart();
+
+      source.onended = () => {
+        this.sources.delete(source);
+        source.disconnect();
+        if (this.sources.size === 0) {
+          this.nextStartTime = this.context?.currentTime ?? 0;
+          this.onLevel(0);
+          this.onIdle();
+        }
+      };
+      source.start(startAt);
+    } catch {
+      // Audio playback errors are non-fatal
+    }
   }
 
   clear() {
