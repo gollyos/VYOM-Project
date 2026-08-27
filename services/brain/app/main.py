@@ -1923,6 +1923,10 @@ def create_app(
         # the general planner, so a single 429 stops every caller instead
         # of each discovering the rate limit independently.
         runtime.general_planner = GeneralPlanner(model_router, providers, provider_health=provider_health)
+        # A multi-domain goal is split across the role agents; a
+        # single-domain goal keeps the cheaper single planner above.
+        runtime.multi_agent_orchestrator = multi_agent_orchestrator
+        multi_agent_orchestrator.task_runtime = runtime
         # The soul fix: unrecognised natural language gets ONE cheap
         # structured model call (action vs conversation, tone, urgency)
         # before any word-count heuristic decides it is small talk.

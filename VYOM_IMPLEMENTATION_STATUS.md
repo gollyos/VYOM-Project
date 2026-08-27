@@ -349,6 +349,19 @@ Developer focus remains a deliberate local composition and `Close everything` do
 
 ## Verification record
 
+### 2026-08-27 (later) - Multi-agent orchestrator wired into the command path (role agents + scoped tools)
+
+- **What changed:**
+  1. `config/agents.yaml` — 13 role seeds added for the `MultiAgentOrchestrator`: `ceo` (coordinator, no world tools), `researcher`, `coder`, `analyst`, `desktop-operator`, `browser-operator`, `file-manager`, `communicator`, `monitor`, `planner`, `qa-verifier`, `seo`, `security`. Each carries a `tools:` list (the HARD run-time scope enforced by `autonomous_worker._tool_schemas` — a researcher never sees `desktop`, a security review never sees `telegram`/`email`) and a shared `budget` anchor (`max_model_calls: 3`, `max_tool_calls: 8`).
+  2. `app/agents/registry.py` `seed()` now reads `tools`, `budget`, `model_policy`, `permissions`, `description` from the config (previously only `capabilities`).
+  3. `app/agents/multi_agent_orchestrator.py` — `decompose()` gained `seo` and `security` keyword rules; new `should_orchestrate(goal)` returns True only when a goal splits into ≥2 distinct role domains or asks for the team explicitly.
+  4. `app/runtime/task_runtime.py` — new `_run_multi_agent_mission()`; the `general`/actionable dispatch now routes a multi-domain goal to `multi_agent_orchestrator.execute(..., max_parallel=1)` (sequential, so N agents do not exhaust one free model's per-minute quota) instead of the single tool-calling planner. Partial/failed outcomes are reported honestly — a quota-starved run raises `RuntimeError` and the task goes `failed`, never fake-`completed`.
+  5. `app/agents/autonomous_worker.py` + `app/agents/runtime.py` — `run()` accepts `max_steps`; `AgentRuntime.delegate` caps each role agent's ReAct loop to `max(2, budget.max_model_calls + 1)`.
+  6. `app/providers/google.py` — **standalone bug fix:** `_sanitize_gemini_schema()` strips the JSON-Schema keywords Gemini's function-calling validator rejects (`exclusiveMaximum`, `minLength`, `additionalProperties`, `$schema`, unsupported `format`, …). One MCP tool shipping `exclusiveMaximum` was failing the *entire* `generateContent` tool call with HTTP 400, so any multi-tool ReAct call that included it died. Fixes tool-calling for every caller, not just multi-agent.
+- **Verification actually run:** `tests/test_multi_agent_wiring.py` — `10 passed` (seed scope, budget ceiling, `should_orchestrate` gating, `decompose` seo/security, schema sanitiser). Agent-suite subset — `60 passed`. Full Brain suite from `services/brain` (`--basetemp="C:/Users/GunjanAdmin/.vyom-pytest-tmp/full3"`) — **1257 passed, 2 skipped, 5 warnings in 516s**. Boot verified: 28 agents registered, role tools scoped as declared (`ceo` → `[mcp.seq-thinking.sequentialthinking]` only, `researcher` has `browser` but not `desktop`).
+- **Live end-to-end status (honest):** the orchestration LAYER works — a multi-domain command is routed to the orchestrator, `decompose()` picks the right roles, each is delegated to its scoped agent, and the Gemini 400 is gone. Sub-agent EXECUTION does not yet complete on this box: with a single free Gemini model (~12 req/min) even sequential role agents hit "Pacing window full" / "No configured model with remaining quota", and `browser`/MCP tools are flaky here, so agents return `verification failed` and the parent task correctly reports `failed`. Reliable multi-agent execution needs a second model key (per-role model config, backlog M5) or paid quota. This is an environment limit, not a wiring defect.
+- **Known follow-up:** `database is locked` was seen once on a live multi-agent task while the full pytest suite ran concurrently against the same disk; not reproduced in isolation. Worth a WAL/busy-timeout check if it recurs.
+
 ### 2026-08-27 (later) - Hallucination fix: non-actionable Q&A no longer routed through the tool-mission planner
 
 - **Root cause (found by live probe, not code reading):** a `general`-intent turn that LLM triage classified `actionable: false` was still forced into `_run_general_mission` whenever `is_conversational()` returned false. That planner path answered "India ki capital kya hai?" with `"India — is a"` (a knowledge fact's `"{subject} — {predicate}"` label — `humanise_observation` reads `title` first) and answered "bore ho raha hoon" with `"Completed: …; Completed: …"` (episodic task-log rows stitched as prose). The structural `Verifier` then reported both COMPLETE, score 1.0 ("Non-empty response").
@@ -1113,6 +1126,14 @@ Do not start a new capability merely because it appears in the future vision. Im
 Recommended next phase when approved: **Phase 17 - Production Integration Activation** (carried): Brain-as-Tauri-sidecar lifecycle, one real Google OAuth E2E, one real web-search/booking/delivery/market-data provider E2E, `pywinauto` accessibility, proactive engine on real triggers, a real second device hardware-verifying the distributed runtime, home-server Docker deployment, code-signing keys + signed updates, and the Expo app on hardware. Phase 16 follow-ups to fold in: register a real planner contract for mission planning (model-assisted planning for genuinely novel multi-step goals, still bounded), route Defuddle/Playwright selection through LearnedRouter.preferred_tool at the research fetch site, and stream mission-loop events into the desktop Core states live.
 
 ## Change log
+
+### 2026-08-27 (later) - Multi-agent orchestrator wired: role agents with scoped tools
+
+- 13 role seeds (`ceo`/`researcher`/`coder`/`analyst`/`seo`/`security`/… ) in `config/agents.yaml`, each with a hard `tools:` scope and a shared 3-model-call budget; `registry.seed()` now reads `tools`/`budget`.
+- `MultiAgentOrchestrator.should_orchestrate()` routes only genuinely multi-domain goals to `_run_multi_agent_mission()` (sequential delegation, honest partial/failed reporting).
+- `AutonomousAgentWorker.run(max_steps=…)` + `AgentRuntime.delegate` cap each role agent's ReAct loop to its budget.
+- `google.py` `_sanitize_gemini_schema()` strips JSON-Schema keywords Gemini rejects — one MCP tool's `exclusiveMaximum` was failing every multi-tool call with HTTP 400.
+- Full Brain suite 1257 passed / 2 skipped. Orchestration layer verified live; sub-agent execution still blocked by single-free-model quota on this box (needs per-role model key, backlog M5).
 
 ### 2026-08-27 (later) - Non-actionable Q&A takes the grounded reasoning path, not the tool-mission planner
 

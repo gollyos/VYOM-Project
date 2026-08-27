@@ -67,3 +67,113 @@ seeds:
     name: Chief of Staff Agent
     role: Cross-domain prioritization, daily planning, unresolved commitments, delegation suggestions, and risk/opportunity summaries; coordinates existing runtime/agents rather than bypassing tool permissions
     capabilities: [chief_of_staff.brief, commitments.track, result.verify]
+
+  # --------------------------------------------------------------------
+  # Role agents for the MultiAgentOrchestrator. A complex, multi-domain
+  # goal is split by the `ceo` agent and each piece is delegated to the
+  # role below whose job it is. `tools` is the HARD scope enforced at
+  # run time (autonomous_worker._tool_schemas) - a role only ever sees
+  # the tool contracts listed here, so a research sub-task cannot spend
+  # budget on desktop automation and a security review cannot post to
+  # social media. `capabilities` stays descriptive; `tools` is the gate.
+  # --------------------------------------------------------------------
+  - id: ceo
+    name: CEO Agent
+    role: Lead coordinator - decomposes a complex goal into role sub-tasks, delegates, then merges and judges the combined result
+    description: Plans and coordinates the other role agents; holds no world tools of its own so it cannot act directly, only delegate
+    capabilities: [task.plan, task.delegate, result.verify]
+    tools: [mcp.seq-thinking.sequentialthinking]
+    # Shared ceiling for every role agent: a single free model cannot
+    # afford an unbounded ReAct loop per delegate. 3 model calls is
+    # enough for observe -> act -> report; the scoped `tools` list keeps
+    # each one on task.
+    budget: &role_budget
+      max_depth: 1
+      max_model_calls: 3
+      max_tool_calls: 8
+      max_runtime_seconds: 200
+      max_cost: 0.05
+  - id: researcher
+    name: Research Agent
+    role: Web research and information gathering from any source
+    description: Searches the web, reads pages, and gathers evidence with citations
+    capabilities: [research, browser.read, result.verify]
+    tools: [browser, screenshot, mcp.duckduckgo.duckduckgo_web_search, mcp.web-fetch.fetch]
+    budget: *role_budget
+  - id: coder
+    name: Coding Agent
+    role: Write, edit, review, and test code inside the project
+    description: Edits project files, runs tests and commands, inspects diffs
+    capabilities: [coding.build_check, filesystem.read, terminal.execute, git.diff]
+    tools: [filesystem, terminal, git, mcp.git.git_status, mcp.git.git_diff]
+    budget: *role_budget
+  - id: analyst
+    name: Analysis Agent
+    role: Data analysis, comparison, and structured reporting
+    description: Reads local data and produces analysis and insights
+    capabilities: [analysis, filesystem.read, result.verify]
+    tools: [filesystem, system, mcp.seq-thinking.sequentialthinking]
+    budget: *role_budget
+  - id: desktop-operator
+    name: Desktop Operator
+    role: Control native desktop applications - launch, focus, click, type
+    description: Opens apps, operates windows, and drives the desktop UI accessibility-first
+    capabilities: [desktop.control, screen.observe]
+    tools: [desktop, screen_observe, input_control, screenshot]
+    budget: *role_budget
+  - id: browser-operator
+    name: Browser Operator
+    role: Web interaction - navigate, fill forms, click, extract content
+    description: Drives a real browser session to complete web tasks
+    capabilities: [browser.execute, browser.read]
+    tools: [browser, screenshot]
+    budget: *role_budget
+  - id: file-manager
+    name: File Manager
+    role: File system operations - list, read, search, organise project files
+    description: Manages files and directories inside allowed roots
+    capabilities: [filesystem.read, filesystem.search]
+    tools: [filesystem, mcp.fs-temp.list_directory, mcp.fs-temp.search_files]
+    budget: *role_budget
+  - id: communicator
+    name: Communication Agent
+    role: Email and messaging - draft and send on the user's behalf under approval
+    description: Handles outbound email, Telegram, and Discord messages
+    capabilities: [email.draft, messaging.send]
+    tools: [email, telegram, discord]
+    budget: *role_budget
+  - id: monitor
+    name: Monitor Agent
+    role: System monitoring and health - CPU, memory, processes, windows
+    description: Reports machine and runtime health from real measurements
+    capabilities: [system.query, screen.observe]
+    tools: [system, screen_observe]
+    budget: *role_budget
+  - id: planner
+    name: Planning Agent
+    role: Break a goal into an ordered, dependency-aware plan
+    description: Produces a step plan with no side effects
+    capabilities: [task.plan]
+    tools: [mcp.seq-thinking.sequentialthinking]
+    budget: *role_budget
+  - id: qa-verifier
+    name: Verification Agent
+    role: Independent quality assurance - confirm a result against real evidence
+    description: Re-checks another agent's output against files, system state, and screenshots
+    capabilities: [result.verify, filesystem.read, system.query]
+    tools: [filesystem, system, screenshot, screen_observe]
+    budget: *role_budget
+  - id: seo
+    name: SEO Agent
+    role: SEO analysis - keyword research, on-page and content review, competitor and SERP checks
+    description: Researches search demand and audits pages for search visibility
+    capabilities: [research, browser.read]
+    tools: [browser, mcp.duckduckgo.duckduckgo_web_search, mcp.web-fetch.fetch]
+    budget: *role_budget
+  - id: security
+    name: Security Agent
+    role: Security review - read-only scan of code and config for secrets, injection, unsafe calls, and dependency risk
+    description: Inspects the project for security issues; never mutates and never exfiltrates
+    capabilities: [coding.build_check, filesystem.read, filesystem.search]
+    tools: [filesystem, terminal, git]
+    budget: *role_budget

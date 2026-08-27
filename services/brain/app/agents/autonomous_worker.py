@@ -180,11 +180,20 @@ class AutonomousAgentWorker:
         permission_level: PermissionLevel = PermissionLevel.L1,
         allowed_roots: tuple | None = None,
         allowed_tools: list[str] | None = None,
+        max_steps: int | None = None,
     ) -> ExecutionResult:
         """Run the bounded multi-step ReAct loop for `goal`. Returns an
         ExecutionResult compatible with the rest of the Brain: real
         evidence, structured step-by-step data, and a `verification.passed`
-        flag other callers (AgentRuntime.delegate) already know to check."""
+        flag other callers (AgentRuntime.delegate) already know to check.
+
+        `max_steps` (when given, and only if it is TIGHTER than the
+        worker's own bound) lets a caller cap the ReAct loop per mission -
+        a role agent delegated on the free tier gets a small budget so
+        four of them do not exhaust one model's per-minute quota."""
+        step_budget = self.max_steps
+        if max_steps is not None:
+            step_budget = max(1, min(step_budget, int(max_steps)))
         tools = self._tool_schemas(allowed_tools)
         if not tools:
             raise AutonomousMissionError("No tools are registered/allowed for this autonomous mission")
@@ -206,10 +215,10 @@ class AutonomousAgentWorker:
         await emit(
             "task_planning",
             f"Autonomous mission planning for: {goal[:120]}",
-            {"available_tools": [schema.name for schema in tools], "max_steps": self.max_steps},
+            {"available_tools": [schema.name for schema in tools], "max_steps": step_budget},
         )
 
-        for step_index in range(self.max_steps):
+        for step_index in range(step_budget):
             elapsed = time.perf_counter() - started
             if elapsed >= self.max_runtime_seconds:
                 final_text = (
@@ -227,7 +236,7 @@ class AutonomousAgentWorker:
             call = response.tool_calls[0]
             await emit(
                 "task_progress",
-                f"Step {step_index + 1}/{self.max_steps}: deciding to call {call.name}",
+                f"Step {step_index + 1}/{step_budget}: deciding to call {call.name}",
                 {"step": step_index + 1, "tool": call.name, "arguments": dict(call.arguments)},
             )
 
@@ -266,7 +275,7 @@ class AutonomousAgentWorker:
             ]})
         else:
             hit_step_bound = True
-            final_text = f"Stopped after reaching the {self.max_steps}-step bound."
+            final_text = f"Stopped after reaching the {step_budget}-step bound."
 
         successful_steps = [step for step in steps if step.success]
         # Passed means: real progress was made (at least one successful

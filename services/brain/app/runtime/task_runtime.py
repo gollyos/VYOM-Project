@@ -111,6 +111,7 @@ class TaskRuntime:
         self.cognitive_runtime = cognitive_runtime
         self.mission_loop = mission_loop
         self.general_planner = None  # attached post-construction in main.py, like cognitive_runtime/mission_loop
+        self.multi_agent_orchestrator = None  # attached post-construction; splits a multi-domain goal across role agents
         self.llm_triage = None  # attached post-construction; optional LLM intent gate for unrecognised text
         self.memory_retriever = None  # attached post-construction in main.py, same pattern
         self.memory_store = None  # attached post-construction in main.py, same pattern
@@ -750,11 +751,23 @@ class TaskRuntime:
                 # today's price) can never be answered from model memory -
                 # it keeps the mission/research path regardless of triage.
                 fresh_needed = needs_fresh_evidence(task.user_request)
-                if triage is not None:
-                    if triage.get("actionable") or fresh_needed:
-                        await self._run_general_mission(task, profile, started, retries, fallback_used)
+                run_mission = (
+                    (triage is not None and (triage.get("actionable") or fresh_needed))
+                    or (triage is None and (fresh_needed or not is_conversational(task.user_request)))
+                )
+                if run_mission:
+                    # A genuinely multi-domain goal ("research X, write it
+                    # up and check it for security issues") is split across
+                    # role agents - each scoped to only its own tools, so
+                    # the work is divided and no sub-agent burns budget
+                    # outside its job. A single-domain goal skips this and
+                    # takes the cheaper single tool-calling planner.
+                    if (
+                        self.multi_agent_orchestrator is not None
+                        and self.multi_agent_orchestrator.should_orchestrate(task.user_request)
+                    ):
+                        await self._run_multi_agent_mission(task, profile, started, retries, fallback_used)
                         return
-                elif fresh_needed or not is_conversational(task.user_request):
                     await self._run_general_mission(task, profile, started, retries, fallback_used)
                     return
 
@@ -2083,6 +2096,170 @@ class TaskRuntime:
             structured_data={"mission": task.metadata["general_mission"], "observations": collected},
             ui_composition=composition,
             evidence=[f"{step.title[:90]}" for step in mission.completed] or [summary],
+            usage=UsageRecord(total_tokens=0, estimated_cost=0),
+        )
+        await self._finish_result(task, result, None, started, retries, fallback_used)
+
+    # -- multi-agent mission ----------------------------------------------
+
+    async def _run_multi_agent_mission(
+        self, task: Task, profile, started: float, retries: int, fallback_used: bool
+    ) -> None:
+        """Split a genuinely multi-domain goal across the role agents and
+        run them in parallel through the existing MultiAgentOrchestrator.
+
+        Each role agent is delegated through AgentRuntime -> the bounded
+        autonomous worker, which only exposes that agent's own scoped
+        `tools`. The runtime does not gain new powers: every sub-agent
+        call goes through the SAME ToolExecutor and permission engine as
+        a single-agent mission.
+        """
+        from app.schemas.results import ExecutionResult
+        from app.schemas.routing import UsageRecord
+
+        orchestrator = self.multi_agent_orchestrator
+        task.assigned_model = "local-multi-agent-v1"
+        await self.task_store.save(task)
+        await self._emit(
+            task, EventType.MODEL_SELECTED, "Selected the multi-agent orchestrator",
+            {"routing": {"primary_model": "local-multi-agent-v1", "primary_provider": "local",
+                         "fallback_models": [], "estimated_cost_tier": "low",
+                         "reason_selected": "Multi-domain goal; split across role agents with scoped tools"}},
+        )
+        await self._transition(task, TaskStatus.EXECUTING, EventType.TASK_PROGRESS,
+                               "Delegating to role agents")
+
+        async def emit(event_type: str, message: str, payload: dict) -> None:
+            try:
+                await self._emit(task, EventType(event_type), message, payload)
+            except ValueError:
+                await self._emit(task, EventType.TASK_PROGRESS, message, payload)
+
+        try:
+            # Sequential (max_parallel=1): on the free tier a single model
+            # meters ~12 requests/minute, so four agents firing ReAct
+            # calls at once just rate-limit each other. One at a time,
+            # each role agent gets the full window and the goal is still
+            # divided across scoped tools.
+            outcome = await orchestrator.execute(
+                task.user_request, task, emit, max_parallel=1, timeout_seconds=600,
+            )
+        except Exception as error:  # pragma: no cover - defensive
+            # An orchestration failure falls back to the single-agent
+            # planner rather than failing the whole request.
+            await self._emit(task, EventType.TASK_PROGRESS,
+                             f"Multi-agent path failed ({str(error)[:160]}); using the single planner",
+                             {})
+            await self._run_general_mission(task, profile, started, retries, fallback_used)
+            return
+
+        # A sub-task only counts as real work when it produced a
+        # non-empty answer that is not itself a "hit the limit" message.
+        # "Stopped after reaching the 8-step bound" is a failure to
+        # report, not a result.
+        _NON_ANSWERS = ("stopped after reaching", "pacing window full",
+                        "no configured model", "step bound", "budget exhausted",
+                        "verification failed")
+
+        def _real_answer(st) -> str:
+            text = str((st.result or {}).get("response", "")).strip()
+            if not text or any(marker in text.lower() for marker in _NON_ANSWERS):
+                return ""
+            return text
+
+        completed = [st for st in outcome.sub_tasks if st.status == "completed" and _real_answer(st)]
+        quota_blocked = sum(
+            1 for st in outcome.sub_tasks
+            if any(m in str(st.error or (st.result or {}).get("response", "")).lower()
+                   for m in ("pacing window full", "no configured model", "remaining quota"))
+        )
+        lines: list[str] = []
+        for st in outcome.sub_tasks:
+            role = st.agent_id or "unassigned"
+            answer = _real_answer(st)
+            if answer:
+                lines.append(f"[{role}] {answer[:400]}")
+            elif st.status == "skipped":
+                lines.append(f"[{role}] skipped: {st.error or 'no matching agent'}")
+            else:
+                detail = str(st.error or (st.result or {}).get("response") or st.status).strip()
+                lines.append(f"[{role}] could not finish: {detail[:200]}")
+        summary = "\n".join(lines).strip() or "No role agent produced a result."
+        if quota_blocked:
+            summary += (
+                f"\n\n({quota_blocked} of {len(outcome.sub_tasks)} agents could not run - "
+                "the free model's per-minute quota was exhausted. Try again in a minute, "
+                "or narrow the request to one domain.)"
+            )
+
+        objects: list[dict] = [{
+            "id": "mission", "type": "task-mission", "title": "Multi-agent mission",
+            "eyebrow": "Orchestrator", "tone": "intelligence",
+            "mission": task.user_request[:120],
+            "status": "complete" if outcome.status == "completed" else (
+                "partial" if outcome.status == "partial" else "failed"),
+            "details": [f"{st.agent_id}: {st.status}" for st in outcome.sub_tasks][:8],
+            "frame": {"x": 2, "y": 4, "width": 32},
+        }]
+        for index, st in enumerate(outcome.sub_tasks[:6]):
+            objects.append({
+                "id": f"sub-{index}", "type": "terminal-output",
+                "title": st.agent_id or "unassigned", "eyebrow": "Role agent",
+                "command": st.goal[:160],
+                "exitCode": 0 if st.status == "completed" else 1,
+                "output": str((st.result or {}).get("response") if st.result else st.error)[:2000],
+                "frame": {"x": 36 + (index % 2) * 32, "y": 4 + (index // 2) * 30, "width": 30},
+            })
+        objects.append({
+            "id": "verified", "type": "verified-result", "title": "Combined result",
+            "eyebrow": "Evidence",
+            "tone": "verified" if outcome.status == "completed" else "attention",
+            "statement": summary[:400],
+            "evidence": [f"{st.agent_id}: {st.status}" for st in outcome.sub_tasks][:8] or ["no sub-tasks"],
+            "timestamp": datetime.now().astimezone().strftime("%H:%M · Orchestrator"),
+            "frame": {"x": 30, "y": 70, "width": 42, "layer": 2},
+        })
+        composition = {
+            "schemaVersion": 1, "id": f"multiagent-{task.id[:12]}", "mode": "tool-execution",
+            "label": "VYOM / Multi-agent", "summary": summary[:400],
+            "generatedAt": datetime.now().astimezone().strftime("%H:%M · Orchestrator"),
+            "objects": objects,
+            "sequence": [
+                {"id": f"s{i}", "label": (o.get("title") or "Activity")[:40], "atMs": 150 + i * 260,
+                 "state": "Verifying" if i == len(objects) - 1 else "Executing", "objectIds": [o["id"]]}
+                for i, o in enumerate(objects)
+            ],
+        }
+
+        task.metadata["multi_agent_mission"] = {
+            "status": outcome.status,
+            "sub_tasks": len(outcome.sub_tasks),
+            "completed": len(completed),
+            "agents_used": outcome.agents_used,
+            "total_time_ms": round(outcome.total_time_ms, 1),
+        }
+        for index, step in enumerate(task.plan):
+            step.status = "complete"
+            task.current_step = index
+        task.progress = 0.8
+        await self.task_store.save(task)
+
+        if outcome.status == "failed" or not completed:
+            raise RuntimeError(summary)
+
+        result = ExecutionResult(
+            response=summary,
+            structured_data={
+                "multi_agent": task.metadata["multi_agent_mission"],
+                "sub_tasks": [
+                    {"agent": st.agent_id, "status": st.status,
+                     "response": (st.result or {}).get("response") if st.result else None,
+                     "error": st.error, "evidence": st.evidence}
+                    for st in outcome.sub_tasks
+                ],
+            },
+            ui_composition=composition,
+            evidence=[f"{st.agent_id}: {st.status}" for st in outcome.sub_tasks] or [summary],
             usage=UsageRecord(total_tokens=0, estimated_cost=0),
         )
         await self._finish_result(task, result, None, started, retries, fallback_used)

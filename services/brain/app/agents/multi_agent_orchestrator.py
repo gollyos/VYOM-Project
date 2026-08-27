@@ -262,6 +262,26 @@ class MultiAgentOrchestrator:
                 agent_id="analyst",
             ))
 
+        # SEO component
+        if any(w in lowered for w in ("seo", "keyword", "keywords", "rank", "ranking",
+                                       "serp", "backlink", "meta description", "search visibility",
+                                       "on-page", "on page")):
+            sub_tasks.append(SubTask(
+                id=f"sub_{uuid4().hex[:8]}",
+                goal=f"SEO analysis: {goal}",
+                agent_id="seo",
+            ))
+
+        # Security review component
+        if any(w in lowered for w in ("security", "vulnerab", "secure", "exploit", "injection",
+                                       "secret", "secrets", "audit", "pentest", "cve",
+                                       "hardening", "threat")):
+            sub_tasks.append(SubTask(
+                id=f"sub_{uuid4().hex[:8]}",
+                goal=f"Security review: {goal}",
+                agent_id="security",
+            ))
+
         # If no specific components matched, create a single general sub-task
         if not sub_tasks:
             sub_tasks.append(SubTask(
@@ -270,6 +290,26 @@ class MultiAgentOrchestrator:
             ))
 
         return OrchestratorPlan(goal=goal, sub_tasks=sub_tasks)
+
+    #: Phrases that ask for the whole team explicitly, regardless of how
+    #: many role keywords the goal happens to contain.
+    _TEAM_PHRASES = (
+        "team", "poori team", "puri team", "sab agents", "all agents",
+        "multi agent", "multi-agent", "har agent", "delegate",
+    )
+
+    def should_orchestrate(self, goal: str) -> bool:
+        """True when a goal is genuinely multi-domain: it decomposes into
+        two or more DISTINCT role sub-tasks, or it explicitly asks for the
+        team. A single-domain goal returns False so it keeps the cheaper
+        single-path execution instead of paying for parallel delegation.
+        """
+        lowered = goal.lower()
+        if any(phrase in lowered for phrase in self._TEAM_PHRASES):
+            return True
+        plan = self.decompose(goal)
+        distinct_roles = {st.agent_id for st in plan.sub_tasks if st.agent_id}
+        return len(distinct_roles) >= 2
 
     async def execute(
         self,

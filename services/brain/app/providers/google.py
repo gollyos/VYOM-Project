@@ -20,6 +20,44 @@ from .base import (
 )
 
 
+#: JSON-Schema keywords Gemini's function-calling schema validator does
+#: NOT accept. A tool whose `input_schema` carries any of these (the MCP
+#: tools ship full Draft-07 schemas, and numeric bounds like
+#: `exclusiveMaximum` are common) makes the whole generateContent request
+#: fail with HTTP 400 "Unknown name ...", taking every other tool in the
+#: same call down with it. They are stripped recursively before the call.
+_GEMINI_SCHEMA_DROP = frozenset({
+    "$schema", "$id", "$ref", "$defs", "definitions", "additionalProperties",
+    "exclusiveMinimum", "exclusiveMaximum", "const", "examples", "default",
+    "patternProperties", "unevaluatedProperties", "if", "then", "else",
+    "allOf", "oneOf", "not", "contentMediaType", "contentEncoding",
+    "minLength", "maxLength", "pattern", "minItems", "maxItems",
+    "minimum", "maximum", "multipleOf", "uniqueItems",
+})
+_GEMINI_ALLOWED_FORMATS = frozenset({"enum", "date-time", "int32", "int64", "float", "double"})
+
+
+def _sanitize_gemini_schema(node: Any) -> Any:
+    """Recursively keep only the schema shape Gemini accepts."""
+    if isinstance(node, list):
+        return [_sanitize_gemini_schema(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    clean: dict[str, Any] = {}
+    for key, value in node.items():
+        if key in _GEMINI_SCHEMA_DROP:
+            continue
+        if key == "format" and value not in _GEMINI_ALLOWED_FORMATS:
+            continue
+        if key in ("properties", "$defs", "definitions"):
+            clean[key] = {k: _sanitize_gemini_schema(v) for k, v in (value or {}).items()}
+        elif key == "items":
+            clean[key] = _sanitize_gemini_schema(value)
+        else:
+            clean[key] = _sanitize_gemini_schema(value)
+    return clean
+
+
 def _is_daily_quota(response: httpx.Response) -> bool:
     """Did Google reject this for an exhausted DAILY, per-model allowance?
 
@@ -179,7 +217,9 @@ class GoogleProvider(BaseProvider):
                     {
                         "name": tool.name,
                         "description": tool.description[:900],
-                        "parameters": tool.parameters or {"type": "object", "properties": {}},
+                        "parameters": _sanitize_gemini_schema(
+                            tool.parameters or {"type": "object", "properties": {}}
+                        ),
                     }
                     for tool in tools
                 ]

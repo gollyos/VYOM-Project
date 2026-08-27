@@ -27,14 +27,34 @@ class AgentRegistry:
         for seed in raw.get("seeds", []):
             if seed["id"] in self._agents:
                 continue
-            agent = AgentSpec(
+            fields = dict(
                 id=seed["id"], name=seed["name"], role=seed["role"],
-                description=seed["role"], goals=[f"Perform {seed['role']} responsibilities safely"],
+                description=seed.get("description", seed["role"]),
+                goals=[f"Perform {seed['role']} responsibilities safely"],
                 capabilities=seed.get("capabilities", ["result.verify"]),
-                memory_scope=["task"], permissions="L1", status=AgentStatus.READY,
+                # `tools` is the ACTUAL scope enforced at run time: an
+                # agent delegated through AgentRuntime -> AutonomousAgentWorker
+                # only sees the tool contracts named here (see
+                # autonomous_worker._tool_schemas). A role agent with a
+                # narrow `tools` list therefore cannot spend model/tool
+                # budget wandering into capabilities that are not its job.
+                tools=seed.get("tools", []),
+                memory_scope=["task"],
+                permissions=seed.get("permissions", "L1"),
+                status=AgentStatus.READY,
                 verification_policy=["require evidence", "respect central permission engine"],
             )
-            self.register(agent)
+            model_policy = seed.get("model_policy")
+            if isinstance(model_policy, dict):
+                fields["model_policy"] = model_policy
+            budget = seed.get("budget")
+            if isinstance(budget, dict):
+                budget = dict(budget)
+                budget.pop("max_parallel_agents", None)  # capped by AgentSpec.enforce_limits
+                if "max_depth" in budget:
+                    budget["max_depth"] = min(int(budget["max_depth"]), 2)
+                fields["budget"] = budget
+            self.register(AgentSpec(**fields))
         return len(self._agents)
 
     def list(self) -> list[AgentSpec]:

@@ -56,6 +56,11 @@ class AgentRuntime:
                     permission_level=agent.permissions,
                     allowed_roots=allowed_roots,
                     allowed_tools=agent.tools or None,
+                    # Cap the ReAct loop to the agent's own model-call
+                    # budget so several role agents delegated in one
+                    # mission do not collectively exhaust a single free
+                    # model's per-minute quota.
+                    max_steps=max(2, agent.budget.max_model_calls + 1),
                 )
             else:
                 result = await self.skills.execute(agent.skills[0], parent, emit)
