@@ -52,6 +52,46 @@ class BrowserActions:
             return {"items": texts, "hrefs": hrefs, "url": page.url}
         if action == "click":
             await page.locator(selector).click()
+        elif action == "click_coordinate":
+            x = float(inputs.get("x", 0))
+            y = float(inputs.get("y", 0))
+            await page.mouse.click(x, y)
+            return {"url": page.url, "title": await page.title(), "action": "click_coordinate", "x": x, "y": y}
+        elif action == "press_key":
+            key = str(inputs.get("key", "Escape"))
+            await page.keyboard.press(key)
+            return {"url": page.url, "title": await page.title(), "action": "press_key", "key": key}
+        elif action == "skip_youtube_ad":
+            # 1. Check for standard YouTube Skip Ad buttons
+            skipped = False
+            skip_selectors = [
+                ".ytp-ad-skip-button",
+                ".ytp-ad-skip-button-modern",
+                ".ytp-skip-ad-button",
+                "button.ytp-ad-skip-button",
+                ".ytp-ad-overlay-close-button",
+            ]
+            for sel in skip_selectors:
+                loc = page.locator(sel)
+                if await loc.count() > 0 and await loc.first.is_visible():
+                    await loc.first.click()
+                    skipped = True
+                    break
+            # 2. If no button yet or unskippable timer, fast-forward ad video via DOM
+            if not skipped:
+                res = await page.evaluate("""() => {
+                    const video = document.querySelector('video');
+                    const adModule = document.querySelector('.ad-showing, .ad-interrupting, .video-ads');
+                    if (video && adModule) {
+                        video.muted = true;
+                        video.playbackRate = 16.0;
+                        video.currentTime = video.duration || 9999;
+                        return { fast_forwarded: true };
+                    }
+                    return { ad_detected: !!adModule };
+                }""")
+                return {"url": page.url, "title": await page.title(), "ad_skipped": skipped, "details": res}
+            return {"url": page.url, "title": await page.title(), "ad_skipped": True}
         elif action == "type":
             await page.locator(selector).fill(str(inputs.get("text", "")))
         elif action == "select":
@@ -65,6 +105,39 @@ class BrowserActions:
             path.parent.mkdir(parents=True, exist_ok=True)
             await page.screenshot(path=str(path), full_page=bool(inputs.get("full_page", True)))
             return {"path": str(path), "url": page.url, "title": await page.title()}
+        elif action == "resolve_stuck_screen":
+            # Inspect dialogs, alerts, overlays, CAPTCHA
+            page_title = await page.title()
+            current_url = page.url
+            screenshot_path = Path("services/brain/data/artifacts/stuck_screen_probe.png")
+            screenshot_path.parent.mkdir(parents=True, exist_ok=True)
+            await page.screenshot(path=str(screenshot_path), full_page=False)
+            
+            stuck_info = await page.evaluate("""() => {
+                const bodyText = document.body ? document.body.innerText.slice(0, 2000) : '';
+                const hasCaptcha = /captcha|recaptcha|verify you are human|cloudflare/i.test(bodyText);
+                const hasModal = !!document.querySelector('.modal, [role="dialog"], .overlay, .popup');
+                const hasLogin = /sign in|log in|enter password|2-step verification/i.test(bodyText);
+                return { hasCaptcha, hasModal, hasLogin, snippet: bodyText.slice(0, 300) };
+            }""")
+            
+            recommendation = "Normal page state."
+            if stuck_info.get("hasCaptcha"):
+                recommendation = "Boss, CAPTCHA / Human verification screen aayi hai. Boss ko verify karne bolo."
+            elif stuck_info.get("hasLogin"):
+                recommendation = "Boss, Login/Password required screen aayi hai. Authentication input chahiye."
+            elif stuck_info.get("hasModal"):
+                recommendation = "Boss, Popup/Modal detected. Dismiss karne ke liye Escape press kar rahe hain."
+                await page.keyboard.press("Escape")
+            
+            return {
+                "url": current_url,
+                "title": page_title,
+                "screenshot": str(screenshot_path),
+                "stuck_analysis": stuck_info,
+                "recommendation": recommendation,
+            }
         else:
             raise ValueError(f"Unsupported browser action: {action}")
         return {"url": page.url, "title": await page.title(), "action": action}
+

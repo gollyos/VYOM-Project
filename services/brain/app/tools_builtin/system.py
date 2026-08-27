@@ -157,6 +157,55 @@ class SystemTool(BaseTool):
                 raise ToolValidationError("Initial system actions currently support Windows only")
             os.startfile(target)  # type: ignore[attr-defined]
             output = {"action": action, "target": target}
+        elif action == "open_chrome":
+            import subprocess
+            profile = str(inputs.get("profile", "")).strip()
+            url = str(inputs.get("url", "https://google.com")).strip()
+            chrome_candidates = [
+                shutil.which("chrome"),
+                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+            ]
+            chrome_path = next((p for p in chrome_candidates if p and os.path.exists(p)), None)
+            if not chrome_path:
+                # Fallback to startfile
+                os.startfile(url)
+                output = {"action": "open_chrome", "status": "fallback_default_browser", "url": url}
+            else:
+                args = [chrome_path]
+                if profile:
+                    args.append(f'--profile-directory={profile}')
+                if url:
+                    args.append(url)
+                subprocess.Popen(args)
+                output = {"action": "open_chrome", "status": "launched", "profile": profile or "Default", "url": url}
+        elif action == "screen_probe":
+            import pyautogui
+            screenshot_dir = Path("services/brain/data/artifacts")
+            screenshot_dir.mkdir(parents=True, exist_ok=True)
+            probe_path = screenshot_dir / "screen_probe.png"
+            grab_ok = False
+            try:
+                img = pyautogui.screenshot()
+                img.save(str(probe_path))
+                grab_ok = True
+            except Exception as e:
+                probe_path = None
+            try:
+                screen_width, screen_height = pyautogui.size()
+                cur_x, cur_y = pyautogui.position()
+            except Exception:
+                screen_width, screen_height = 1920, 1080
+                cur_x, cur_y = 0, 0
+            output = {
+                "action": "screen_probe",
+                "screen_width": screen_width,
+                "screen_height": screen_height,
+                "cursor_pos": [cur_x, cur_y],
+                "screenshot_captured": grab_ok,
+                "screenshot": str(probe_path) if probe_path else None,
+            }
         else:
             raise ToolValidationError("Unsupported system action")
         evidence = EvidenceItem(type="tool_result", summary=f"System {action}", data=output)
