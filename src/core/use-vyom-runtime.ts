@@ -21,7 +21,19 @@ export type PendingWorkItem = {
   error: string | null;
 };
 
-const BRAIN_URL = (import.meta.env.VITE_VYOM_BRAIN_URL as string | undefined)?.replace(/\/$/, "") || "http://127.0.0.1:7788";
+function getBrainUrl(): string {
+  if (typeof window !== "undefined") {
+    const saved = window.localStorage.getItem("vyom_remote_brain_url");
+    if (saved && saved.trim()) return saved.trim().replace(/\/$/, "");
+  }
+  return (
+    (import.meta.env.VITE_VYOM_BRAIN_URL as string | undefined)?.replace(/\/$/, "") ||
+    (import.meta.env.VITE_REMOTE_BRAIN_URL as string | undefined)?.replace(/\/$/, "") ||
+    "http://127.0.0.1:7788"
+  );
+}
+
+const BRAIN_URL = getBrainUrl();
 
 async function dispatchNativeNotification(title: string, body: string) {
   if (!("__TAURI_INTERNALS__" in window)) return;
