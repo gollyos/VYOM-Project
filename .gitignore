@@ -40,3 +40,8 @@ brain-recovery.log
 
 # Brain internal data that shouldn't be committed
 services/brain/data/logs/
+services/brain/data/artifacts/
+services/brain/data/agency_workspaces/
+services/brain/data/custom_agents/
+services/brain/data/company_hierarchy.json
+services/brain/data/project_file_index.json
