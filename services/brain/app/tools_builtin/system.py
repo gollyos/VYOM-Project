@@ -77,6 +77,7 @@ class SystemTool(BaseTool):
                 output = {"percent": 100, "power_plugged": True, "state": "AC power (no battery sensor)"}
         elif action == "volume":
             import pyautogui
+            pyautogui.FAILSAFE = False
 
             direction = str(inputs.get("direction", "up")).strip().lower()
             if direction in {"mute", "toggle_mute"}:
