@@ -30,6 +30,7 @@
 | 22 | 24/7 VPS HeadlessDaemon & Autonomous Cron Engine for background cloud automation | BRAIN + SUBSYSTEMS | done (ef45eca) |
 | 23 | TaskClassifier Intent Rules for Translation & Remote Voice Routing | BRAIN | done (9692f8a) |
 | 24 | Mobile Android Companion Remote Brain URL Support in Frontend | FRONTEND | done (95b715e) |
+| 25 | Reliability & Crash Resistance: multi-model Gemini fallbacks, React error boundary, safe PCM decoding & optional chaining in WS stream | FRONTEND + BRAIN | done (0b51236) |
 
 ## Maya-transcript backlog (28-Aug analysis; priority order)
 

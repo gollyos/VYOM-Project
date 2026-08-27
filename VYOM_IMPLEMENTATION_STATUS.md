@@ -2,7 +2,7 @@
 
 > Persistent implementation ledger. Update this file after every completed work slice.
 >
-> Last verified: 2026-08-27 20:10 (Asia/Calcutta) — **Mobile Companion, Multilingual Translator & 24/7 VPS Daemon Stack Verified Complete** (`6d23495`). Implemented & Verified: (1) Multilingual TranslationFormatterService (Hindi-to-English translation & dispatch); (2) 24/7 VPS HeadlessServerDaemon with autonomous cron scheduling; (3) TaskClassifier translation & macro intent rules; (4) Mobile Android Companion dynamic remote Brain URL support in frontend runtime. **17/17 regression tests green (2.61s), Frontend build green (9.11s, 0 errors)**.
+> Last verified: 2026-08-27 20:38 (Asia/Calcutta) — **Reliability, Multi-Model Fallback & React Error Boundary Stack Verified Complete** (`0b51236`). Implemented & Verified: (1) Activated full Google Gemini model fleet in `config/models.yaml` (`gemini-3.1-flash-lite`, `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-flash-latest`, `gemini-flash-lite-latest`) with automatic model spreading and tool support; (2) React `ErrorBoundary` component integrated in `main.tsx` and `vyom-experience.tsx` preventing white-screen crashes; (3) Safe optional chaining for `event.structured_payload?.` in WebSocket event stream handling; (4) Safe base64 PCM audio decoding and error-resistant playback in `audio-runtime.ts`. **Brain test suites green, Frontend build green (9.06s, 0 errors)**.
 >
 > Installed-native verification: release/NSIS rebuild green; exact installed binary voice auto-on + active microphone + provider connection + bundled Brain readiness verified; installed-layout launcher fix `4017163`.
 >
