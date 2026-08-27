@@ -33,10 +33,11 @@ _TRIAGE_SYSTEM = (
     "needs no tool), "
     '"intent_hint" (short snake_case label of the request, or \'none\'), '
     '"tone" (one of: neutral, urgent, frustrated, cheerful, curious), '
-    '"urgency" (one of: low, normal, high). '
-    "The user speaks Hinglish (Hindi+English) - understand the MEANING, "
-    "not the keywords. Example: 'aaj ka kaam sambhal lo' means 'take charge "
-    "of today's work' -> actionable true, intent_hint manage_daily_work."
+    '"urgency" (one of: low, normal, high), '
+    '"detected_language" (e.g. en, hi, hinglish, es, fr, de, ja, gu, etc.). '
+    "The user can speak in Hinglish, English, Hindi, or any regional/international language. "
+    "Understand the SEMANTIC MEANING in their native language, not just keywords. "
+    "Example: 'aaj ka kaam sambhal lo' means 'take charge of today's work' -> actionable true, intent_hint manage_daily_work."
 )
 
 

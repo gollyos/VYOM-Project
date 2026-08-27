@@ -12,20 +12,23 @@ from .input_control import InputControlTool
 from .instagram_tool import InstagramTool
 from .linkedin_tool import LinkedInTool
 from .meta_ads_tool import MetaAdsTool
+from .news_tool import NewsTool
+from .safety_judge_tool import SafetyJudgeTool
 from .screen import ScreenObserveTool
 from .screenshot import ScreenshotTool
 from .sheets_tool import SheetsTool
 from .system import SystemTool
 from .telegram_tool import TelegramTool
+from .terminal import TerminalTool
 from .twitter_tool import TwitterTool
 from .video_tool import VideoTool
 from .weather_tool import WeatherTool
+from .whatsapp_tool import WhatsAppTool
+from .wikipedia_tool import WikipediaTool
 from .youtube_tool import YouTubeTool
-from .safety_judge_tool import SafetyJudgeTool
-from .terminal import TerminalTool
 
 __all__ = [
     "BrowserTool", "CryptoTool", "CurrencyTool", "DesktopTool", "DiscordTool", "EmailTool", "FacebookTool", "FilesystemTool", "GitTool", "InputControlTool",
-    "InstagramTool", "LinkedInTool", "MetaAdsTool", "ScreenObserveTool", "ScreenshotTool", "SheetsTool", "SystemTool",
-    "TelegramTool", "TriviaFactsTool", "TwitterTool", "VideoTool", "WeatherTool", "YouTubeTool", "SafetyJudgeTool", "TerminalTool",
+    "InstagramTool", "LinkedInTool", "MetaAdsTool", "NewsTool", "SafetyJudgeTool", "ScreenObserveTool", "ScreenshotTool", "SheetsTool", "SystemTool",
+    "TelegramTool", "TerminalTool", "TriviaFactsTool", "TwitterTool", "VideoTool", "WeatherTool", "WhatsAppTool", "WikipediaTool", "YouTubeTool",
 ]

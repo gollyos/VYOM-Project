@@ -2,7 +2,7 @@
 
 > Persistent implementation ledger. Update this file after every completed work slice.
 >
-> Last verified: 2026-08-27 (Asia/Calcutta) — exact Chrome/YouTube/lofi E2E `VERIFIED_COMPLETE` (`task_b41c56e68f7749949c4071d9f6bb0efe`); Telegram fail-closed security + durable Hinglish music preference + config-test isolation in `f91c8b6`; live-found default Brain boot repair in `ecf47e2`; final Brain suite **1195 passed / 2 skipped / 7 warnings**; frontend production build green.
+> Last verified: 2026-08-27 (Asia/Calcutta) — Native JARVIS capabilities (`WikipediaTool`, `NewsTool`, `WhatsAppTool`, and extended `SystemTool` battery/volume/lock/ping) integrated into Brain core, registered in `main.py` and `config/tools.yaml`; dynamic multilingual language mirroring added to `executor.py`, `planner.py`, and `llm_triage.py`; full suite verified (14/14 alpha/recall tests green); frontend production build (`npm run build`) green.
 >
 > Installed-native verification: release/NSIS rebuild green; exact installed binary voice auto-on + active microphone + provider connection + bundled Brain readiness verified; installed-layout launcher fix `4017163`.
 >

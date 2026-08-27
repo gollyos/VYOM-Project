@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JARVIS — Autonomous Desktop Intelligence</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="style.css" />
+  <!-- Eel JS Bridge -->
+  <script type="text/javascript" src="/eel.js"></script>
+</head>
+<body class="jarvis-body">
+  <!-- Background Grid & Glow Effects -->
+  <div class="bg-cyber-grid"></div>
+  <div class="bg-radial-glow top-left"></div>
+  <div class="bg-radial-glow bottom-right"></div>
+
+  <!-- Main Container -->
+  <div class="app-container d-flex flex-column">
+    <!-- Top Header Bar -->
+    <header class="top-bar d-flex align-items-center justify-content-between px-4 py-3">
+      <div class="brand-section d-flex align-items-center gap-2">
+        <div class="status-dot pulse-online" id="statusDot"></div>
+        <span class="brand-title">J.A.R.V.I.S</span>
+        <span class="brand-sub">DESKTOP v2.0</span>
+      </div>
+
+      <div class="header-center d-flex align-items-center gap-3">
+        <div class="state-badge" id="systemStateBadge">
+          <i class="bi bi-shield-check me-1 text-cyan"></i>
+          <span id="systemStateText">SYSTEM READY</span>
+        </div>
+      </div>
+
+      <div class="header-actions d-flex align-items-center gap-2">
+        <button class="btn-icon" id="btnContacts" title="Contacts Manager" data-bs-toggle="offcanvas" data-bs-target="#contactsDrawer">
+          <i class="bi bi-person-lines-fill"></i>
+        </button>
+        <button class="btn-icon" id="btnHistory" title="Command History" data-bs-toggle="offcanvas" data-bs-target="#historyDrawer">
+          <i class="bi bi-clock-history"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Area -->
+    <main class="main-workspace flex-grow-1 d-flex flex-column align-items-center justify-content-between px-3 py-2">
+      <!-- Neural Core Animated Orb Section -->
+      <section class="orb-section d-flex flex-column align-items-center justify-content-center" id="orbContainer">
+        <div class="orb-wrapper" id="orbWrapper">
+          <div class="orb-ring ring-outer"></div>
+          <div class="orb-ring ring-middle"></div>
+          <div class="orb-ring ring-inner"></div>
+          <div class="orb-core" id="Oval">
+            <div class="core-glow"></div>
+            <i class="bi bi-cpu core-icon" id="coreIcon"></i>
+          </div>
+          <!-- Voice Visualizer Waves -->
+          <div class="voice-waves" id="voiceWaves">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+        <div class="orb-status-text mt-3" id="orbStatus">READY FOR COMMAND</div>
+      </section>
+
+      <!-- Chat Canvas Section -->
+      <section class="chat-canvas-container w-100 flex-grow-1" id="chatContainer">
+        <div class="chat-messages" id="chatMessages">
+          <div class="message-row jarvis-row">
+            <div class="message-avatar">
+              <i class="bi bi-robot"></i>
+            </div>
+            <div class="message-bubble jarvis-bubble">
+              <div class="message-sender">JARVIS</div>
+              <div class="message-content">All systems online and initialized, sir. How may I assist you today?</div>
+              <div class="message-time" id="initTime">Just now</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Bottom Interactive Command Bar -->
+      <footer class="bottom-command-bar w-100 px-3 py-3">
+        <div class="input-card d-flex align-items-center gap-2 p-2">
+          <!-- Voice Mic Trigger -->
+          <button class="btn-mic" id="btnMic" title="Toggle Voice Listening (Ctrl + J)">
+            <i class="bi bi-mic-fill" id="micIcon"></i>
+          </button>
+
+          <!-- Text Input -->
+          <input
+            type="text"
+            id="txtCommand"
+            class="command-input flex-grow-1"
+            placeholder="Ask JARVIS anything (e.g., 'Open Chrome', 'Weather in Mumbai', 'Play lofi')..."
+            autocomplete="off"
+          />
+
+          <!-- Hotkey Badge -->
+          <div class="hotkey-pill d-none d-md-flex align-items-center" title="Global Shortcut">
+            <span>Ctrl + J</span>
+          </div>
+
+          <!-- Send Action Button -->
+          <button class="btn-send" id="btnSend" title="Send Command">
+            <i class="bi bi-arrow-up-circle-fill"></i>
+          </button>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Offcanvas: History Drawer -->
+  <div class="offcanvas offcanvas-end jarvis-drawer" tabindex="-1" id="historyDrawer">
+    <div class="offcanvas-header border-bottom border-dark-subtle">
+      <h5 class="offcanvas-title text-cyan d-flex align-items-center gap-2">
+        <i class="bi bi-clock-history"></i> Command History
+      </h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="text-secondary small">Recent commands & responses</span>
+        <button class="btn btn-sm btn-outline-cyan" id="btnRefreshHistory">
+          <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+        </button>
+      </div>
+      <div class="history-list" id="historyList">
+        <div class="text-center text-muted py-4">Loading history...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Offcanvas: Contacts Manager Drawer -->
+  <div class="offcanvas offcanvas-end jarvis-drawer" tabindex="-1" id="contactsDrawer">
+    <div class="offcanvas-header border-bottom border-dark-subtle">
+      <h5 class="offcanvas-title text-cyan d-flex align-items-center gap-2">
+        <i class="bi bi-person-lines-fill"></i> Contacts Database
+      </h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+      <!-- Add New Contact Form -->
+      <div class="add-contact-card p-3 mb-4">
+        <h6 class="text-light mb-3"><i class="bi bi-person-plus me-1 text-cyan"></i> Add New Contact</h6>
+        <div class="mb-2">
+          <input type="text" id="contactName" class="form-control jarvis-form-input" placeholder="Full Name (e.g. John Doe)" />
+        </div>
+        <div class="mb-2">
+          <input type="text" id="contactPhone" class="form-control jarvis-form-input" placeholder="Phone Number (e.g. +919876543210)" />
+        </div>
+        <div class="mb-3">
+          <input type="email" id="contactEmail" class="form-control jarvis-form-input" placeholder="Email (optional)" />
+        </div>
+        <button class="btn btn-cyan w-100" id="btnAddContact">
+          <i class="bi bi-check2-circle me-1"></i> Save Contact
+        </button>
+      </div>
+
+      <!-- Contacts List -->
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="text-secondary small">Registered Contacts</span>
+        <button class="btn btn-sm btn-outline-cyan" id="btnRefreshContacts">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+      <div class="contacts-list" id="contactsList">
+        <div class="text-center text-muted py-3">No contacts loaded yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap 5 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Application JS -->
+  <script src="main.js"></script>
+</body>
+</html>

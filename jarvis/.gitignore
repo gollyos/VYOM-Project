@@ -1,0 +1,19 @@
+# Secrets & Environment
+.env
+.env.local
+
+# Database files
+jarvis.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Logs & temp
+*.log
+scratch/

@@ -24,7 +24,7 @@ class SystemTool(BaseTool):
     )
 
     #: Reading machine state changes nothing, so every query below is L0.
-    READ_ACTIONS = {"status", "processes", "clock", "disks", "interpreter", "which"}
+    READ_ACTIONS = {"status", "processes", "clock", "disks", "interpreter", "which", "battery", "ping"}
 
     def permission_for(self, inputs: dict[str, Any]) -> PermissionLevel:
         return PermissionLevel.L0 if inputs.get("action") in self.READ_ACTIONS else PermissionLevel.L1
@@ -62,6 +62,52 @@ class SystemTool(BaseTool):
             key = "cpu_percent" if sort_by == "cpu" else "memory_mb"
             rows.sort(key=lambda row: row[key], reverse=True)
             output = {"processes": rows[:limit], "sorted_by": key, "total": len(rows)}
+        elif action == "battery":
+            import psutil
+
+            battery = psutil.sensors_battery()
+            if battery is not None:
+                output = {
+                    "percent": battery.percent,
+                    "power_plugged": battery.power_plugged,
+                    "secsleft": battery.secsleft if battery.secsleft != -1 else None,
+                    "state": "plugged in" if battery.power_plugged else "on battery",
+                }
+            else:
+                output = {"percent": 100, "power_plugged": True, "state": "AC power (no battery sensor)"}
+        elif action == "volume":
+            import pyautogui
+
+            direction = str(inputs.get("direction", "up")).strip().lower()
+            if direction in {"mute", "toggle_mute"}:
+                pyautogui.press("volumemute")
+                output = {"volume_action": "toggled_mute"}
+            elif direction in {"down", "decrease", "lower"}:
+                steps = int(inputs.get("steps", 5))
+                for _ in range(steps):
+                    pyautogui.press("volumedown")
+                output = {"volume_action": "decreased", "steps": steps}
+            else:
+                steps = int(inputs.get("steps", 5))
+                for _ in range(steps):
+                    pyautogui.press("volumeup")
+                output = {"volume_action": "increased", "steps": steps}
+        elif action == "lock":
+            if os.name == "nt":
+                import ctypes
+                ctypes.windll.user32.LockWorkStation()
+                output = {"lock_action": "workstation_locked"}
+            else:
+                output = {"lock_action": "unsupported_on_non_windows"}
+        elif action == "ping":
+            import time
+            import httpx
+
+            start_t = time.time()
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                resp = await client.get("https://www.google.com")
+                latency_ms = round((time.time() - start_t) * 1000, 1)
+                output = {"status_code": resp.status_code, "latency_ms": latency_ms, "online": resp.status_code == 200}
         elif action == "clock":
             from datetime import datetime
 

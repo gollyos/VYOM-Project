@@ -320,7 +320,7 @@ from app.security.command_policy import CommandPolicy
 from app.security.permission_engine import PermissionEngine
 from app.tools.executor import ToolExecutor
 from app.tools.registry import ToolRegistry
-from app.tools_builtin import BrowserTool, CryptoTool, CurrencyTool, DesktopTool, DiscordTool, EmailTool, FacebookTool, FilesystemTool, GitTool, InputControlTool, InstagramTool, LinkedInTool, MetaAdsTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, TriviaFactsTool, TwitterTool, VideoTool, WeatherTool, YouTubeTool, SafetyJudgeTool, TerminalTool
+from app.tools_builtin import BrowserTool, CryptoTool, CurrencyTool, DesktopTool, DiscordTool, EmailTool, FacebookTool, FilesystemTool, GitTool, InputControlTool, InstagramTool, LinkedInTool, MetaAdsTool, NewsTool, SafetyJudgeTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, TerminalTool, TriviaFactsTool, TwitterTool, VideoTool, WeatherTool, WhatsAppTool, WikipediaTool, YouTubeTool
 from app.skills.builder import SkillBuilder
 from app.skills.executor import SkillExecutor
 from app.skills.teachable import TeachableSkillService
@@ -342,6 +342,9 @@ def create_app(
         conversation_store = ConversationStore(database)
         performance_store = ModelPerformanceStore(database)
         event_bus = EventBus()
+        from app.runtime.progress_tracker import ProgressTracker
+        progress_tracker = ProgressTracker()
+        event_bus.add_observer(progress_tracker.observe)
         model_registry = ModelRegistry.from_yaml(selected_settings.model_registry_path)
         providers = provider_registry or create_provider_registry(selected_settings)
         provider_health = ProviderHealth()
@@ -446,6 +449,9 @@ def create_app(
         tool_registry.register(CurrencyTool())
         tool_registry.register(CryptoTool())
         tool_registry.register(TriviaFactsTool())
+        tool_registry.register(WikipediaTool())
+        tool_registry.register(NewsTool())
+        tool_registry.register(WhatsAppTool())
         tool_registry.register(DesktopTool(desktop_controller, native_app_adapters))
         tool_registry.register(ScreenObserveTool(screen_observer))
         if mouse_backend is not None and keyboard_backend is not None:
@@ -1693,6 +1699,7 @@ def create_app(
         application.state.kanban_dispatcher = kanban_dispatcher
         application.state.performance_store = performance_store
         application.state.event_bus = event_bus
+        application.state.progress_tracker = progress_tracker
         application.state.model_registry = model_registry
         application.state.providers = providers
         application.state.provider_health = provider_health
@@ -1927,6 +1934,10 @@ def create_app(
         # single-domain goal keeps the cheaper single planner above.
         runtime.multi_agent_orchestrator = multi_agent_orchestrator
         multi_agent_orchestrator.task_runtime = runtime
+        # Live "where has the work reached" board - read by
+        # _answer_runtime_introspection so "kaam kaha pahuncha?" names the
+        # agent and step, not just "executing".
+        runtime.progress_tracker = progress_tracker
         # The soul fix: unrecognised natural language gets ONE cheap
         # structured model call (action vs conversation, tone, urgency)
         # before any word-count heuristic decides it is small talk.

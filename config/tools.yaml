@@ -32,6 +32,15 @@ tools:
   facts:
     enabled: true
     risk: low
+  wikipedia:
+    enabled: true
+    risk: low
+  news:
+    enabled: true
+    risk: low
+  whatsapp:
+    enabled: true
+    risk: medium
 mcp_servers:
   # Real MCP servers VYOM connects to automatically on boot. Every entry
   # below is CREDENTIAL-FREE and was live-verified connected (2026-08-25):

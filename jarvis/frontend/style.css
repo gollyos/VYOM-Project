@@ -1,0 +1,610 @@
+/* ==========================================================================
+   JARVIS Desktop Assistant — Premium Cyber-Glass Aesthetic
+   ========================================================================== */
+
+:root {
+  --bg-primary: #07090e;
+  --bg-secondary: #0f141f;
+  --bg-card: rgba(18, 24, 38, 0.75);
+  --border-color: rgba(0, 240, 255, 0.15);
+  --border-hover: rgba(0, 240, 255, 0.4);
+  
+  --cyan-primary: #00f0ff;
+  --cyan-glow: rgba(0, 240, 255, 0.35);
+  --blue-primary: #0077fe;
+  --blue-glow: rgba(0, 119, 254, 0.3);
+  --amber-warning: #ffaa00;
+  --green-success: #00ff88;
+  
+  --text-main: #f0f4fc;
+  --text-muted: #8896ab;
+  
+  --font-family-main: 'Outfit', sans-serif;
+  --font-family-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body.jarvis-body {
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  font-family: var(--font-family-main);
+  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+  user-select: none;
+}
+
+/* Background Cyber Grid */
+.bg-cyber-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+  background-size: 36px 36px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-radial-glow {
+  position: absolute;
+  width: 450px;
+  height: 450px;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-radial-glow.top-left {
+  top: -100px;
+  left: -100px;
+  background: radial-gradient(circle, rgba(0, 240, 255, 0.12) 0%, transparent 70%);
+}
+
+.bg-radial-glow.bottom-right {
+  bottom: -100px;
+  right: -100px;
+  background: radial-gradient(circle, rgba(0, 119, 254, 0.12) 0%, transparent 70%);
+}
+
+/* Main App Layout */
+.app-container {
+  height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+/* Top Header Bar */
+.top-bar {
+  background: rgba(11, 15, 25, 0.85);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border-color);
+  height: 64px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--cyan-primary);
+  box-shadow: 0 0 10px var(--cyan-primary);
+}
+
+.pulse-online {
+  animation: pulse-dot 2s infinite ease-in-out;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
+}
+
+.brand-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--text-main);
+  background: linear-gradient(90deg, #ffffff, var(--cyan-primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.brand-sub {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--cyan-primary);
+  background: rgba(0, 240, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 240, 255, 0.2);
+}
+
+.state-badge {
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid var(--border-color);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-family: var(--font-family-mono);
+  color: var(--text-main);
+  letter-spacing: 1px;
+}
+
+.text-cyan {
+  color: var(--cyan-primary) !important;
+}
+
+.btn-icon {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-icon:hover {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: var(--cyan-primary);
+  color: var(--cyan-primary);
+  transform: translateY(-1px);
+}
+
+/* Main Workspace */
+.main-workspace {
+  overflow: hidden;
+  height: calc(100vh - 64px);
+}
+
+/* ==========================================================================
+   Glowing Neural Core Orb
+   ========================================================================== */
+.orb-section {
+  padding: 16px 0 8px 0;
+  transition: all 0.3s ease;
+}
+
+.orb-wrapper {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orb-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  pointer-events: none;
+}
+
+.ring-outer {
+  width: 136px;
+  height: 136px;
+  border-top-color: var(--cyan-primary);
+  border-bottom-color: var(--blue-primary);
+  animation: rotate-clockwise 8s linear infinite;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+}
+
+.ring-middle {
+  width: 108px;
+  height: 108px;
+  border-left-color: var(--cyan-primary);
+  border-right-color: var(--cyan-primary);
+  border-style: dashed;
+  animation: rotate-counter 5s linear infinite;
+}
+
+.ring-inner {
+  width: 80px;
+  height: 80px;
+  border-top-color: var(--blue-primary);
+  border-right-color: var(--cyan-primary);
+  animation: rotate-clockwise 3s linear infinite;
+}
+
+.orb-core {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #00f0ff, #0055ff 70%, #001133 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 
+    0 0 25px rgba(0, 240, 255, 0.6),
+    inset 0 0 12px rgba(255, 255, 255, 0.8);
+  animation: pulse-core 3s ease-in-out infinite;
+}
+
+.core-icon {
+  font-size: 1.3rem;
+  color: #ffffff;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+}
+
+.voice-waves {
+  position: absolute;
+  bottom: -15px;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.voice-waves span {
+  width: 3px;
+  height: 12px;
+  background-color: var(--cyan-primary);
+  border-radius: 2px;
+  animation: wave-motion 1s ease-in-out infinite;
+}
+
+.voice-waves span:nth-child(2) { animation-delay: 0.15s; }
+.voice-waves span:nth-child(3) { animation-delay: 0.3s; }
+.voice-waves span:nth-child(4) { animation-delay: 0.45s; }
+.voice-waves span:nth-child(5) { animation-delay: 0.6s; }
+
+@keyframes wave-motion {
+  0%, 100% { height: 6px; }
+  50% { height: 22px; }
+}
+
+@keyframes rotate-clockwise {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes rotate-counter {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+@keyframes pulse-core {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(0, 240, 255, 0.5); }
+  50% { transform: scale(1.08); box-shadow: 0 0 35px rgba(0, 240, 255, 0.85); }
+}
+
+/* Dynamic State Animations */
+.state-listening .orb-core {
+  background: radial-gradient(circle at 35% 35%, #00ff88, #00aa55 70%, #003311 100%);
+  box-shadow: 0 0 35px rgba(0, 255, 136, 0.8);
+  animation: pulse-core 1.2s ease-in-out infinite;
+}
+
+.state-listening .voice-waves {
+  opacity: 1;
+}
+
+.state-thinking .ring-outer {
+  animation-duration: 2s;
+  border-top-color: var(--amber-warning);
+}
+
+.state-speaking .orb-core {
+  animation: pulse-core 0.8s ease-in-out infinite;
+  box-shadow: 0 0 45px rgba(0, 240, 255, 0.95);
+}
+
+.state-speaking .voice-waves {
+  opacity: 1;
+}
+
+.orb-status-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--cyan-primary);
+  font-family: var(--font-family-mono);
+}
+
+/* ==========================================================================
+   Chat Messages Canvas
+   ========================================================================== */
+.chat-canvas-container {
+  overflow-y: auto;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 10px 15px;
+  scroll-behavior: smooth;
+}
+
+.chat-canvas-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-canvas-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 240, 255, 0.2);
+  border-radius: 4px;
+}
+
+.message-row {
+  display: flex;
+  margin-bottom: 16px;
+  gap: 12px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.user-row {
+  justify-content: flex-end;
+}
+
+.jarvis-row {
+  justify-content: flex-start;
+}
+
+.message-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid var(--border-color);
+  color: var(--cyan-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.user-row .message-avatar {
+  background: rgba(0, 119, 254, 0.15);
+  border-color: rgba(0, 119, 254, 0.3);
+  color: #70b0ff;
+  order: 2;
+}
+
+.message-bubble {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 14px;
+  position: relative;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.jarvis-bubble {
+  background: rgba(18, 24, 38, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-top-left-radius: 2px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.user-bubble {
+  background: linear-gradient(135deg, rgba(0, 119, 254, 0.3), rgba(0, 60, 160, 0.4));
+  border: 1px solid rgba(0, 119, 254, 0.4);
+  color: #ffffff;
+  border-top-right-radius: 2px;
+  order: 1;
+}
+
+.message-sender {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--cyan-primary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.user-bubble .message-sender {
+  color: #9ac2ff;
+  text-align: right;
+}
+
+.message-time {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+  text-align: right;
+  font-family: var(--font-family-mono);
+}
+
+/* ==========================================================================
+   Bottom Command Bar
+   ========================================================================== */
+.bottom-command-bar {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.input-card {
+  background: rgba(15, 20, 32, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s ease;
+}
+
+.input-card:focus-within {
+  border-color: var(--cyan-primary);
+  box-shadow: 0 0 20px var(--cyan-glow);
+}
+
+.command-input {
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-size: 0.95rem;
+  padding: 8px 12px;
+  outline: none;
+  font-family: var(--font-family-main);
+}
+
+.command-input::placeholder {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.btn-mic {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid var(--border-color);
+  color: var(--cyan-primary);
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-mic:hover {
+  background: rgba(0, 240, 255, 0.25);
+  transform: scale(1.05);
+}
+
+.btn-mic.listening {
+  background: rgba(0, 255, 136, 0.25);
+  border-color: var(--green-success);
+  color: var(--green-success);
+  box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+  animation: pulse-dot 1.2s infinite ease-in-out;
+}
+
+.hotkey-pill {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  font-family: var(--font-family-mono);
+  color: var(--text-muted);
+}
+
+.btn-send {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  color: var(--cyan-primary);
+  font-size: 1.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-send:hover {
+  color: #ffffff;
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 8px var(--cyan-primary));
+}
+
+/* ==========================================================================
+   Offcanvas Drawers (History & Contacts)
+   ========================================================================== */
+.jarvis-drawer {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-main) !important;
+  border-left: 1px solid var(--border-color) !important;
+  width: 380px !important;
+}
+
+.history-item, .contact-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+  transition: all 0.2s ease;
+}
+
+.history-item:hover, .contact-item:hover {
+  border-color: var(--border-hover);
+  background: rgba(0, 240, 255, 0.04);
+}
+
+.history-query {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--cyan-primary);
+  margin-bottom: 4px;
+}
+
+.history-response {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.history-ts {
+  font-size: 0.7rem;
+  color: #627289;
+  font-family: var(--font-family-mono);
+  margin-top: 4px;
+}
+
+.add-contact-card {
+  background: rgba(0, 240, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
+
+.jarvis-form-input {
+  background: rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-main) !important;
+  font-size: 0.85rem !important;
+}
+
+.jarvis-form-input:focus {
+  border-color: var(--cyan-primary) !important;
+  box-shadow: 0 0 10px var(--cyan-glow) !important;
+}
+
+.btn-cyan {
+  background: var(--cyan-primary);
+  color: #000000;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.btn-cyan:hover {
+  background: #33f3ff;
+  box-shadow: 0 0 12px var(--cyan-glow);
+}
+
+.btn-outline-cyan {
+  border: 1px solid var(--cyan-primary);
+  color: var(--cyan-primary);
+  background: transparent;
+  font-size: 0.78rem;
+}
+
+.btn-outline-cyan:hover {
+  background: rgba(0, 240, 255, 0.15);
+  color: var(--cyan-primary);
+}
