@@ -1078,6 +1078,10 @@ class TaskClassifier:
             return TaskProfile(domain=TaskDomain.PERSONAL, complexity=1, deterministic=True, intent="quiet_mode_start", needs={"phase11"})
         if "run" in text and "routine" in text:
             return TaskProfile(domain=TaskDomain.PERSONAL, complexity=2, deterministic=True, intent="routine_run", needs={"phase11"})
+        if any(k in text for k in ("english me convert", "translate karke", "english me bhej do", "translate to english", "translate and send")):
+            return TaskProfile(domain=TaskDomain.COMMUNICATION, complexity=2, deterministic=True, intent="translate_and_send", needs={"messaging", "tools"})
+        if any(k in text for k in ("run macro", "macro chalao", "execute macro", "macro execute")):
+            return TaskProfile(domain=TaskDomain.AUTOMATION, complexity=2, deterministic=True, intent="macro_run", needs={"automation", "tools"})
         if "what model" in text or "model you chose" in text or "explain model" in text:
             return TaskProfile(
                 domain=TaskDomain.ANALYSIS,
