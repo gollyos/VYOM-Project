@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Awaitable, Callable
+from uuid import uuid4
 
 from app.artifacts.diagram_engine import DiagramEdge, DiagramEngine, DiagramNode, DiagramSpec, DiagramType
 from app.artifacts.engine import ArtifactEngine
@@ -19,6 +21,7 @@ from app.delivery.client_delivery import ClientDeliveryService
 from app.delivery.package_builder import PackageBuilder
 from app.delivery.quality_gate import QualityGate
 from app.discovery.engine import DiscoveryEngine
+from app.persistence.database import Database
 from app.research.orchestrator import DeepResearchTask
 from app.research.schemas import ResearchDepth
 from app.schemas.results import ExecutionResult
@@ -34,6 +37,10 @@ from .extraction import (
 )
 
 EventEmitter = Callable[[str, str, dict], Awaitable[None]]
+
+
+async def _noop_emit(event_type: str, message: str, payload: dict) -> None:
+    pass
 
 RESEARCH_TRIGGERS = (
     "research the top competitors for", "research competitors for", "research ",
@@ -110,6 +117,89 @@ class Phase8Engine:
         self.synthesis_provider = None
         self.synthesis_model: str | None = None
 
+    @classmethod
+    def create_default(
+        cls,
+        database: Database,
+        artifacts_root: Path | None = None,
+        research_config: dict | None = None,
+    ) -> "PersonalOSEngine":
+        """Standalone factory to instantiate PersonalOSEngine with all real sub-services."""
+        from app.artifacts.export_manager import ArtifactStore
+        from app.booking.store import BookingStore
+        from app.delivery.client_delivery import DeliveryStore
+        from app.discovery.saas_discovery import SubscriptionRegistry
+        from app.capabilities.registry import CapabilityRegistry
+        from app.mcp.registry import MCPRegistry
+
+        research_config = research_config or {"search_providers": {"local_fixture": {"enabled": True}}}
+        research_task = DeepResearchTask.from_config(research_config)
+        cap_reg = CapabilityRegistry()
+        sub_reg = SubscriptionRegistry()
+        mcp_reg = MCPRegistry()
+        discovery_engine = DiscoveryEngine(cap_reg, research_task, sub_reg, mcp_reg)
+
+        booking_store = BookingStore(database)
+        booking_search = BookingSearchService({})
+        booking_reservation = BookingReservationService(booking_search, booking_store)
+
+        artifacts_path = artifacts_root or (Path("services/brain/data/artifacts") if Path("services/brain").exists() else Path("data/artifacts"))
+        artifact_store = ArtifactStore(database)
+        artifact_engine = ArtifactEngine(artifacts_path, artifact_store)
+
+        delivery_store = DeliveryStore(database)
+        delivery_service = ClientDeliveryService(delivery_store)
+        crm_store = CRMStore(database)
+
+        return cls(
+            research_task=research_task,
+            discovery_engine=discovery_engine,
+            booking_search=booking_search,
+            booking_reservation=booking_reservation,
+            artifact_engine=artifact_engine,
+            delivery_service=delivery_service,
+            crm_store=crm_store,
+        )
+
+    # -- Direct Python Automation API ---------------------------------
+
+    async def run_deep_research(self, topic: str, depth: ResearchDepth = ResearchDepth.STANDARD, emit: EventEmitter | None = None) -> ExecutionResult:
+        """Run deep multi-source research for any topic directly from Python."""
+        task = Task(id=f"auto_research_{uuid4().hex[:8]}", user_request=f"research {topic}", goal=f"research {topic}")
+        profile = TaskProfile(intent="deep_research", summary=f"Research: {topic}")
+        return await self.execute(task, profile, emit or _noop_emit)
+
+    async def discover_tools(self, need: str, emit: EventEmitter | None = None) -> ExecutionResult:
+        """Discover tools, APIs, or MCP servers for a given need."""
+        task = Task(id=f"auto_discover_{uuid4().hex[:8]}", user_request=f"find a tool for {need}", goal=f"find a tool for {need}")
+        profile = TaskProfile(intent="tool_discovery", summary=f"Discover: {need}")
+        return await self.execute(task, profile, emit or _noop_emit)
+
+    async def search_bookings(self, category: str = "restaurant", date: str | None = None, time: str | None = None, party_size: int | None = None, emit: EventEmitter | None = None) -> ExecutionResult:
+        """Search and rank booking options under constraints."""
+        req = f"book a {category}"
+        if party_size:
+            req += f" for {party_size} people"
+        if date:
+            req += f" on {date}"
+        if time:
+            req += f" at {time}"
+        task = Task(id=f"auto_book_{uuid4().hex[:8]}", user_request=req, goal=req)
+        profile = TaskProfile(intent="booking_search", summary=f"Book: {category}")
+        return await self.execute(task, profile, emit or _noop_emit)
+
+    async def generate_client_report(self, client: str, emit: EventEmitter | None = None) -> ExecutionResult:
+        """Generate a verified markdown client report from persistent CRM state."""
+        task = Task(id=f"auto_report_{uuid4().hex[:8]}", user_request=f"generate client report for {client}", goal=f"generate client report for {client}")
+        profile = TaskProfile(intent="generate_client_report", summary=f"Report: {client}")
+        return await self.execute(task, profile, emit or _noop_emit)
+
+    async def prepare_client_delivery(self, client: str, emit: EventEmitter | None = None) -> ExecutionResult:
+        """Prepare a client delivery package through the Quality Gate."""
+        task = Task(id=f"auto_delivery_{uuid4().hex[:8]}", user_request=f"prepare client delivery for {client}", goal=f"prepare client delivery for {client}")
+        profile = TaskProfile(intent="prepare_client_delivery", summary=f"Delivery: {client}")
+        return await self.execute(task, profile, emit or _noop_emit)
+
     def supports(self, intent: str) -> bool:
         return intent in self.INTENTS
 
@@ -131,7 +221,7 @@ class Phase8Engine:
             return await self._generate_presentation(task, emit)
         if intent == "prepare_client_delivery":
             return await self._prepare_client_delivery(task, emit)
-        raise RuntimeError(f"Unsupported Phase 8 intent: {intent}")
+        raise RuntimeError(f"Unsupported Personal OS intent: {intent}")
 
     # -- Research -----------------------------------------------------
 
