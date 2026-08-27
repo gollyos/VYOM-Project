@@ -321,6 +321,7 @@ from app.security.permission_engine import PermissionEngine
 from app.tools.executor import ToolExecutor
 from app.tools.registry import ToolRegistry
 from app.tools_builtin import BrowserTool, CryptoTool, CurrencyTool, DesktopTool, DiscordTool, EmailTool, FacebookTool, FilesystemTool, GitTool, InputControlTool, InstagramTool, LinkedInTool, MetaAdsTool, NewsTool, SafetyJudgeTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, TerminalTool, TriviaFactsTool, TwitterTool, VideoTool, WeatherTool, WhatsAppTool, WikipediaTool, YouTubeTool
+from app.tools_builtin.project_files import ProjectFileTool
 from app.skills.builder import SkillBuilder
 from app.skills.executor import SkillExecutor
 from app.skills.teachable import TeachableSkillService
@@ -454,6 +455,7 @@ def create_app(
         tool_registry.register(WhatsAppTool())
         tool_registry.register(DesktopTool(desktop_controller, native_app_adapters))
         tool_registry.register(ScreenObserveTool(screen_observer))
+        tool_registry.register(ProjectFileTool())
         if mouse_backend is not None and keyboard_backend is not None:
             tool_registry.register(InputControlTool(native_accessibility, MouseController(mouse_backend, input_safety_policy), KeyboardController(keyboard_backend, input_safety_policy), input_safety_policy))
         action_engine = ActionEngine(

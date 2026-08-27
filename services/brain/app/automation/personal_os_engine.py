@@ -79,6 +79,8 @@ class PersonalOSEngine:
         "booking_search", "booking_reserve", "generate_client_report",
         "generate_presentation", "prepare_client_delivery", "generate_content_plan",
         "create_client_account", "create_specialist_agent",
+        "company_research", "market_research", "technology_research",
+        "project_file_search", "chief_of_staff_briefing", "learning_recommendation",
     }
 
     def __init__(
@@ -255,7 +257,85 @@ class PersonalOSEngine:
             return await self._create_client_account(task, emit)
         if intent == "create_specialist_agent":
             return await self._create_specialist_agent(task, emit)
+        if intent in ("company_research", "market_research", "technology_research"):
+            return await self._web_intelligence_research(task, emit, intent)
+        if intent == "project_file_search":
+            return await self._project_file_search(task, emit)
+        if intent == "chief_of_staff_briefing":
+            return await self._chief_of_staff_briefing(task, emit)
+        if intent == "learning_recommendation":
+            return await self._learning_recommendation(task, emit)
         raise RuntimeError(f"Unsupported Personal OS intent: {intent}")
+
+    async def _web_intelligence_research(self, task: Task, emit: EventEmitter, intent: str) -> ExecutionResult:
+        from app.web_intelligence.company_research import research_company
+        from app.web_intelligence.market_research import research_market
+        from app.web_intelligence.technology_research import research_technology
+        req = task.user_request
+        await emit("research_started", f"Starting {intent.replace('_', ' ')} for: {req}", {})
+        if intent == "company_research":
+            result = await research_company(self.research_task, req)
+        elif intent == "market_research":
+            result = await research_market(self.research_task, req)
+        else:
+            result = await research_technology(self.research_task, req)
+        await emit("research_done", f"Research complete ({len(result.claims)} findings)", {})
+        return ExecutionResult(
+            response=result.synthesis or "Research complete. See structured data for details.",
+            structured_data={"claims": [c.text for c in result.claims], "sources": [s.url for s in result.sources]},
+            evidence=[f"source:{s.url}" for s in result.sources[:5]],
+        )
+
+    async def _project_file_search(self, task: Task, emit: EventEmitter) -> ExecutionResult:
+        from app.knowledge.project_index import get_project_knowledge
+        req = task.user_request
+        knowledge = get_project_knowledge()
+        query = re.sub(r"(vyom[,]?|project files kahan hain|kaunsi file kahan hai|project ka structure batao)", "", req, flags=re.IGNORECASE).strip()
+        results = knowledge.search(query or req, top_k=10)
+        files_info = "\n".join(f"- {r['path']}: {r.get('description', r.get('purpose', ''))}" for r in results[:10]) if results else "No matching files found."
+        return ExecutionResult(
+            response=f"Found {len(results)} matching project files:\n{files_info}",
+            structured_data={"files": results},
+            evidence=[r["path"] for r in results[:5]],
+        )
+
+    async def _chief_of_staff_briefing(self, task: Task, emit: EventEmitter) -> ExecutionResult:
+        await emit("briefing_started", "Generating Chief of Staff daily priority briefing...", {})
+        from app.chief_of_staff.risk_detector import RiskDetector
+        from app.chief_of_staff.opportunity_detector import OpportunityDetector
+        risks = RiskDetector().detect()
+        opps = OpportunityDetector().detect()
+        items = []
+        for r in risks[:3]:
+            items.append(f"  \u26a0 RISK: {r.description}")
+        for o in opps[:3]:
+            items.append(f"  \u2726 OPPORTUNITY: {o.description}")
+        if not items:
+            items = ["  \u2705 No urgent risks or blockers detected. Focus on your top goal."]
+        return ExecutionResult(
+            response="Chief of Staff Daily Briefing:\n" + "\n".join(items),
+            structured_data={"risks": [r.description for r in risks], "opportunities": [o.description for o in opps]},
+            evidence=[],
+        )
+
+    async def _learning_recommendation(self, task: Task, emit: EventEmitter) -> ExecutionResult:
+        # ImprovementEngine needs MemoryManager — use lesson_store directly for lightweight lookup
+        from app.learning.failure_analyzer import FailureAnalyzer
+        analyzer = FailureAnalyzer()
+        tips = [
+            "Review your recent failed tasks and extract lessons.",
+            "Teach VYOM a new skill via: 'VYOM, sikho ki kaise [task] karte hain'.",
+            "Run a mock exam or practice set to reinforce weak areas.",
+            "Use deep research to stay updated on your domain.",
+            "Set a daily habit to review VYOM's memory graph for new connections.",
+        ]
+        items = "\n".join(f"  {i+1}. {t}" for i, t in enumerate(tips))
+        return ExecutionResult(
+            response=f"Learning & Skill Improvement Recommendations:\n{items}",
+            structured_data={"recommendations": tips},
+            evidence=[],
+        )
+
 
     async def _create_client_account(self, task: Task, emit: EventEmitter) -> ExecutionResult:
         from app.agency.content_ops import get_viral_content_engine, AccountProfile

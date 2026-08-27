@@ -893,6 +893,18 @@ class TaskClassifier:
             return TaskProfile(domain=TaskDomain.AGENCY, complexity=2, deterministic=True, intent="create_specialist_agent", needs={"phase8"})
         if "research " in text and ("market" in text or "trend" in text or "technology" in text or "product" in text or "company" in text):
             return TaskProfile(domain=TaskDomain.RESEARCH, complexity=3, deterministic=True, intent="deep_research", needs={"phase8"})
+        if any(k in text for k in ("company research", "company profile", "company ka analysis", "research company")):
+            return TaskProfile(domain=TaskDomain.RESEARCH, complexity=4, deterministic=True, intent="company_research", needs={"phase8"})
+        if any(k in text for k in ("market research", "market ka analysis", "market trend research")):
+            return TaskProfile(domain=TaskDomain.RESEARCH, complexity=4, deterministic=True, intent="market_research", needs={"phase8"})
+        if any(k in text for k in ("technology research", "tech research", "technology analysis")):
+            return TaskProfile(domain=TaskDomain.RESEARCH, complexity=3, deterministic=True, intent="technology_research", needs={"phase8"})
+        if any(k in text for k in ("what needs attention", "mujhe kya karna chahiye", "kya pending hai", "chief of staff", "priority kya hai", "what should i focus")):
+            return TaskProfile(domain=TaskDomain.PRODUCTIVITY, complexity=2, deterministic=True, intent="chief_of_staff_briefing", needs={"phase11"})
+        if any(k in text for k in ("project files kahan hain", "project file search", "kaunsi file kahan hai", "project deliverable", "project ka structure batao")):
+            return TaskProfile(domain=TaskDomain.KNOWLEDGE, complexity=1, deterministic=True, intent="project_file_search", needs={"phase8"})
+        if any(k in text for k in ("mujhe kya seekhna chahiye", "skill improve karo", "learning recommendation", "improve kar", "improvement suggest")):
+            return TaskProfile(domain=TaskDomain.PRODUCTIVITY, complexity=2, deterministic=True, intent="learning_recommendation", needs={"phase11"})
 
         if "analyze" in text and "this project" not in text and "code" not in text and extract_symbol(request) is not None:
             return TaskProfile(domain=TaskDomain.FINANCE, complexity=3, deterministic=True, intent="analyze_market", needs={"phase10"})
