@@ -320,7 +320,7 @@ from app.security.command_policy import CommandPolicy
 from app.security.permission_engine import PermissionEngine
 from app.tools.executor import ToolExecutor
 from app.tools.registry import ToolRegistry
-from app.tools_builtin import BrowserTool, CryptoTool, CurrencyTool, DesktopTool, DiscordTool, EmailTool, FacebookTool, FilesystemTool, GitTool, InputControlTool, InstagramTool, LinkedInTool, MetaAdsTool, NewsTool, SafetyJudgeTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, TerminalTool, TriviaFactsTool, TwitterTool, VideoTool, WeatherTool, WhatsAppTool, WikipediaTool, YouTubeTool
+from app.tools_builtin import BrowserTool, CryptoTool, CurrencyTool, DesktopTool, DiscordTool, EmailTool, FacebookTool, FilesystemTool, GitTool, ImageEditTool, InputControlTool, InstagramTool, LinkedInTool, MetaAdsTool, NewsTool, SafetyJudgeTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, TerminalTool, TriviaFactsTool, TwitterTool, VideoTool, WeatherTool, WhatsAppTool, WikipediaTool, YouTubeTool
 from app.tools_builtin.project_files import ProjectFileTool
 from app.skills.builder import SkillBuilder
 from app.skills.executor import SkillExecutor
@@ -453,6 +453,7 @@ def create_app(
         tool_registry.register(WikipediaTool())
         tool_registry.register(NewsTool())
         tool_registry.register(WhatsAppTool())
+        tool_registry.register(ImageEditTool())
         tool_registry.register(DesktopTool(desktop_controller, native_app_adapters))
         tool_registry.register(ScreenObserveTool(screen_observer))
         tool_registry.register(ProjectFileTool())
