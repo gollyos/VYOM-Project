@@ -26,6 +26,10 @@
 | 18 | Teachable MacroEngine for custom voice/event/schedule user workflows | SUBSYSTEMS | done (cd44e99) |
 | 19 | Smart Professional Email Composer with customized tones and contextual drafts | SUBSYSTEMS | done (d6efb6d) |
 | 20 | Phone-to-PC Remote Controller Bridge via Telegram Gateway (/status, /lock, tasks) | BRAIN | done (040e284) |
+| 21 | Multilingual TranslationFormatterService for Hindi-to-English voice dictation and dispatch | BRAIN + SUBSYSTEMS | done (22fefb1) |
+| 22 | 24/7 VPS HeadlessDaemon & Autonomous Cron Engine for background cloud automation | BRAIN + SUBSYSTEMS | done (ef45eca) |
+| 23 | TaskClassifier Intent Rules for Translation & Remote Voice Routing | BRAIN | done (9692f8a) |
+| 24 | Mobile Android Companion Remote Brain URL Support in Frontend | FRONTEND | done (95b715e) |
 
 ## Maya-transcript backlog (28-Aug analysis; priority order)
 
