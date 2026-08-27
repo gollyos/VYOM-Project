@@ -256,6 +256,47 @@ button {
   background: rgba(255, 255, 255, 0.09);
 }
 
+.persona-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.25s ease;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.persona-maya {
+  color: #ff9ec6;
+  border-color: rgba(255, 158, 198, 0.28);
+  background: rgba(255, 158, 198, 0.08);
+  box-shadow: 0 0 12px rgba(255, 158, 198, 0.12);
+}
+
+.persona-maya:hover {
+  background: rgba(255, 158, 198, 0.16);
+  box-shadow: 0 0 16px rgba(255, 158, 198, 0.24);
+  transform: translateY(-1px);
+}
+
+.persona-jarvis {
+  color: #64d2ff;
+  border-color: rgba(100, 210, 255, 0.28);
+  background: rgba(100, 210, 255, 0.08);
+  box-shadow: 0 0 12px rgba(100, 210, 255, 0.12);
+}
+
+.persona-jarvis:hover {
+  background: rgba(100, 210, 255, 0.16);
+  box-shadow: 0 0 16px rgba(100, 210, 255, 0.24);
+  transform: translateY(-1px);
+}
+
 .core-interface {
   position: absolute;
   z-index: 8;

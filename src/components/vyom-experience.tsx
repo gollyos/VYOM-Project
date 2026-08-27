@@ -87,6 +87,53 @@ export function VyomExperience() {
     return () => { cancelled = true; };
   }, [brainConnection]);
 
+  // Active Persona State (Maya Companion / Girlfriend & JARVIS Executive)
+  const [activePersona, setActivePersona] = useState<{ id: string; name: string; care_mode: boolean } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchPersona = async () => {
+      try {
+        const base = import.meta.env.VITE_VYOM_BRAIN_URL || "http://127.0.0.1:7788";
+        const data = await fetch(`${base}/api/persona`, { signal: AbortSignal.timeout(2000) }).then((r) => r.json());
+        if (cancelled) return;
+        if (data?.active_persona) {
+          setActivePersona({
+            id: data.active_persona.id,
+            name: data.active_persona.name,
+            care_mode: Boolean(data.active_persona.care_mode),
+          });
+        }
+      } catch {
+        /* best-effort */
+      }
+    };
+    void fetchPersona();
+    const interval = window.setInterval(fetchPersona, 30_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [brainConnection]);
+
+  const togglePersona = async () => {
+    const targetId = activePersona?.id === "companion_girlfriend" ? "assistant_jarvis" : "companion_girlfriend";
+    try {
+      const base = import.meta.env.VITE_VYOM_BRAIN_URL || "http://127.0.0.1:7788";
+      const res = await fetch(`${base}/api/persona/switch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ persona: targetId }),
+      }).then((r) => r.json());
+      if (res?.active_persona) {
+        setActivePersona({
+          id: res.active_persona.id,
+          name: res.active_persona.name,
+          care_mode: Boolean(res.active_persona.care_mode),
+        });
+      }
+    } catch {
+      /* fallback */
+    }
+  };
+
   const diagnostics = useMemo(() => {
     const mode = import.meta.env.DEV ? "DEV" : "RELEASE";
     const build = (import.meta.env.VITE_VYOM_BUILD_ID as string | undefined) ?? "unversioned";
@@ -313,6 +360,20 @@ export function VyomExperience() {
                     ? "BRAIN RECONNECTING"
                     : "LOCAL PRESENCE"}
           </span>
+          {activePersona && (
+            <>
+              <span className="status-divider" />
+              <button
+                type="button"
+                className={`persona-pill ${activePersona.care_mode ? "persona-maya" : "persona-jarvis"}`}
+                onClick={togglePersona}
+                title={`Click to switch persona (Current: ${activePersona.name})`}
+              >
+                <span>{activePersona.care_mode ? "🌸" : "⚡"}</span>
+                <span>{activePersona.name.split(" ")[0]}</span>
+              </button>
+            </>
+          )}
           <span className="status-divider" />
           <span>{time || "--:--"}</span>
         </div>
