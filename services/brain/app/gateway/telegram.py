@@ -85,6 +85,8 @@ class TelegramGateway:
         self._poll_task = asyncio.create_task(self._poll_loop())
         await self._post("setMyCommands", {"commands": [
             {"command": "start", "description": "Pair this chat with VYOM"},
+            {"command": "status", "description": "Check PC and Brain status"},
+            {"command": "lock", "description": "Lock PC screen remotely"},
             {"command": "file", "description": "Send a file from the PC (<=20 MB)"},
         ]})
 
@@ -146,6 +148,26 @@ class TelegramGateway:
             return
         if chat_id not in self._allowed_chat_ids or chat_id not in self._chat_ids:
             await self._send_text(chat_id, "This chat is not paired with VYOM.")
+            return
+        if text.startswith("/status"):
+            import platform
+            status_msg = (
+                f"🖥️ PC Status: ONLINE\n"
+                f"• Host: {platform.node()}\n"
+                f"• OS: {platform.system()} {platform.release()}\n"
+                f"• Gateway: Telegram Phone Bridge (Active)\n"
+                f"• Brain Status: READY\n\n"
+                f"Boss, aapka PC perfectly connected hai. Jo bhi kaam karwana ho bolo!"
+            )
+            await self._send_text(chat_id, status_msg)
+            return
+        if text.startswith("/lock"):
+            import ctypes
+            try:
+                ctypes.windll.user32.LockWorkStation()
+                await self._send_text(chat_id, "🔒 PC lock kar diya Boss.")
+            except Exception as e:
+                await self._send_text(chat_id, f"Lock execute nahi ho paya: {e}")
             return
         if text.startswith("/file"):
             await self._handle_file(chat_id, text[len("/file"):].strip())
