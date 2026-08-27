@@ -109,6 +109,11 @@ class CEOOrchestrationEngine:
         initial_employees = [
             EmployeeAgent("vp_social_growth", "Maya / Director of Content", "VP_MANAGER", "Social Media & Viral Growth", "Oversees all client social media campaigns, niche isolation, and 30-day plans"),
             EmployeeAgent("lead_instagram_content", "Lead Instagram Strategist", "TEAM_LEAD", "Social Media & Viral Growth", "Manages Instagram content calendars and niche hooks"),
+            EmployeeAgent("worker_grok_trend_hunter", "Grok Viral Trend Hunter", "SPECIALIST_WORKER", "Social Media & Viral Growth", "Scans breaking viral topics and contrarian hooks in real time"),
+            EmployeeAgent("worker_prime_director", "Prime Video Director", "SPECIALIST_WORKER", "Social Media & Viral Growth", "Multi-modal director for retention curves, B-roll cues, and video pacing"),
+            EmployeeAgent("worker_openclaw_scraper", "OpenClaw Competitor Scraper", "SPECIALIST_WORKER", "Social Media & Viral Growth", "Deconstructs high-performing competitor reels and formats"),
+            EmployeeAgent("worker_hermes_engagement", "Hermes DM & Comment Nurturer", "SPECIALIST_WORKER", "Social Media & Viral Growth", "Automates keyword comment triggers, lead routing, and DMs"),
+            EmployeeAgent("worker_carousel_architect", "Carousel 10-Slide Architect", "SPECIALIST_WORKER", "Social Media & Viral Growth", "Designs high-value 10-slide visual carousel content"),
             EmployeeAgent("worker_hook_writer", "Viral Hook Specialist", "SPECIALIST_WORKER", "Social Media & Viral Growth", "Writes high-retention 0-3s pattern interrupt hooks"),
             EmployeeAgent("worker_script_dialogue", "Dialogue Scriptwriter", "SPECIALIST_WORKER", "Social Media & Viral Growth", "Writes full visual and audio cues for short-form videos"),
             EmployeeAgent("worker_hashtag_matrix", "Hashtag & SEO Specialist", "SPECIALIST_WORKER", "Social Media & Viral Growth", "Generates high-conversion hashtags and captions"),
