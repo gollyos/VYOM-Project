@@ -237,3 +237,7 @@ class Phase13Engine:
             ui_composition=_composition(f"explain-{task.id}", "brain-context", "Decision", statement, objects),
             evidence=["explanation:operational"],
         )
+
+
+DiagnosticsObservabilityEngine = Phase13Engine
+__all__ = ["Phase13Engine", "DiagnosticsObservabilityEngine"]

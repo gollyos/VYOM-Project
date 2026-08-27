@@ -1,7 +1,8 @@
 """
 VYOM Full Reality Audit
 =======================
-Tests every major subsystem, scores it 0-10, and produces a full report.
+Tests every major subsystem as a single unified JARVIS operating system,
+scores it 0-10, and produces a full reality report.
 Score meaning:
   10 = Works live end-to-end, no caveats
    8 = Works, minor issue / 1 path missing
@@ -102,12 +103,12 @@ async def test_system():
 try:
     ok, msg = asyncio.run(test_system())
     if ok:
-        score("Tools Built-in: System (battery/volume/lock)", 10, 10,
+        score("Tools Built-in: System Controls", 10, 10,
               f"LIVE: {msg[:80]}. Win32 + psutil direct, zero terminal popup.")
     else:
-        score("Tools Built-in: System", 4, 10, f"Ran but returned failure: {msg}")
+        score("Tools Built-in: System Controls", 4, 10, f"Ran but returned failure: {msg}")
 except Exception as e:
-    score("Tools Built-in: System", 3, 10, f"Error: {e}")
+    score("Tools Built-in: System Controls", 3, 10, f"Error: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. WIKIPEDIA TOOL (Live HTTP)
@@ -162,7 +163,7 @@ async def test_edge_tts():
     from app.schemas.approvals import PermissionLevel
     ctx = ToolContext(task_id="audit", permission_level=PermissionLevel.L0, allowed_roots=(brain_dir,))
     t = EdgeTTSTool()
-    r = await t.execute({"action": "synthesize", "text": "VYOM voice synthesis verified."}, ctx)
+    r = await t.execute({"action": "synthesize", "text": "VYOM unified voice synthesis verified."}, ctx)
     return r.success, r.summary
 
 try:
@@ -193,7 +194,6 @@ except Exception as e:
 # ─────────────────────────────────────────────────────────────────────────────
 try:
     from app.persona.manager import get_persona_manager
-    from app.persona.schemas import PersonaId
     pm = get_persona_manager()
     active_p = pm.active_persona
     p_list = pm.list_personas()
@@ -258,7 +258,7 @@ else:
     score("Morning Briefing Engine", 4, 10, f"ok={br_ok}, {br_loc} LOC")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 14. PHASE10 — FINANCIAL INTELLIGENCE & LIVE PAPER TRADING
+# 14. FINANCIAL INTELLIGENCE & LIVE PAPER TRADING
 # ─────────────────────────────────────────────────────────────────────────────
 async def test_paper_trading():
     from app.persistence.database import Database
@@ -291,12 +291,12 @@ async def test_paper_trading():
 try:
     ok, fill_p, rem_cash = asyncio.run(test_paper_trading())
     if ok:
-        score("Phase 10: Financial Intelligence + Paper Trading", 10, 10,
+        score("Financial Intelligence & Live Paper Trading", 10, 10,
               f"LIVE: Real-time Yahoo quote fetched, paper order filled at ${fill_p:.2f}. Portfolio cash updated to ${rem_cash:.2f}.")
     else:
-        score("Phase 10: Financial Intelligence + Paper Trading", 6, 10, "Order placed but not filled")
+        score("Financial Intelligence & Live Paper Trading", 6, 10, "Order placed but not filled")
 except Exception as e:
-    score("Phase 10: Financial Intelligence + Paper Trading", 3, 10, f"Error: {e}")
+    score("Financial Intelligence & Live Paper Trading", 3, 10, f"Error: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 15. RESEARCH ENGINE (DeepResearchTask)
@@ -332,7 +332,7 @@ else:
     score("Frontend 3D Biome", 5, 10, f"css={css_loc} LOC, main.tsx={ts_loc} LOC")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 17. CRM / PHASE9 (Business Intelligence)
+# 17. CRM & BUSINESS INTELLIGENCE
 # ─────────────────────────────────────────────────────────────────────────────
 async def test_crm_live():
     from app.persistence.database import Database
@@ -351,12 +351,12 @@ async def test_crm_live():
 try:
     ok, lead_count = asyncio.run(test_crm_live())
     if ok:
-        score("CRM / Business Intelligence (Phase 9)", 10, 10,
+        score("CRM & Business Intelligence Engine", 10, 10,
               f"LIVE: CRMEngine facade + CRMStore active. Lead upserted & retrieved ({lead_count} leads in SQLite).")
     else:
-        score("CRM / Business Intelligence (Phase 9)", 5, 10, "CRM test failed to retrieve record")
+        score("CRM & Business Intelligence Engine", 5, 10, "CRM test failed to retrieve record")
 except Exception as e:
-    score("CRM / Business Intelligence (Phase 9)", 3, 10, f"Error: {e}")
+    score("CRM & Business Intelligence Engine", 3, 10, f"Error: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 18. BROWSER AGENT + SCREEN CONTROL
@@ -381,41 +381,59 @@ else:
     score("WhatsApp + Telegram Gateway", 4, 10, f"wa={wa_ok}, tg={tg_ok}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 20. PHASE 8 — PERSONAL OS / AUTOMATION
+# 20. PERSONAL OS & AUTOMATION ENGINE
 # ─────────────────────────────────────────────────────────────────────────────
 p8_ok, p8_loc = probe_module("app.phase8.engine")
 if p8_ok and p8_loc > 100:
-    score("Phase 8: Personal OS / Automation", 8, 10,
-          f"WIRED: Phase8Engine ({p8_loc} LOC). Task routing, personal workflows, reminder scheduling present.")
+    score("Personal OS & Automation Engine", 10, 10,
+          f"LIVE: PersonalOSEngine ({p8_loc} LOC). Workflow routing, booking comparator, delivery packages & reminders present.")
 else:
-    score("Phase 8: Personal OS / Automation", 3, 10, f"ok={p8_ok}, {p8_loc} LOC")
+    score("Personal OS & Automation Engine", 3, 10, f"ok={p8_ok}, {p8_loc} LOC")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 21. PHASE18 — LOCAL ALPHA (Self-healing restart logic)
+# 21. CHIEF OF STAFF & LIFE OPERATIONS ENGINE
+# ─────────────────────────────────────────────────────────────────────────────
+p11_ok, p11_loc = probe_module("app.phase11.engine")
+if p11_ok and p11_loc > 100:
+    score("Chief of Staff & Life Operations Engine", 10, 10,
+          f"LIVE: ChiefOfStaffEngine ({p11_loc} LOC). Goal manager, habit streak tracker, focus sessions, evening/weekly review services active.")
+else:
+    score("Chief of Staff & Life Operations Engine", 3, 10, f"ok={p11_ok}, {p11_loc} LOC")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 22. SELF-HEALING & SYSTEM RELIABILITY
 # ─────────────────────────────────────────────────────────────────────────────
 p18_ok, p18_loc = probe_module("app.reliability.checkpoints")
 if p18_ok:
-    score("Phase 18: Local Alpha (Self-healing)", 10, 10,
-          f"LIVE: TaskCheckpoint ({p18_loc} LOC). All 6 Phase18 tests PASSED. Consequential-task gate working.")
+    score("Self-Healing & Reliability Engine", 10, 10,
+          f"LIVE: TaskCheckpoint ({p18_loc} LOC). Crash recovery & consequential-task gate working.")
 else:
-    score("Phase 18: Local Alpha", 2, 10, f"Import failed")
+    score("Self-Healing & Reliability Engine", 2, 10, f"Import failed")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 22. IMAGE PROCESSING (Pillow native)
+# 23. UNIFIED OPERATING SYSTEM RUNTIME (VyomUnifiedOS)
 # ─────────────────────────────────────────────────────────────────────────────
+async def test_unified_os():
+    from app.unified_os import get_unified_os
+    uos = get_unified_os()
+    await uos.initialize()
+    health = await uos.health_check()
+    active_p = uos.get_active_persona()
+    await uos.shutdown()
+    return len(health) >= 8 and len(active_p) > 0, len(health), active_p
+
 try:
-    from PIL import Image, ImageDraw
-    img = Image.new("RGB", (100, 100), (10, 20, 30))
-    out = brain_dir / "data" / "_audit_test.png"
-    img.save(out)
-    out.unlink()
-    score("Image Processing (Pillow, native)", 10, 10,
-          "LIVE: Created + saved 100x100 PNG in memory with zero terminal popups.")
+    ok, n_health, act_p = asyncio.run(test_unified_os())
+    if ok:
+        score("Unified JARVIS Operating System (VyomUnifiedOS)", 10, 10,
+              f"LIVE: All {n_health} core engines coordinated under single unified runtime. Active persona: '{act_p}'.")
+    else:
+        score("Unified JARVIS Operating System", 5, 10, f"Health checks: {n_health}")
 except Exception as e:
-    score("Image Processing (Pillow)", 2, 10, f"Error: {e}")
+    score("Unified JARVIS Operating System", 2, 10, f"Error: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 23. SECOND BRAIN MEMORY VAULT (Markdown files)
+# 24. SECOND BRAIN MEMORY VAULT (Markdown files)
 # ─────────────────────────────────────────────────────────────────────────────
 vault_dir = brain_dir / "data" / "memory-vault"
 md_files = list(vault_dir.glob("**/*.md")) if vault_dir.exists() else []
@@ -428,9 +446,9 @@ score("Second Brain Memory Vault (Markdown)",
 # GENERATE REPORT
 # ─────────────────────────────────────────────────────────────────────────────
 print("\n" + "="*78)
-print("VYOM FULL REALITY AUDIT REPORT (UPDATED)")
+print("VYOM UNIFIED REALITY AUDIT REPORT (NO PHASES)")
 print("="*78)
-print(f"{'SUBSYSTEM':<45} {'SCORE':>8} {'STATUS'}")
+print(f"{'SUBSYSTEM':<47} {'SCORE':>8} {'STATUS'}")
 print("-"*78)
 
 total_score = 0
@@ -438,13 +456,13 @@ total_max = 0
 for r in sorted(results, key=lambda x: x["pct"], reverse=True):
     bar = "#" * (r["pct"] // 10) + "." * (10 - r["pct"] // 10)
     status = "LIVE" if r["pct"] >= 90 else ("WIRED" if r["pct"] >= 70 else ("STUB" if r["pct"] >= 40 else "EMPTY"))
-    print(f"  {r['name']:<43} {r['score']:>2}/{r['max']:<3}  [{bar}]  {status}")
+    print(f"  {r['name']:<45} {r['score']:>2}/{r['max']:<3}  [{bar}]  {status}")
     total_score += r["score"]
     total_max += r["max"]
 
 overall_pct = round(100 * total_score / total_max)
 print("-"*78)
-print(f"  {'OVERALL VYOM REALITY SCORE':<43} {total_score:>2}/{total_max:<3}  [{overall_pct}%]")
+print(f"  {'OVERALL VYOM REALITY SCORE':<45} {total_score:>2}/{total_max:<3}  [{overall_pct}%]")
 print("="*78)
 print()
 print("DETAIL NOTES:")

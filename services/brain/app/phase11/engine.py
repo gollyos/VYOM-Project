@@ -453,3 +453,7 @@ class Phase11Engine:
         await emit("quiet_mode_started", f"Quiet mode active for {minutes:.0f} minute(s)", {"until": until.isoformat()})
         statement = f"Quiet mode on for {minutes:.0f} minute(s), until {until.strftime('%H:%M')}. Critical notifications will still come through."
         return ExecutionResult(response=statement, structured_data={"until": until.isoformat()}, evidence=[])
+
+
+ChiefOfStaffEngine = Phase11Engine
+__all__ = ["Phase11Engine", "ChiefOfStaffEngine"]

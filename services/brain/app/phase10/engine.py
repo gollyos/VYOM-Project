@@ -368,3 +368,7 @@ def _fallback_thesis(symbol: str, direction: TradeDirection, analysis: MarketAna
         invalidation="Reassess once catalyst/research evidence is available.",
         confidence=0.2, data_timestamp=analysis.technical.as_of,
     )
+
+
+FinancialIntelligenceEngine = Phase10Engine
+__all__ = ["Phase10Engine", "FinancialIntelligenceEngine"]

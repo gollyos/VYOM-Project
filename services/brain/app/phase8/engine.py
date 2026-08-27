@@ -419,3 +419,7 @@ class Phase8Engine:
         statement = f"Delivery package for {client} prepared ({len(eligible)} deliverable(s)). External send requires approval."
         composition = _composition(f"delivery-{task.id}", "brain-context", "Client delivery", statement, [obj])
         return ExecutionResult(response=statement, structured_data=prepared.model_dump(mode="json"), ui_composition=composition, evidence=[f"package_id:{prepared.id}", f"quality_passed:{report.passed}"])
+
+
+PersonalOSEngine = Phase8Engine
+__all__ = ["Phase8Engine", "PersonalOSEngine"]

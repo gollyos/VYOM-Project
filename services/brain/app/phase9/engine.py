@@ -239,3 +239,7 @@ class Phase9Engine:
             response=statement, structured_data=status,
             ui_composition=_composition(f"sysstatus-{task.id}", "brain-context", "System status", statement, [obj]), evidence=[],
         )
+
+
+DesktopExecutionEngine = Phase9Engine
+__all__ = ["Phase9Engine", "DesktopExecutionEngine"]
