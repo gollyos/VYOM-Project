@@ -15,6 +15,14 @@ from app.schemas.tasks import TaskStatus
 
 from .cognitive_runtime import CognitiveRuntime
 
+# Optional: CognitiveScaffolder imported lazily so the class remains loadable
+# even if the routing module has an import error.
+try:
+    from app.routing.cognitive_scaffolder import CognitiveScaffolder as _CognitiveScaffolder
+    _SCAFFOLDER: _CognitiveScaffolder | None = _CognitiveScaffolder()
+except Exception:  # pragma: no cover
+    _SCAFFOLDER = None
+
 StepExecutor = Callable[[str, dict], Awaitable[dict]]   # (step title, context) -> {ok, output}
 StepVerifier = Callable[[str, dict], Awaitable[bool]]   # (step title, result) -> verified
 
@@ -88,6 +96,8 @@ class MissionLoop:
         self.task_store = task_store
         self.limits = limits or MissionLimits()
         self._cancel_events: dict[str, asyncio.Event] = {}
+        # CognitiveScaffolder: boosts free-model performance via reflexion
+        self._scaffolder = _SCAFFOLDER
 
     async def _emit(self, mission_id: str, event_type: EventType, message: str, payload: dict | None = None) -> None:
         if self.emit is not None:

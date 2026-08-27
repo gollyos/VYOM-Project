@@ -869,6 +869,50 @@ class TaskClassifier:
         if "automate" in text and ("briefing" in text or "agency" in text):
             return TaskProfile(domain=TaskDomain.AGENCY, complexity=2, deterministic=True, intent="create_automation", needs={"business"})
 
+        # ── AUTONOMOUS AGENCY PIPELINE ──────────────────────────────────────
+        # High-level client delivery commands: research, strategy, code, and
+        # deliverable packaging — all executed autonomously end-to-end.
+        # Triggers: "client ka project handle karo", "agency pipeline run
+        # karo", "complete deliverable banao for ...", "full research + code
+        # for ...", etc. Complexity 4 = multi-step mission loop.
+        _AGENCY_PIPELINE_PATTERNS = (
+            ("handle karo", "project"),
+            ("agency pipeline", ""),
+            ("client deliverable", ""),
+            ("complete deliverable", ""),
+            ("autonomous agency", ""),
+            ("full agency", ""),
+            ("research aur implement", ""),
+            ("research and implement", ""),
+            ("100 humans", ""),
+            ("khud kar", "research"),
+            ("sab kuch kar", ""),
+            ("full project", ""),
+            ("deliver karo", "client"),
+        )
+        for primary, secondary in _AGENCY_PIPELINE_PATTERNS:
+            if primary in text and (not secondary or secondary in text):
+                return TaskProfile(
+                    domain=TaskDomain.AGENCY, complexity=4, deterministic=False,
+                    intent="autonomous_agency_pipeline",
+                    needs={"intelligence", "research", "tools", "business"},
+                    criticality="high",
+                )
+
+        # ── DYNAMIC TOOL SYNTHESIS ────────────────────────────────────────
+        # "create a tool that...", "bana ek tool jo...", "make me a script
+        # that...", "synthesize a capability for..." -> DynamicToolSynthesizer
+        if (
+            ("create a tool" in text or "bana ek tool" in text or "tool banao" in text
+             or "synthesize" in text or "make me a script" in text)
+            and ("that" in text or "jo" in text or "for" in text or "jiske" in text)
+        ):
+            return TaskProfile(
+                domain=TaskDomain.CODING, complexity=3, deterministic=False,
+                intent="synthesize_tool",
+                needs={"intelligence", "tools", "coding"},
+            )
+
         if "research the top competitors" in text or ("research" in text and "competitor" in text):
             return TaskProfile(domain=TaskDomain.RESEARCH, complexity=4, deterministic=True, intent="competitor_research", needs={"phase8"})
         if "can vyom connect to" in text or "connect to " in text and "?" in text:
