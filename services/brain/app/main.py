@@ -2146,8 +2146,9 @@ def create_app(
     application.include_router(setup_api.router)
     application.include_router(observability_api.router)
     application.include_router(quota.router)
-    from app.api import persona as persona_api
+    from app.api import persona as persona_api, ecosystem as ecosystem_api
     application.include_router(persona_api.router)
+    application.include_router(ecosystem_api.router)
     application.include_router(websocket.router)
 
     @application.get("/health")

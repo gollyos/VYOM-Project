@@ -4,7 +4,7 @@ VYOM Unified Operating System Runtime
 The single, coherent entry-point that coordinates all real domain engines into
 ONE unified personal operator runtime.
 
-Domain Engines:
+Domain Engines & Subsystems:
 - PersonalOSEngine: Automation, deep research, tool discovery, client packages
 - DesktopExecutionEngine: Windows desktop controller, screen awareness, native apps
 - FinancialIntelligenceEngine: Live market data quotes, risk metrics, paper trading
@@ -12,6 +12,11 @@ Domain Engines:
 - DiagnosticsObservabilityEngine: System doctor, security audit, cost tracking
 - PersonaManager: Configurable operator profiles (Companion & Executive modes)
 - DynamicToolMatcher: 335+ built-in and external tools
+- SecondBrainGraphEngine: Bi-directional neural memory & syllabus knowledge graph
+- ExamPreparationEngine: 30-day exam syllabus breakdowns & timed mock tests
+- CareerAccelerationEngine: ATS resume optimizer & recruiter outreach drafter
+- CEOOrchestrationEngine: 27-agent autonomous corporate team & on-demand hiring
+- PrimeMetaDirector: Universal Hermes ReAct, Grok Live, and OpenClaw Playwright fleet
 """
 
 from __future__ import annotations
@@ -28,6 +33,17 @@ from app.desktop.execution_engine import DesktopExecutionEngine
 from app.finance.intelligence_engine import FinancialIntelligenceEngine
 from app.productivity.chief_of_staff_engine import ChiefOfStaffEngine
 from app.diagnostics.observability_engine import DiagnosticsObservabilityEngine
+from app.knowledge.second_brain_graph import SecondBrainGraphEngine, get_second_brain_graph
+from app.education.exam_career_engine import (
+    ExamPreparationEngine,
+    CareerAccelerationEngine,
+    get_exam_engine,
+    get_career_engine,
+)
+from app.agents.ceo_hierarchy import CEOOrchestrationEngine, get_ceo_engine
+from app.agents.fleet_orchestrator import PrimeMetaDirector, get_fleet_director
+from app.agency.content_ops import ViralContentEngine, get_viral_content_engine
+from app.sheets.local_excel import LocalExcelService, get_local_excel_service
 
 
 @dataclass
@@ -45,6 +61,13 @@ class VyomUnifiedOS:
         self.db = database or Database(self.data_dir / "vyom-brain.db")
         self.persona_manager: PersonaManager = get_persona_manager()
         self.tool_matcher: DynamicToolMatcher = get_tool_matcher()
+        self.second_brain: SecondBrainGraphEngine = get_second_brain_graph()
+        self.exam_engine: ExamPreparationEngine = get_exam_engine()
+        self.career_engine: CareerAccelerationEngine = get_career_engine()
+        self.ceo_orchestrator: CEOOrchestrationEngine = get_ceo_engine()
+        self.fleet_director: PrimeMetaDirector = get_fleet_director()
+        self.viral_content: ViralContentEngine = get_viral_content_engine()
+        self.excel_service: LocalExcelService = get_local_excel_service()
         self._connected = False
 
     async def initialize(self) -> None:
@@ -68,6 +91,42 @@ class VyomUnifiedOS:
             return True
         except Exception:
             return False
+
+    # -- High-Level Auto-Run Facade Methods -----------------------------
+
+    def get_second_brain_graph_data(self) -> dict[str, Any]:
+        """Returns the full 2D/3D neural memory and knowledge graph."""
+        return self.second_brain.get_graph_data()
+
+    def generate_study_plan(self, subject: str, target_exam: str = "General", days: int = 30) -> dict[str, Any]:
+        """Auto-run 30-day exam syllabus breakdown and Excel plan."""
+        return self.exam_engine.generate_study_plan(subject, target_exam=target_exam, days_available=days)
+
+    def generate_mock_test(self, subject: str, num_questions: int = 10) -> dict[str, Any]:
+        """Auto-run timed mock test generation with answer keys."""
+        from dataclasses import asdict
+        mock = self.exam_engine.generate_mock_test(subject, num_questions=num_questions)
+        return asdict(mock)
+
+    def optimize_resume(self, current_resume_text: str, target_job_role: str) -> dict[str, Any]:
+        """Auto-run ATS resume scoring and recruiter outreach copy."""
+        from dataclasses import asdict
+        res = self.career_engine.optimize_resume_for_job(current_resume_text, target_job_role)
+        return asdict(res)
+
+    def generate_client_content_plan(self, account_id: str) -> dict[str, Any]:
+        """Auto-run 30-day social media plan with viral hooks & Excel export."""
+        return self.viral_content.generate_30day_content_plan(account_id)
+
+    def execute_ceo_mission(self, user_mission: str) -> dict[str, Any]:
+        """Autonomous CEO triage and delegation to 27 active agents."""
+        return self.ceo_orchestrator.execute_as_ceo(user_mission)
+
+    async def execute_universal_fleet(self, goal: str, domain: str = "general", include_live_web: bool = False) -> dict[str, Any]:
+        """Universal multi-agent execution (Hermes ReAct + Grok Live + OpenClaw Crawler)."""
+        from dataclasses import asdict
+        res = await self.fleet_director.orchestrate_mission(goal, domain=domain, include_live_web=include_live_web)
+        return asdict(res)
 
     async def health_check(self) -> list[SubsystemHealth]:
         """Verify that every core engine is operational."""
@@ -111,6 +170,26 @@ class VyomUnifiedOS:
                 name="Diagnostics & Observability",
                 status="OK",
                 details="DiagnosticsObservabilityEngine ready for system doctor & security audits",
+            ),
+            SubsystemHealth(
+                name="Second Brain Neural Graph",
+                status="OK",
+                details=f"{len(self.second_brain.nodes)} nodes and {len(self.second_brain.edges)} bi-directional links",
+            ),
+            SubsystemHealth(
+                name="Exam & Career Mastery",
+                status="OK",
+                details="ExamPreparationEngine & CareerAccelerationEngine active",
+            ),
+            SubsystemHealth(
+                name="CEO Corporate Hierarchy",
+                status="OK",
+                details=f"{len(self.ceo_orchestrator.employees)} active agents across 4 departments",
+            ),
+            SubsystemHealth(
+                name="Universal Autonomous Fleet",
+                status="OK",
+                details="Hermes ReAct + Grok Live + OpenClaw Browser crawler ready",
             ),
         ]
         return results
