@@ -20,6 +20,7 @@
 | 9 | Isolate external-capability tests from tracked production config | BRAIN + VERIFY | done (ecf47e2) |
 | 11 | Add weather/currency/crypto/trivia builtin tools (no-key free APIs) | BRAIN | done (4f6a768) |
 | 14 | Native JARVIS tools (WikipediaTool, NewsTool, WhatsAppTool, System battery/volume/lock) + multilingual language mirroring | BRAIN + SUBSYSTEMS | done (4d56a62) |
+| 15 | Universal 335+ Tools Catalog + JIT DynamicToolMatcher across 10 functional domains | BRAIN + SUBSYSTEMS | done (a4eb020) |
 
 ## Maya-transcript backlog (28-Aug analysis; priority order)
 
