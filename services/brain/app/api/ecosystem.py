@@ -42,6 +42,22 @@ class FleetExecutionRequest(BaseModel):
     include_live_web: bool = False
 
 
+class AccountCreateRequest(BaseModel):
+    account_id: str = ""
+    owner_name: str
+    platform: str = "instagram"
+    handle: str
+    niche: str
+    target_audience: str = ""
+    tone: str = "Engaging, high-value, authentic"
+    upload_time: str = "19:00 IST"
+    posting_frequency: str = "1 post/day"
+    preferred_hooks: list[str] = []
+    hashtag_pool: list[str] = []
+    cta_templates: list[str] = []
+    brand_rules: list[str] = []
+
+
 @router.get("/health")
 async def get_ecosystem_health() -> dict[str, Any]:
     os = get_unified_os()
@@ -50,6 +66,43 @@ async def get_ecosystem_health() -> dict[str, Any]:
         "status": "OK",
         "subsystems": [{"name": h.name, "status": h.status, "details": h.details} for h in health],
     }
+
+
+@router.get("/agency/accounts")
+async def list_agency_accounts(owner: str | None = None, platform: str | None = None) -> list[dict[str, Any]]:
+    from dataclasses import asdict
+    os = get_unified_os()
+    accounts = os.viral_content.workspaces.list_accounts(owner_filter=owner, platform_filter=platform)
+    return [asdict(a) for a in accounts]
+
+
+@router.post("/agency/accounts")
+async def create_agency_account(req: AccountCreateRequest) -> dict[str, Any]:
+    from dataclasses import asdict
+    from app.agency.content_ops import AccountProfile
+    os = get_unified_os()
+    prof = AccountProfile(**req.model_dump())
+    saved = os.viral_content.workspaces.create_or_update_account(prof)
+    return asdict(saved)
+
+
+@router.get("/agency/accounts/{account_id}")
+async def get_agency_account(account_id: str) -> dict[str, Any]:
+    from dataclasses import asdict
+    os = get_unified_os()
+    acc = os.viral_content.workspaces.get_account(account_id)
+    if not acc:
+        raise HTTPException(status_code=404, detail=f"Account '{account_id}' not found")
+    return asdict(acc)
+
+
+@router.delete("/agency/accounts/{account_id}")
+async def delete_agency_account(account_id: str) -> dict[str, Any]:
+    os = get_unified_os()
+    deleted = os.viral_content.workspaces.delete_account(account_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Account '{account_id}' not found")
+    return {"status": "deleted", "account_id": account_id}
 
 
 @router.get("/graph")

@@ -1,14 +1,15 @@
 """
-VYOM Agency & Multi-Account Content Operating System
-====================================================
-Provides strict workspace isolation for multiple clients and multiple social media accounts.
-Handles:
-- Client & Account Profiles (Niche, Tone, Schedule, Hashtag Pool, Guidelines)
-- Viral Research & 0-3s Hook Formulas
-- Reel / Short Video Dialogue & Script Production
-- 30-Day Content Calendar Generation & Excel Export
-- Document / Presentation / NotebookLM Research Synthesis
-- Zero-Bleed Data Isolation between Clients
+VYOM Scalable Multi-Tenant Agency & Client Content Operating System
+===================================================================
+Provides dynamic, fully customizable multi-client and multi-account workspace management.
+Scales effortlessly from 1 account to 100+ clients without hardcoded limits or fixed niches.
+
+Capabilities:
+- Dynamic Account Management (Create, Update, Delete, List, Search any brand/client)
+- Custom Niche & Persona Configuration (Niche, Tone, Schedule, Hashtags, CTA, Rules)
+- Scalable 30-Day Viral Content Engine (Hooks, Line-by-line dialogue scripts, visual cues)
+- Isolated Deliverables (.xlsx Excel spreadsheets + .md packages)
+- Zero Cross-Client Data Bleed
 """
 
 from __future__ import annotations
@@ -17,7 +18,8 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
+from uuid import uuid4
 
 from app.sheets.local_excel import get_local_excel_service
 
@@ -28,17 +30,19 @@ AGENCY_STORAGE_DIR = Path("services/brain/data/agency_workspaces")
 class AccountProfile:
     account_id: str
     owner_name: str
-    platform: str  # 'instagram', 'youtube', 'linkedin', 'twitter'
+    platform: str  # 'instagram', 'youtube', 'linkedin', 'twitter', 'tiktok', 'threads'
     handle: str
     niche: str
     target_audience: str
     tone: str
     upload_time: str  # e.g. "18:30 IST"
-    posting_frequency: str  # e.g. "1 reel/day"
+    posting_frequency: str = "1 post/day"
     preferred_hooks: list[str] = field(default_factory=list)
     hashtag_pool: list[str] = field(default_factory=list)
     cta_templates: list[str] = field(default_factory=list)
     brand_rules: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 @dataclass
@@ -57,17 +61,17 @@ class ContentItem:
 
 
 class ClientWorkspaceManager:
-    """Manages isolated workspaces for multiple clients and separate brand accounts."""
+    """Dynamic multi-tenant workspace manager scaling from 1 to 100+ client accounts."""
 
     def __init__(self, base_dir: Path | None = None):
         self.base_dir = base_dir or AGENCY_STORAGE_DIR
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self._accounts: dict[str, AccountProfile] = {}
         self._load()
-        self._ensure_defaults()
 
     def _get_account_file(self, account_id: str) -> Path:
-        return self.base_dir / f"{account_id}_profile.json"
+        safe_id = account_id.strip().lower().replace(" ", "_")
+        return self.base_dir / f"{safe_id}_profile.json"
 
     def _load(self) -> None:
         for file in self.base_dir.glob("*_profile.json"):
@@ -82,93 +86,10 @@ class ClientWorkspaceManager:
         file = self._get_account_file(profile.account_id)
         file.write_text(json.dumps(asdict(profile), indent=2), encoding="utf-8")
 
-    def _ensure_defaults(self) -> None:
-        """Pre-populate Gunjan's 4 distinct niche Instagram accounts if not present."""
-        if "gunjan_ai_tech" not in self._accounts:
-            self.register_account(AccountProfile(
-                account_id="gunjan_ai_tech",
-                owner_name="Gunjan",
-                platform="instagram",
-                handle="@gunjan.ai_automation",
-                niche="AI Agents, No-Code Tech & Workflow Automation",
-                target_audience="Founders, creators, developers, tech enthusiasts looking to automate work",
-                tone="Authoritative, innovative, fast-paced, high value, futuristic",
-                upload_time="19:00 IST",
-                posting_frequency="1 Reel/Day",
-                preferred_hooks=[
-                    "Stop doing [boring manual task] in 2026. Use this AI setup instead.",
-                    "Nobody is talking about this hidden AI workflow that saves 15 hours a week.",
-                    "If you're still not using personal AI agents, you're falling behind.",
-                ],
-                hashtag_pool=["#AIAutomation", "#ArtificialIntelligence", "#TechTrends", "#AIAgents", "#ProductivityHacks"],
-                cta_templates=["Comment 'AI' and I'll send the direct workflow setup link!", "Save this reel before you forget!"],
-                brand_rules=["Always show real workflow proof on screen", "Keep transitions snappy (under 1.5s per cut)"],
-            ))
-
-        if "gunjan_fitness" not in self._accounts:
-            self.register_account(AccountProfile(
-                account_id="gunjan_fitness",
-                owner_name="Gunjan",
-                platform="instagram",
-                handle="@gunjan.fitmatrix",
-                niche="Fitness, Calisthenics & High Performance Body Composition",
-                target_audience="Busy professionals and youth wanting peak physical shape with smart routines",
-                tone="Disciplined, energetic, motivating, science-backed, direct",
-                upload_time="07:30 IST",
-                posting_frequency="1 Reel/Day",
-                preferred_hooks=[
-                    "The real reason your bench press is stuck (and it's not your chest).",
-                    "3 daily habits that helped me stay lean without starving.",
-                    "Stop making this 1 huge mistake in your workout routine.",
-                ],
-                hashtag_pool=["#FitnessMotivation", "#Calisthenics", "#WorkoutRoutine", "#HighPerformance", "#HealthHabits"],
-                cta_templates=["Share this with your gym partner!", "Drop a 🔥 if you're hitting the gym today!"],
-                brand_rules=["Focus on clean form and energy", "High-energy background audio"],
-            ))
-
-        if "gunjan_finance" not in self._accounts:
-            self.register_account(AccountProfile(
-                account_id="gunjan_finance",
-                owner_name="Gunjan",
-                platform="instagram",
-                handle="@gunjan.alphatrader",
-                niche="Finance, Stock Market & Trading Psychology",
-                target_audience="Traders, investors, and business people looking for risk-managed market alpha",
-                tone="Calculated, analytical, calm, risk-conscious, wealth-focused",
-                upload_time="08:45 IST",
-                posting_frequency="1 Reel/Day",
-                preferred_hooks=[
-                    "90% of retail traders lose money because of this single psychological flaw.",
-                    "How professional risk management beats fancy technical indicators every time.",
-                    "Here is the exact trading framework I use before placing any order.",
-                ],
-                hashtag_pool=["#StockMarketIndia", "#TradingStrategy", "#WealthMindset", "#FinanceTips", "#RiskManagement"],
-                cta_templates=["Save this risk checklist for market open tomorrow!", "Comment 'CHART' for breakdown!"],
-                brand_rules=["Never give financial advice disclaimers skipped", "Show real risk-to-reward ratios"],
-            ))
-
-        if "gunjan_lifestyle" not in self._accounts:
-            self.register_account(AccountProfile(
-                account_id="gunjan_lifestyle",
-                owner_name="Gunjan",
-                platform="instagram",
-                handle="@gunjan.lifestyle",
-                niche="Mindset, Personal Mastery, Tech Nomad Lifestyle",
-                target_audience="Ambitious creators, remote builders, modern entrepreneurs",
-                tone="Inspirational, aesthetic, authentic, storytelling, high-vibe",
-                upload_time="20:30 IST",
-                posting_frequency="1 Reel/Day",
-                preferred_hooks=[
-                    "The uncomfortable truth about building freedom in your 20s.",
-                    "What happens when you cut out all distractions for 30 straight days.",
-                    "A day in the life of building autonomous AI systems from scratch.",
-                ],
-                hashtag_pool=["#MindsetMatters", "#CreatorEconomy", "#PersonalGrowth", "#DigitalNomad", "#DeepWork"],
-                cta_templates=["Save this for when you need that reminder.", "Tag someone who needs to hear this."],
-                brand_rules=["Aesthetic cinematic b-roll", "Warm color grading"],
-            ))
-
-    def register_account(self, profile: AccountProfile) -> AccountProfile:
+    def create_or_update_account(self, profile: AccountProfile) -> AccountProfile:
+        """Create or update any arbitrary client/brand account profile."""
+        if not profile.account_id:
+            profile.account_id = f"acc_{uuid4().hex[:8]}"
         self._accounts[profile.account_id] = profile
         self._save_account(profile)
         return profile
@@ -176,70 +97,138 @@ class ClientWorkspaceManager:
     def get_account(self, account_id: str) -> AccountProfile | None:
         return self._accounts.get(account_id)
 
-    def list_accounts(self) -> list[AccountProfile]:
-        return list(self._accounts.values())
+    def delete_account(self, account_id: str) -> bool:
+        if account_id in self._accounts:
+            del self._accounts[account_id]
+            file = self._get_account_file(account_id)
+            if file.exists():
+                file.unlink()
+            return True
+        return False
+
+    def list_accounts(
+        self,
+        owner_filter: str | None = None,
+        platform_filter: str | None = None,
+    ) -> list[AccountProfile]:
+        res = list(self._accounts.values())
+        if owner_filter:
+            res = [a for a in res if owner_filter.lower() in a.owner_name.lower()]
+        if platform_filter:
+            res = [a for a in res if platform_filter.lower() == a.platform.lower()]
+        return res
+
+    def search_accounts(self, query: str) -> list[AccountProfile]:
+        q = query.lower()
+        return [
+            a for a in self._accounts.values()
+            if q in a.account_id.lower() or q in a.owner_name.lower() or q in a.handle.lower() or q in a.niche.lower()
+        ]
 
 
 class ViralContentEngine:
-    """Generates viral hooks, dialogue scripts, and 30-day content calendars with zero client bleed."""
+    """Generates viral hooks, dialogue scripts, and 30-day content calendars dynamically for any niche."""
 
     def __init__(self, workspace_manager: ClientWorkspaceManager | None = None):
         self.workspaces = workspace_manager or ClientWorkspaceManager()
 
     def generate_30day_content_plan(
         self,
-        account_id: str,
+        account_id_or_profile: str | AccountProfile,
         *,
         focus_topic: str = "",
         month_name: str = "Upcoming Month",
     ) -> dict[str, Any]:
-        account = self.workspaces.get_account(account_id)
-        if not account:
-            raise ValueError(f"Account '{account_id}' not found. Please register the account profile first.")
+        """Dynamically generates 30-day viral plan for any registered or on-the-fly profile."""
+        if isinstance(account_id_or_profile, AccountProfile):
+            account = account_id_or_profile
+        else:
+            account = self.workspaces.get_account(account_id_or_profile)
+            if not account:
+                # If not found, try searching or create an on-the-fly profile for custom niche
+                matches = self.workspaces.search_accounts(account_id_or_profile)
+                if matches:
+                    account = matches[0]
+                else:
+                    # Dynamically instantiate a custom profile for this query
+                    account = AccountProfile(
+                        account_id=f"custom_{account_id_or_profile.lower().replace(' ', '_')[:32]}",
+                        owner_name="Client",
+                        platform="instagram",
+                        handle=f"@{account_id_or_profile.lower().replace(' ', '_')}",
+                        niche=account_id_or_profile,
+                        target_audience=f"Target audience for {account_id_or_profile}",
+                        tone="Engaging, high-value, authentic, authoritative",
+                        upload_time="19:00 IST",
+                        preferred_hooks=[
+                            f"Stop making this rookie mistake with {account_id_or_profile}.",
+                            f"The 3-step framework for mastering {account_id_or_profile}.",
+                        ],
+                        hashtag_pool=[f"#{w}" for w in account_id_or_profile.split()[:4]],
+                        cta_templates=["Comment below for details!", "Save this post for later!"],
+                    )
 
         plan_items: list[ContentItem] = []
         topic_base = focus_topic or account.niche
+        niche_core = account.niche.split(",")[0].strip()
 
-        # Hook patterns & formula templates
+        # Dynamic Hook Generator Formulas
         hook_types = [
-            ("Pattern Interrupt", f"Stop making this rookie mistake with {account.niche.split(',')[0]}."),
+            ("Pattern Interrupt", f"Stop doing {niche_core} the old way in 2026. Here is the modern approach."),
             ("Curiosity Gap", f"The secret 3-step framework top 1% use for {topic_base}."),
-            ("Contrarian Truth", f"Why everything you've been told about {topic_base} is wrong."),
-            ("Story / Transformation", f"How I went from 0 to complete mastery in {topic_base}."),
-            ("Urgent Problem Fix", f"If you're struggling with {topic_base}, watch this 30-second fix."),
+            ("Contrarian Truth", f"Why everything you've been told about {niche_core} is wrong."),
+            ("Story / Transformation", f"How to go from 0 to complete mastery in {topic_base}."),
+            ("Urgent Problem Fix", f"If you're struggling with {niche_core}, watch this 30-second fix."),
+            ("Framework Breakdown", f"The exact step-by-step blueprint for {niche_core}."),
+            ("Mistake Warning", f"The #1 mistake destroying your progress in {niche_core}."),
+        ]
+
+        ctas = account.cta_templates or [
+            "Comment 'INFO' below to get the direct guide!",
+            "Save this reel before you forget!",
+            "Share this with someone who needs to see it!",
+        ]
+
+        hashtags = account.hashtag_pool or [
+            f"#{niche_core.replace(' ', '')}",
+            "#TrendingReels",
+            "#ViralGrowth",
+            "#CreatorStrategy",
+            "#DailyValue",
         ]
 
         for day in range(1, 31):
             htype, htext = hook_types[(day - 1) % len(hook_types)]
-            hook_full = f"[0-3s HOOK]: \"{htext}\""
-            
+            hook_full = f"[0-3s HOOK ({htype})]: \"{htext}\""
+            selected_cta = ctas[(day - 1) % len(ctas)]
+
             script = (
-                f"[Visual: Fast hook cut on screen showing live example]\n"
-                f"[Audio/Dialogue]: \"{htext} Most people ignore this, but here is what actually works.\"\n"
-                f"[Visual: Step 1 text on screen + demonstration]\n"
-                f"[Audio/Dialogue]: \"Step 1: Simplify your core setup. Step 2: Implement daily consistency. Step 3: Track metrics with precision.\"\n"
-                f"[Visual: Screen showing final verified output]\n"
-                f"[Audio/Dialogue]: \"{account.cta_templates[day % len(account.cta_templates)]}\""
+                f"[Visual: Fast cut high-energy demonstration of {niche_core}]\n"
+                f"[Audio/Dialogue]: \"{htext} Here is what actually works.\"\n"
+                f"[Visual: Step 1 text on screen with kinetic animation]\n"
+                f"[Audio/Dialogue]: \"Step 1: Simplify your foundation. Step 2: Implement daily consistency. Step 3: Track metrics with precision.\"\n"
+                f"[Visual: Verified result on screen + gesture to comment]\n"
+                f"[Audio/Dialogue]: \"{selected_cta}\""
             )
 
             caption = (
                 f"🔥 {htext}\n\n"
                 f"When building in {account.niche}, consistency and the right systems make all the difference.\n\n"
                 f"📌 Save this post for later!\n"
-                f"👇 {account.cta_templates[day % len(account.cta_templates)]}\n\n"
-                f"{' '.join(account.hashtag_pool[:5])}"
+                f"👇 {selected_cta}\n\n"
+                f"{' '.join(hashtags[:5])}"
             )
 
             item = ContentItem(
                 day_number=day,
-                title=f"Day {day}: {account.niche.split(',')[0]} Breakdown #{day}",
+                title=f"Day {day}: {niche_core} Mastery #{day}",
                 niche=account.niche,
                 content_format="Reel / Short",
                 hook_3s=hook_full,
                 script_dialogue=script,
-                cta=account.cta_templates[day % len(account.cta_templates)],
+                cta=selected_cta,
                 caption=caption,
-                hashtags=account.hashtag_pool[:5],
+                hashtags=hashtags[:5],
                 scheduled_time=account.upload_time,
                 status="Scheduled / Ready",
             )
@@ -270,7 +259,7 @@ class ViralContentEngine:
             filename,
             headers,
             rows,
-            sheet_name=f"{account.handle} 30D Plan",
+            sheet_name=f"{account.handle[:25]} 30D Plan",
         )
 
         # Also write clean markdown deliverable
@@ -296,31 +285,11 @@ class ViralContentEngine:
         md_content.append(f"\n*Full 30-day rows available in Excel deliverable: `{excel_path}`*")
         md_path.write_text("\n".join(md_content), encoding="utf-8")
 
-        # Register in file knowledge index
-        try:
-            from app.knowledge.project_index import get_project_knowledge
-            p_svc = get_project_knowledge()
-            p_svc.register_file(
-                excel_path,
-                category="client_deliverable",
-                purpose=f"30-Day social media content calendar for {account.handle} ({account.niche})",
-                why_created=f"Owner request for {account.owner_name} {account.platform} campaign",
-                tags=["social_media", "instagram", "content_calendar", account.account_id],
-            )
-            p_svc.register_file(
-                md_path,
-                category="client_deliverable",
-                purpose=f"30-Day video scripts and hooks document for {account.handle}",
-                why_created=f"Scripts and dialogue preparation for {account.handle}",
-                tags=["scripts", "dialogue", "hooks", account.account_id],
-            )
-        except Exception:
-            pass
-
         return {
             "account_id": account.account_id,
             "owner": account.owner_name,
             "handle": account.handle,
+            "platform": account.platform,
             "niche": account.niche,
             "total_days_planned": len(plan_items),
             "excel_file": str(excel_path),
