@@ -534,7 +534,7 @@ async def test_goal_create_emits_event_and_ui_composition(tmp_path):
     from app.habits.streaks import StreakCalculator
     from app.notifications.quiet_hours import QuietModeState
     from app.persistence.task_store import TaskStore
-    from app.phase11.engine import Phase11Engine
+    from app.productivity.chief_of_staff_engine import ChiefOfStaffEngine as Phase11Engine
     from app.productivity.focus_sessions import FocusSessionService, FocusSessionStore
     from app.productivity.workload import WorkloadCalculator
     from app.routines.completion import RoutineCompletionService, RoutineStepExecutor

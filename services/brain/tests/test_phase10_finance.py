@@ -23,7 +23,7 @@ from app.market_data.registry import ProviderRegistry
 from app.market_data.schemas import Candle, DataFreshness, MarketState, MarketStatus, MarketType, ProviderCapabilityInfo, ProviderStatus, Quote
 from app.market_intelligence.technical_analysis import TechnicalAnalysisEngine, atr, ema, macd, rsi, sma
 from app.persistence.database import Database
-from app.phase10.extraction import extract_percentage, extract_symbol
+from app.finance.extraction import extract_percentage, extract_symbol
 from app.risk.engine import RiskDecisionType, RiskEngine
 from app.risk.kill_switch import PaperKillSwitch, RiskKillSwitch
 from app.risk.rules import RiskRules
@@ -631,7 +631,7 @@ async def test_analyze_market_emits_events_and_ui_composition(tmp_path):
     from app.market_intelligence.sentiment import SentimentAnalyzer
     from app.market_intelligence.technical_analysis import TechnicalAnalysisEngine
     from app.market_intelligence.thesis_builder import ThesisBuilder
-    from app.phase10.engine import Phase10Engine
+    from app.finance.intelligence_engine import FinancialIntelligenceEngine as Phase10Engine
     from app.research.orchestrator import DeepResearchTask
     from app.schemas.tasks import Task, TaskProfile
     from app.trading.setup_builder import SetupBuilder

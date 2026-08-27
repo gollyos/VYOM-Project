@@ -23,7 +23,7 @@ checks = [
     ('QuotaBudgeter',      'from app.routing.quota_budgeter import QuotaBudgeter'),
     ('MemoryManager',      'from app.memory.manager import MemoryManager'),
     ('PaperBroker',        'from app.trading.paper_broker import PaperBroker'),
-    ('Phase8Engine',       'from app.phase8.engine import Phase8Engine'),
+    ('PersonalOSEngine',   'from app.automation.personal_os_engine import PersonalOSEngine'),
     ('TaskCheckpoint',     'from app.reliability.checkpoints import TaskCheckpoint'),
     ('MorningBriefing',    'from app.daily_review.morning import MorningBriefingService'),
     ('DynamicMatcher',     'from app.tools.dynamic_matcher import get_tool_matcher'),

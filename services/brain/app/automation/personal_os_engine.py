@@ -191,6 +191,41 @@ class PersonalOSEngine:
         profile = TaskProfile(intent="prepare_client_delivery", summary=f"Delivery: {client}")
         return await self.execute(task, profile, emit or _noop_emit)
 
+    async def create_custom_spreadsheet(
+        self,
+        filename: str,
+        headers: list[str],
+        rows: list[list[Any]],
+        *,
+        sheet_name: str = "Sheet1",
+        as_csv: bool = False,
+    ) -> ExecutionResult:
+        """Create a custom Excel (.xlsx) or CSV spreadsheet strictly as requested by owner."""
+        from app.sheets.local_excel import get_local_excel_service
+        svc = get_local_excel_service()
+        file_path = svc.create_spreadsheet(filename, headers, rows, sheet_name=sheet_name, as_csv=as_csv)
+        statement = f"Spreadsheet '{file_path.name}' created with {len(headers)} columns and {len(rows)} row(s)."
+        return ExecutionResult(
+            response=statement,
+            structured_data={
+                "file_path": str(file_path),
+                "headers": headers,
+                "row_count": len(rows),
+                "format": "csv" if as_csv else "xlsx",
+            },
+            evidence=[f"file_exists:{file_path.exists()}", f"file_size:{file_path.stat().st_size}B"],
+        )
+
+    async def export_leads_to_excel(self, filename: str = "leads_export.xlsx") -> ExecutionResult:
+        """Export all persistent CRM leads into a formatted Excel spreadsheet."""
+        leads = await self.crm_store.leads()
+        headers = ["ID", "Company", "State", "Score", "Domain", "Created At"]
+        rows = [
+            [lead.id, lead.company or lead.name, lead.state.value, lead.score, lead.domain or "-", lead.created_at.strftime("%Y-%m-%d")]
+            for lead in leads
+        ]
+        return await self.create_custom_spreadsheet(filename, headers, rows, sheet_name="Leads")
+
     def supports(self, intent: str) -> bool:
         return intent in self.INTENTS
 

@@ -72,7 +72,7 @@ from app.delivery.client_delivery import ClientDeliveryService, DeliveryStore, M
 from app.discovery.engine import DiscoveryEngine
 from app.discovery.saas_discovery import SubscriptionRegistry
 from app.research.orchestrator import DeepResearchTask
-from app.phase8.engine import Phase8Engine
+from app.automation.personal_os_engine import PersonalOSEngine as Phase8Engine
 from app.desktop.app_launcher import ApplicationRegistry, AppLauncher
 from app.desktop.clipboard import ClipboardController
 from app.desktop.controller import DesktopController
@@ -198,7 +198,7 @@ from app.native_apps.adapters.terminal import TerminalAdapter
 from app.native_apps.adapters.vscode import VSCodeAdapter
 from app.native_apps.capability_discovery import register_adapter_capabilities
 from app.native_apps.registry import NativeAppAdapterRegistry
-from app.phase9.engine import Phase9Engine
+from app.desktop.execution_engine import DesktopExecutionEngine as Phase9Engine
 from app.alerts.engine import AlertEngine
 from app.alerts.store import AlertStore
 from app.backtesting.engine import BacktestEngine
@@ -215,7 +215,7 @@ from app.market_intelligence.researcher import MarketResearcher
 from app.market_intelligence.sentiment import SentimentAnalyzer
 from app.market_intelligence.technical_analysis import TechnicalAnalysisEngine
 from app.market_intelligence.thesis_builder import ThesisBuilder
-from app.phase10.engine import Phase10Engine
+from app.finance.intelligence_engine import FinancialIntelligenceEngine as Phase10Engine
 from app.risk.engine import RiskEngine
 from app.risk.kill_switch import PaperKillSwitch, RiskKillSwitch
 from app.risk.rules import RiskRules
@@ -250,8 +250,8 @@ from app.personal.commitments import CommitmentService
 from app.personal.context_builder import PersonalContextBuilder
 from app.personal.profile import PersonalProfileService
 from app.personal.store import CommitmentStore, PersonalProfileStore
-from app.phase11.engine import Phase11Engine
-from app.phase13.engine import Phase13Engine
+from app.productivity.chief_of_staff_engine import ChiefOfStaffEngine as Phase11Engine
+from app.diagnostics.observability_engine import DiagnosticsObservabilityEngine as Phase13Engine
 from app.proactive.engine import ProactiveEngine
 from app.proactive.rules import ProactiveRules
 from app.proactive.suppression import ProactiveSuggestionStore

@@ -7,7 +7,7 @@ checks = [
     ('MemoryManager',    'from app.memory.manager import MemoryManager'),
     ('PaperBroker',      'from app.trading.paper_broker import PaperBroker'),
     ('DeepResearchTask', 'from app.research.orchestrator import DeepResearchTask'),
-    ('Phase8Engine',     'from app.phase8.engine import Phase8Engine'),
+    ('PersonalOSEngine', 'from app.automation.personal_os_engine import PersonalOSEngine'),
     ('RuntimeExecutor',  'from app.runtime.executor import Executor'),
     ('BrainGraph',       'from app.brain_graph.graph_engine import GraphEngine'),
     ('TaskCheckpoint',   'from app.reliability.checkpoints import TaskCheckpoint'),

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import re as _re_module
 
-from app.phase10.extraction import extract_symbol
+from app.finance.extraction import extract_symbol
 from app.schemas.tasks import TaskDomain, TaskProfile
 
 

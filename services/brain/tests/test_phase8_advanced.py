@@ -33,7 +33,7 @@ from app.discovery.mcp_discovery import MCPCatalog, MCPDiscoveryEngine
 from app.discovery.saas_discovery import SaaSDiscovery, Subscription, SubscriptionRegistry
 from app.execution.evidence_collector import EvidenceCollector
 from app.persistence.database import Database
-from app.phase8.extraction import extract_client_name, extract_date, extract_party_size, extract_time
+from app.automation.extraction import extract_client_name, extract_date, extract_party_size, extract_time
 from app.research.contradiction import ContradictionDetector
 from app.research.extractor import ClaimExtractor
 from app.research.freshness import FreshnessPolicy
