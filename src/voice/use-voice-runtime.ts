@@ -65,6 +65,12 @@ const DISPATCH_SETTLE_MS = 1400;
 // without making a bare "stop" feel unresponsive.
 const INTERRUPT_DISPATCH_SETTLE_MS = 220;
 
+// Echo Guard: When VYOM finishes speaking, room reverberation/echo-tail
+// from speakers can be picked up by the microphone and cause a self-loop
+// or duplicate answer. Suppress mic input for 2.5s after audio stops.
+const ECHO_TAIL_GUARD_MS = 2500;
+const BARGE_IN_LEVEL_THRESHOLD = 0.048;
+
 const INTERRUPT_TOKENS = new Set([
   "stop", "cancel", "halt", "abort", "enough", "ruko", "ruk", "ja", "jao",
   "rukiye", "bas", "karo", "band", "kar", "chhodo", "chodo", "mat", "nahi",
@@ -274,6 +280,7 @@ export function useVoiceRuntime({ onCommand }: VoiceRuntimeOptions): VoiceRuntim
   const lastLevelUpdateRef = useRef(0);
   const lastSpeechAtRef = useRef(0);
   const speakingStartedAtRef = useRef(0);
+  const speakingFinishedAtRef = useRef(0);
   const onCommandRef = useRef(onCommand);
   onCommandRef.current = onCommand;
 
@@ -305,6 +312,7 @@ export function useVoiceRuntime({ onCommand }: VoiceRuntimeOptions): VoiceRuntim
   const interruptPlayback = useCallback(() => {
     if (stateRef.current !== "Speaking") return;
     playerRef.current?.clear();
+    speakingFinishedAtRef.current = performance.now();
     turnCompleteRef.current = false;
     setState("Interrupted");
     if (interruptionTimerRef.current) window.clearTimeout(interruptionTimerRef.current);
@@ -315,13 +323,20 @@ export function useVoiceRuntime({ onCommand }: VoiceRuntimeOptions): VoiceRuntim
 
   const handleLevel = useCallback((nextLevel: number) => {
     const now = performance.now();
+    const isEchoTailActive = now - speakingFinishedAtRef.current < ECHO_TAIL_GUARD_MS;
+
     lastSpeechAtRef.current = nextLevel > 0.018 ? now : lastSpeechAtRef.current;
     if (now - lastLevelUpdateRef.current > 70) {
       setLevel(Math.min(nextLevel * 5.5, 1));
       lastLevelUpdateRef.current = now;
     }
 
-    if (nextLevel > 0.032) {
+    // In echo tail window or while speaking, require a higher barge-in threshold
+    const effectiveLevelThreshold = (stateRef.current === "Speaking" || isEchoTailActive)
+      ? BARGE_IN_LEVEL_THRESHOLD
+      : 0.032;
+
+    if (nextLevel > effectiveLevelThreshold) {
       if (stateRef.current === "Idle" && sessionActiveRef.current) {
         // The user has started speaking again after a settled turn: this
         // is a NEW utterance, with its own identity. Without the reset the
@@ -341,6 +356,12 @@ export function useVoiceRuntime({ onCommand }: VoiceRuntimeOptions): VoiceRuntim
 
   const sendAudio = useCallback((pcm: ArrayBuffer) => {
     if (connectionRef.current !== "connected") return;
+    const now = performance.now();
+    // ECHO GUARD: Do not stream microphone frames during speaking or the 2.5s echo-tail
+    // window unless user has explicitly barged in (handled above).
+    if (stateRef.current === "Speaking" || (now - speakingFinishedAtRef.current < ECHO_TAIL_GUARD_MS)) {
+      return;
+    }
     void providerRef.current?.sendAudio(pcmBufferToBase64(pcm)).catch(() => {
       if (sessionActiveRef.current) setConnection("reconnecting");
     });
@@ -550,6 +571,7 @@ export function useVoiceRuntime({ onCommand }: VoiceRuntimeOptions): VoiceRuntim
         setState("Speaking");
       },
       () => {
+        speakingFinishedAtRef.current = performance.now();
         if (turnCompleteRef.current && stateRef.current === "Speaking") setState("Idle");
       },
       (outputLevel) => setLevel(Math.min(outputLevel * 4.5, 1)),
