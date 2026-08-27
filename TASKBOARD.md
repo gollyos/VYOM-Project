@@ -21,6 +21,11 @@
 | 11 | Add weather/currency/crypto/trivia builtin tools (no-key free APIs) | BRAIN | done (4f6a768) |
 | 14 | Native JARVIS tools (WikipediaTool, NewsTool, WhatsAppTool, System battery/volume/lock) + multilingual language mirroring | BRAIN + SUBSYSTEMS | done (4d56a62) |
 | 15 | Universal 335+ Tools Catalog + JIT DynamicToolMatcher across 10 functional domains | BRAIN + SUBSYSTEMS | done (a4eb020) |
+| 16 | HumanTypewriter Anti-Ban Keyboard Simulator with Gaussian timing jitter & micro-pauses | BRAIN | done (70ca35c) |
+| 17 | Social Media Interceptor & Stylized Auto-Responder with Focus Mode quiet rule | BRAIN + SUBSYSTEMS | done (c3edf85) |
+| 18 | Teachable MacroEngine for custom voice/event/schedule user workflows | SUBSYSTEMS | done (cd44e99) |
+| 19 | Smart Professional Email Composer with customized tones and contextual drafts | SUBSYSTEMS | done (d6efb6d) |
+| 20 | Phone-to-PC Remote Controller Bridge via Telegram Gateway (/status, /lock, tasks) | BRAIN | done (040e284) |
 
 ## Maya-transcript backlog (28-Aug analysis; priority order)
 
