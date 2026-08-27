@@ -17,7 +17,7 @@
 | 8 | Exact owner media command routes to `play_media`, not generic Chrome launch | BRAIN | done (2dee063) |
 | 9 | Isolate external-capability tests from tracked production config | BRAIN + VERIFY | done (ecf47e2) |
 | 10 | Telegram gateway fail-closed owner auth, scoped files, remote provenance | BRAIN + VERIFY | done (f91c8b6) |
-| 11 | Add weather/currency/crypto/trivia builtin tools (no-key free APIs) | BRAIN | done (PENDING_COMMIT) |
+| 11 | Add weather/currency/crypto/trivia builtin tools (no-key free APIs) | BRAIN | done (4f6a768) |
 
 ## Maya-transcript backlog (28-Aug analysis; priority order)
 
