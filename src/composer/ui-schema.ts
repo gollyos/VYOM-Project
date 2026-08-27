@@ -41,7 +41,8 @@ export type UIObjectType =
   | "goal-progress-path"
   | "habit-trend"
   | "routine-sequence"
-  | "focus-mission";
+  | "focus-mission"
+  | "whiteboard-canvas";
 
 export type SurfaceTone = "neutral" | "intelligence" | "attention" | "verified";
 
@@ -375,6 +376,31 @@ export type FocusMissionObject = UIObjectBase<"focus-mission"> & {
   status: string;
 };
 
+export type WhiteboardNode = {
+  id: string;
+  label: string;
+  description?: string;
+  type?: "concept" | "action" | "decision" | "database" | "note";
+  x: number;
+  y: number;
+  color?: string;
+};
+
+export type WhiteboardEdge = {
+  from: string;
+  to: string;
+  label?: string;
+  dashed?: boolean;
+};
+
+export type WhiteboardCanvasObject = UIObjectBase<"whiteboard-canvas"> & {
+  topic: string;
+  description?: string;
+  nodes: WhiteboardNode[];
+  edges: WhiteboardEdge[];
+  summaryNotes?: string[];
+};
+
 export type UIObject =
   | StatusSummaryObject
   | AgentStatusObject
@@ -416,7 +442,8 @@ export type UIObject =
   | GoalProgressPathObject
   | HabitTrendObject
   | RoutineSequenceObject
-  | FocusMissionObject;
+  | FocusMissionObject
+  | WhiteboardCanvasObject;
 
 export type CompositionStep = {
   id: string;

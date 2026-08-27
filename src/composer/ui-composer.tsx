@@ -38,6 +38,7 @@ import {
   ListOrdered,
   Flag,
   Repeat,
+  Presentation,
 } from "lucide-react";
 import type {
   AgentStatusObject,
@@ -85,6 +86,7 @@ import type {
   HabitTrendObject,
   RoutineSequenceObject,
   FocusMissionObject,
+  WhiteboardCanvasObject,
 } from "./ui-schema";
 
 type UIComposerProps = {
@@ -135,6 +137,7 @@ const iconByType: Record<UIObject["type"], ReactNode> = {
   "habit-trend": <Repeat size={13} />,
   "routine-sequence": <ListOrdered size={13} />,
   "focus-mission": <Target size={13} />,
+  "whiteboard-canvas": <Presentation size={13} />,
 };
 
 function toneClass(tone: SurfaceTone | undefined) {
@@ -878,6 +881,93 @@ function FocusMission({ object }: { object: FocusMissionObject }) {
   );
 }
 
+function WhiteboardCanvas({ object }: { object: WhiteboardCanvasObject }) {
+  return (
+    <Surface object={object}>
+      <div className="whiteboard-header" style={{ marginBottom: "10px" }}>
+        <h4 style={{ margin: 0, fontSize: "13px", color: "#00f0ff" }}>{object.topic}</h4>
+        {object.description && <p style={{ margin: "3px 0 0", fontSize: "11px", opacity: 0.8 }}>{object.description}</p>}
+      </div>
+      <div
+        className="whiteboard-canvas-area"
+        style={{
+          position: "relative",
+          minHeight: "220px",
+          width: "100%",
+          background: "rgba(10, 16, 26, 0.65)",
+          borderRadius: "8px",
+          border: "1px solid rgba(0, 240, 255, 0.15)",
+          overflow: "hidden",
+        }}
+      >
+        <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
+          {object.edges.map((edge, idx) => {
+            const fromNode = object.nodes.find((n) => n.id === edge.from);
+            const toNode = object.nodes.find((n) => n.id === edge.to);
+            if (!fromNode || !toNode) return null;
+            return (
+              <g key={`edge-${idx}`}>
+                <line
+                  x1={`${fromNode.x}%`}
+                  y1={`${fromNode.y}%`}
+                  x2={`${toNode.x}%`}
+                  y2={`${toNode.y}%`}
+                  stroke="rgba(0, 240, 255, 0.5)"
+                  strokeWidth="1.5"
+                  strokeDasharray={edge.dashed ? "4,4" : undefined}
+                />
+                {edge.label && (
+                  <text
+                    x={`${(fromNode.x + toNode.x) / 2}%`}
+                    y={`${(fromNode.y + toNode.y) / 2 - 4}%`}
+                    fill="rgba(255,255,255,0.75)"
+                    fontSize="9"
+                    textAnchor="middle"
+                  >
+                    {edge.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+        {object.nodes.map((node) => (
+          <div
+            key={node.id}
+            style={{
+              position: "absolute",
+              left: `${node.x}%`,
+              top: `${node.y}%`,
+              transform: "translate(-50%, -50%)",
+              background: node.color || "rgba(18, 28, 45, 0.9)",
+              border: "1px solid rgba(0, 240, 255, 0.4)",
+              borderRadius: "6px",
+              padding: "6px 10px",
+              fontSize: "11px",
+              color: "#fff",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
+              zIndex: 2,
+            }}
+          >
+            <strong>{node.label}</strong>
+            {node.description && <p style={{ margin: "2px 0 0", fontSize: "9px", opacity: 0.75 }}>{node.description}</p>}
+          </div>
+        ))}
+      </div>
+      {object.summaryNotes && object.summaryNotes.length > 0 && (
+        <div className="whiteboard-notes" style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "4px" }}>
+          {object.summaryNotes.map((note, idx) => (
+            <div key={`note-${idx}`} style={{ fontSize: "11px", color: "rgba(255,255,255,0.85)", display: "flex", gap: "6px", alignItems: "center" }}>
+              <i style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#00f0ff", display: "inline-block" }} />
+              <span>{note}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Surface>
+  );
+}
+
 function ObjectRenderer({ object }: { object: UIObject }) {
   switch (object.type) {
     case "status-summary": return <StatusSummary object={object} />;
@@ -921,6 +1011,7 @@ function ObjectRenderer({ object }: { object: UIObject }) {
     case "habit-trend": return <HabitTrend object={object} />;
     case "routine-sequence": return <RoutineSequence object={object} />;
     case "focus-mission": return <FocusMission object={object} />;
+    case "whiteboard-canvas": return <WhiteboardCanvas object={object} />;
   }
 }
 
