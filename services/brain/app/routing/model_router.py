@@ -76,9 +76,12 @@ class ModelRouter:
                 # rewarding failure-prone models and penalising proven
                 # ones, which made the learned-evidence layer actively
                 # harmful instead of merely inert.
-                score -= bias
-                if bias_reason:
-                    learned_reasons.append(bias_reason)
+            role = task.metadata.get("role") or profile.domain.value
+            role_model = self.registry.get_for_role(role)
+            if role_model is not None and role_model.model_id == model.model_id:
+                score -= 60
+                learned_reasons.append(f"role-override for '{role}'")
+
             candidates.append((score, model))
 
         if not candidates:

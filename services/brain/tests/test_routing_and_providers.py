@@ -81,3 +81,24 @@ async def test_bounded_fallback_is_used_and_logged(tmp_path):
     finally:
         await close_harness(harness)
 
+
+@pytest.mark.asyncio
+async def test_per_role_model_configuration(tmp_path):
+    general_model = local_model(provider="p1", model_id="general-fast", priority=50)
+    coder_model = local_model(provider="p2", model_id="deep-coder", capabilities={"coding", "general"}, priority=50)
+    harness = await build_runtime(
+        tmp_path / "role.db",
+        models=[general_model, coder_model],
+        providers=[MockProvider("p1"), MockProvider("p2")],
+    )
+    try:
+        harness.registry.set_role_override("coding", "deep-coder")
+        task = Task(goal="Write python script", user_request="Write a fibonacci solver", metadata={"role": "coding"})
+        profile = TaskProfile(domain="coding", complexity=2, needs={"coding"})
+        decision = await harness.router.route(task, profile)
+        assert decision.primary_model == "deep-coder"
+        assert any("role-override" in r for r in decision.reason_selected.splitlines() if r) or "deep-coder" in decision.primary_model
+    finally:
+        await close_harness(harness)
+
+
