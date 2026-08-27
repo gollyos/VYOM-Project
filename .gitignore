@@ -13,7 +13,10 @@ __pycache__/
 *.egg-info/
 
 .env
-services/brain/.env
+*.bak
+*.env*
+services/brain/.env*
+services/brain/data/*.bak
 services/brain/data/*.db
 services/brain/data/*.db-shm
 services/brain/data/*.db-wal
