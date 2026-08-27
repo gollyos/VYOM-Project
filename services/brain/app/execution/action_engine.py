@@ -1578,7 +1578,8 @@ class ActionEngine:
         r"baarish|barish|rain|garmi|thand|humidity|wind|kaisa|kaisi|kaise|kitna|kitni|"
         r"hai|hain|hoga|hogi|hoge|rahega|kya|batao|bata|bataiye|bataen|dikhao|tell|show|"
         r"me|my|the|in|at|of|and|or|ka|ki|ke|se|liye|mein|me|please|plz|vyom|hey|hi|"
-        r"hello|how|what|is|it|like|outside|going|a|an|the|full|report|status|now)$"
+        r"hello|how|what|is|it|like|outside|going|a|an|the|full|report|status|now|"
+        r"bahar|baahar|bhar|yaha|yahan|yahaan|idhar|ghar|home|shehar|city)$"
     )
 
     @classmethod

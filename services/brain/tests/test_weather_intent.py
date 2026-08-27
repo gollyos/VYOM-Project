@@ -62,6 +62,8 @@ def test_location_extraction_returns_none_for_bare_requests():
     extract = ActionEngine._extract_weather_location
     assert extract("aaj mausam kaisa hai") is None
     assert extract("weather batao") is None
+    assert extract("bahar mausam kaisa hai") is None  # "bahar" = outside, not Bahār (Iran)
+    assert extract("yaha ka mausam kya hai") is None  # "yaha" = here
 
 
 @pytest.mark.asyncio
