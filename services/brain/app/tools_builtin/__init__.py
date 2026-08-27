@@ -3,6 +3,7 @@ from .crypto_tool import CryptoTool
 from .currency_tool import CurrencyTool
 from .desktop import DesktopTool
 from .discord_tool import DiscordTool
+from .edge_tts_tool import EdgeTTSTool
 from .email_tool import EmailTool
 from .facebook_tool import FacebookTool
 from .facts_tool import TriviaFactsTool
@@ -28,7 +29,7 @@ from .wikipedia_tool import WikipediaTool
 from .youtube_tool import YouTubeTool
 
 __all__ = [
-    "BrowserTool", "CryptoTool", "CurrencyTool", "DesktopTool", "DiscordTool", "EmailTool", "FacebookTool", "FilesystemTool", "GitTool", "InputControlTool",
+    "BrowserTool", "CryptoTool", "CurrencyTool", "DesktopTool", "DiscordTool", "EdgeTTSTool", "EmailTool", "FacebookTool", "FilesystemTool", "GitTool", "InputControlTool",
     "InstagramTool", "LinkedInTool", "MetaAdsTool", "NewsTool", "SafetyJudgeTool", "ScreenObserveTool", "ScreenshotTool", "SheetsTool", "SystemTool",
     "TelegramTool", "TerminalTool", "TriviaFactsTool", "TwitterTool", "VideoTool", "WeatherTool", "WhatsAppTool", "WikipediaTool", "YouTubeTool",
 ]

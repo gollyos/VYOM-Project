@@ -119,6 +119,11 @@ class ActionEngine:
         # so every browser handler below falls back to the pre-existing
         # UI-Automation behaviour unchanged when it is absent.
         self.extension_bridge = extension_bridge
+        try:
+            from app.browser_agent import BrowserAgentRuntime
+            self.browser_agent = BrowserAgentRuntime(executor)
+        except Exception:
+            self.browser_agent = None
 
     def supports(self, intent: str) -> bool:
         return intent in TOOL_INTENTS

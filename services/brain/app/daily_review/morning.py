@@ -34,6 +34,7 @@ class MorningBriefing(BaseModel):
     #: Failed/paused tasks worth retrying today (id + what it was), so the
     #: UI can offer one-tap retry instead of making the user remember.
     retry_candidates: list[dict] = Field(default_factory=list)
+    audio_path: str | None = None
 
 
 class MorningBriefingService:
@@ -70,7 +71,7 @@ class MorningBriefingService:
         highlights.extend(data.personal_priorities[:2])
         highlights = highlights[: self.max_highlights]
 
-        summary = "Good morning. " + (" ".join(f"{item}." for item in highlights) if highlights else "Nothing urgent is recorded right now.")
+        summary = "Good morning Boss. " + (" ".join(f"{item}." for item in highlights) if highlights else "Nothing urgent is recorded right now.")
         return MorningBriefing(
             summary=summary, highlights=highlights, risks=data.risks,
             ask_prepare_plan=True,
@@ -81,3 +82,13 @@ class MorningBriefingService:
                 for note in data.pending_task_notes[:5] if "|" in note
             ],
         )
+
+    async def build_with_audio(self, data: MorningBriefingInput, *, output_path: str | None = None) -> MorningBriefing:
+        """Builds briefing and synthesizes high-quality in-process voice narration."""
+        briefing = self.build(data)
+        from app.tools_builtin.edge_tts_tool import EdgeTTSTool
+        tts = EdgeTTSTool()
+        res = await tts.execute({"action": "synthesize", "text": briefing.summary, "output_path": output_path})
+        if res.success and res.structured_output:
+            briefing.audio_path = res.structured_output.get("path")
+        return briefing
