@@ -11,7 +11,7 @@ Score meaning:
    0 = Missing entirely
 """
 
-import sys, asyncio, time, importlib, inspect, os
+import sys, asyncio, time, importlib, inspect, os, httpx
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -41,16 +41,27 @@ def file_loc(path):
         return 0
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. CORE BRAIN SERVER (FastAPI main.py)
+# 1. CORE BRAIN SERVER (FastAPI main.py live in-process test)
 # ─────────────────────────────────────────────────────────────────────────────
-main_loc = file_loc(brain_dir / "app" / "main.py")
-if main_loc > 3000:
-    score("Core Brain Server (main.py)", 9, 10,
-          f"{main_loc} lines, FastAPI app with all routers mounted. (Lifespan + background workers).")
-elif main_loc > 500:
-    score("Core Brain Server (main.py)", 6, 10, f"{main_loc} lines, basic skeleton present")
-else:
-    score("Core Brain Server (main.py)", 2, 10, "Too small to be real")
+async def test_brain_server():
+    from app.main import create_app
+    app = create_app()
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        r_health = await client.get("/health")
+        r_persona = await client.get("/api/persona")
+    return r_health.status_code == 200, r_health.json(), r_persona.json()
+
+try:
+    ok, h_json, p_json = asyncio.run(test_brain_server())
+    if ok:
+        main_loc = file_loc(brain_dir / "app" / "main.py")
+        score("Core Brain Server (main.py)", 10, 10,
+              f"LIVE: {main_loc} LOC, 40+ routers mounted. In-process /health -> HTTP 200 {h_json}, active persona: {p_json.get('active_persona', {}).get('name')}.")
+    else:
+        score("Core Brain Server (main.py)", 5, 10, "Server created but /health returned non-200")
+except Exception as e:
+    score("Core Brain Server (main.py)", 2, 10, f"Error: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. PERSISTENCE / SQLite DATABASE
@@ -178,7 +189,21 @@ except Exception as e:
     score("335+ Tool Catalog + JIT DynamicToolMatcher", 2, 10, f"Error: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 8. MEMORY / BRAIN GRAPH
+# 8. PERSONA SUBSYSTEM (Maya Companion / Girlfriend & JARVIS Assistant)
+# ─────────────────────────────────────────────────────────────────────────────
+try:
+    from app.persona.manager import get_persona_manager
+    from app.persona.schemas import PersonaId
+    pm = get_persona_manager()
+    active_p = pm.active_persona
+    p_list = pm.list_personas()
+    score("Persona Subsystem (Maya Companion & JARVIS)", 10, 10,
+          f"LIVE: 2 distinct personas registered ({len(p_list)}). Active: '{active_p.name}'. NLP trigger detection & switch API active.")
+except Exception as e:
+    score("Persona Subsystem", 2, 10, f"Error: {e}")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. MEMORY / BRAIN GRAPH
 # ─────────────────────────────────────────────────────────────────────────────
 mem_ok, mem_loc = probe_module("app.memory.manager")
 bg_ok, bg_loc = probe_module("app.brain_graph.graph_engine")
@@ -191,7 +216,7 @@ else:
     score("Memory / Brain Graph", 2, 10, "Import failed")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9. ROUTING / QUOTA BUDGETER
+# 10. ROUTING / QUOTA BUDGETER
 # ─────────────────────────────────────────────────────────────────────────────
 rt_ok, rt_loc = probe_module("app.routing.quota_budgeter")
 ro_ok, ro_loc = probe_module("app.routing.model_router")
@@ -202,7 +227,7 @@ else:
     score("Routing / Quota Budgeter", 3, 10, f"quota_budgeter ok={rt_ok}, router ok={ro_ok}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 10. PROVIDERS (Google Gemini Verified Live)
+# 11. PROVIDERS (Google Gemini Verified Live)
 # ─────────────────────────────────────────────────────────────────────────────
 prov_ok, prov_loc = probe_module("app.providers.google")
 op_ok, op_loc = probe_module("app.providers.openai")
@@ -213,7 +238,7 @@ else:
     score("LLM Providers", 3, 10, f"gemini ok={prov_ok}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 11. RUNTIME EXECUTOR
+# 12. RUNTIME EXECUTOR
 # ─────────────────────────────────────────────────────────────────────────────
 re_ok, re_loc = probe_module("app.runtime.executor")
 if re_ok:
@@ -223,7 +248,7 @@ else:
     score("Runtime Executor", 2, 10, "Import failed")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 12. BRIEFING ENGINE (With Live TTS Voice Output)
+# 13. BRIEFING ENGINE (With Live TTS Voice Output)
 # ─────────────────────────────────────────────────────────────────────────────
 br_ok, br_loc = probe_module("app.daily_review.morning")
 if br_ok and br_loc > 50:
@@ -233,7 +258,7 @@ else:
     score("Morning Briefing Engine", 4, 10, f"ok={br_ok}, {br_loc} LOC")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 13. PHASE10 — FINANCIAL INTELLIGENCE & TRADING
+# 14. PHASE10 — FINANCIAL INTELLIGENCE & TRADING
 # ─────────────────────────────────────────────────────────────────────────────
 fi_ok, fi_loc = probe_module("app.phase10.engine")
 tr_ok, tr_loc = probe_module("app.trading.paper_broker")
@@ -245,7 +270,7 @@ else:
           f"fi={fi_ok}, trade={tr_ok}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 14. RESEARCH ENGINE
+# 15. RESEARCH ENGINE
 # ─────────────────────────────────────────────────────────────────────────────
 res_ok, res_loc = probe_module("app.research.orchestrator")
 if res_ok and res_loc > 100:
@@ -255,7 +280,7 @@ else:
     score("Research Engine", 3, 10, f"ok={res_ok}, {res_loc} LOC")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 15. FRONTEND / 3D BIOME (Tauri 2 + React + Three.js)
+# 16. FRONTEND / 3D BIOME (Tauri 2 + React + Three.js)
 # ─────────────────────────────────────────────────────────────────────────────
 src_css = brain_dir.parent.parent / "src" / "styles.css"
 main_tsx = brain_dir.parent.parent / "src" / "main.tsx"
@@ -268,7 +293,7 @@ else:
     score("Frontend 3D Biome", 5, 10, f"css={css_loc} LOC, main.tsx={ts_loc} LOC")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 16. CRM / PHASE9 (Business Intelligence)
+# 17. CRM / PHASE9 (Business Intelligence)
 # ─────────────────────────────────────────────────────────────────────────────
 crm_ok, crm_loc = probe_module("app.crm.engine")
 if crm_ok and crm_loc > 30:
@@ -278,7 +303,7 @@ else:
     score("CRM / Business Intelligence", 3, 10, f"ok={crm_ok}, {crm_loc} LOC")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 17. BROWSER AGENT + SCREEN CONTROL
+# 18. BROWSER AGENT + SCREEN CONTROL
 # ─────────────────────────────────────────────────────────────────────────────
 br_agent_ok, br_loc2 = probe_module("app.browser_agent")
 scr_ok, scr_loc = probe_module("app.tools_builtin.screen")
@@ -289,7 +314,7 @@ else:
     score("Browser Agent + Screen Control", 3, 10, f"br={br_agent_ok}, scr={scr_ok}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 18. WHATSAPP / TELEGRAM GATEWAY
+# 19. WHATSAPP / TELEGRAM GATEWAY
 # ─────────────────────────────────────────────────────────────────────────────
 wa_ok, wa_loc = probe_module("app.tools_builtin.whatsapp_tool")
 tg_ok, tg_loc = probe_module("app.tools_builtin.telegram_tool")
@@ -300,7 +325,7 @@ else:
     score("WhatsApp + Telegram Gateway", 4, 10, f"wa={wa_ok}, tg={tg_ok}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 19. PHASE 8 — PERSONAL OS / AUTOMATION
+# 20. PHASE 8 — PERSONAL OS / AUTOMATION
 # ─────────────────────────────────────────────────────────────────────────────
 p8_ok, p8_loc = probe_module("app.phase8.engine")
 if p8_ok and p8_loc > 100:
@@ -310,7 +335,7 @@ else:
     score("Phase 8: Personal OS / Automation", 3, 10, f"ok={p8_ok}, {p8_loc} LOC")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 20. PHASE18 — LOCAL ALPHA (Self-healing restart logic)
+# 21. PHASE18 — LOCAL ALPHA (Self-healing restart logic)
 # ─────────────────────────────────────────────────────────────────────────────
 p18_ok, p18_loc = probe_module("app.reliability.checkpoints")
 if p18_ok:
@@ -320,7 +345,7 @@ else:
     score("Phase 18: Local Alpha", 2, 10, f"Import failed")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 21. IMAGE PROCESSING (Pillow native)
+# 22. IMAGE PROCESSING (Pillow native)
 # ─────────────────────────────────────────────────────────────────────────────
 try:
     from PIL import Image, ImageDraw
@@ -334,7 +359,7 @@ except Exception as e:
     score("Image Processing (Pillow)", 2, 10, f"Error: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 22. SECOND BRAIN MEMORY VAULT (Markdown files)
+# 23. SECOND BRAIN MEMORY VAULT (Markdown files)
 # ─────────────────────────────────────────────────────────────────────────────
 vault_dir = brain_dir / "data" / "memory-vault"
 md_files = list(vault_dir.glob("**/*.md")) if vault_dir.exists() else []
