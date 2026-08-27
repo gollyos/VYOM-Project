@@ -349,6 +349,14 @@ Developer focus remains a deliberate local composition and `Close everything` do
 
 ## Verification record
 
+### 2026-08-27 (later) - Weather/currency/crypto/trivia builtin tools (no-key free APIs)
+
+- Added four new BRAIN-lane builtin tools so VYOM can answer natural conversational queries without any external API key: `WeatherTool` (`app/tools_builtin/weather_tool.py`, Open-Meteo geocoding + forecast), `CurrencyTool` (`app/tools_builtin/currency_tool.py`, Frankfurter/ECB convert + rates), `CryptoTool` (`app/tools_builtin/crypto_tool.py`, CoinGecko simple/price + search/trending, with explicit 429 handling), and `TriviaFactsTool` (`app/tools_builtin/facts_tool.py`, Advice Slip + Useless Facts + Official Joke API). All four are L0/low-risk, registered in `app/tools_builtin/__init__.py`, instantiated directly in `app/main.py` next to `SystemTool()`, and enabled in `config/tools.yaml`.
+- Each tool follows the existing `BaseTool`/`ToolMetadata`/`ToolResult.completed`/`EvidenceItem(type="tool_result")` contract, validates required inputs via `ToolValidationError`, and wraps `httpx.AsyncClient` network failures (and CoinGecko rate limiting) into clear validation errors rather than raw exceptions.
+- Tests added: `tests/test_weather_tool.py`, `tests/test_currency_tool.py`, `tests/test_crypto_tool.py`, `tests/test_facts_tool.py` — all mock the network with `httpx.MockTransport` against realistically-shaped API responses (same convention as `tests/test_discord_integration.py`), so the suite never hits real endpoints.
+- Verification actually run: focused new-tool suite `33 passed in 1.61s`; full Brain suite from `services/brain` — `python -m pytest tests/ -q --basetemp="C:/Users/GunjanAdmin/.vyom-pytest-tmp/brain"` — **1230 passed, 2 skipped, 6 warnings in 315.19s**. Live network calls to Open-Meteo/Frankfurter/CoinGecko/Advice-Slip/Useless-Facts/Joke-API were not exercised in this pass (unit-test-only per the network-mocking convention); a manual live smoke check is still open follow-up work if the owner wants it before first real use.
+- No new dependency was added (`httpx` was already a repo dependency, matching `app/instagram/provider.py`'s usage).
+
 ### 2026-08-27 - Exact owner media E2E, durable preference, secure Telegram boundary, and cold-boot repair
 
 - Exact live task `task_b41c56e68f7749949c4071d9f6bb0efe` executed `VYOM, Chrome kholo aur YouTube pe lofi play karo` through the real Brain and visible Chrome. Intent was `play_media`; YouTube title was `lofi hip hop radio 📚 beats to relax/study to`; `playing=true` came from `browser-tab-audio-state`; required `app_launch` and `media_playing` postconditions both reached `VERIFIED_COMPLETE`; whole-goal score 1.0; five desktop tool calls; no error. Implemented in `2dee063`.

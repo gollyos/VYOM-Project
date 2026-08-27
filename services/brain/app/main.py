@@ -320,7 +320,7 @@ from app.security.command_policy import CommandPolicy
 from app.security.permission_engine import PermissionEngine
 from app.tools.executor import ToolExecutor
 from app.tools.registry import ToolRegistry
-from app.tools_builtin import BrowserTool, DesktopTool, DiscordTool, EmailTool, FacebookTool, FilesystemTool, GitTool, InputControlTool, InstagramTool, LinkedInTool, MetaAdsTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, TwitterTool, VideoTool, YouTubeTool, SafetyJudgeTool, TerminalTool
+from app.tools_builtin import BrowserTool, CryptoTool, CurrencyTool, DesktopTool, DiscordTool, EmailTool, FacebookTool, FilesystemTool, GitTool, InputControlTool, InstagramTool, LinkedInTool, MetaAdsTool, ScreenObserveTool, ScreenshotTool, SheetsTool, SystemTool, TelegramTool, TriviaFactsTool, TwitterTool, VideoTool, WeatherTool, YouTubeTool, SafetyJudgeTool, TerminalTool
 from app.skills.builder import SkillBuilder
 from app.skills.executor import SkillExecutor
 from app.skills.teachable import TeachableSkillService
@@ -442,6 +442,10 @@ def create_app(
         tool_registry.register(BrowserTool(browser_actions, browser_verifier))
         tool_registry.register(ScreenshotTool(browser_actions, window_manager, privacy_filter))
         tool_registry.register(SystemTool())
+        tool_registry.register(WeatherTool())
+        tool_registry.register(CurrencyTool())
+        tool_registry.register(CryptoTool())
+        tool_registry.register(TriviaFactsTool())
         tool_registry.register(DesktopTool(desktop_controller, native_app_adapters))
         tool_registry.register(ScreenObserveTool(screen_observer))
         if mouse_backend is not None and keyboard_backend is not None:

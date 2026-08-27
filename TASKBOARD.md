@@ -10,13 +10,14 @@
 | 1 | LIVE E2E: "Chrome kholo + YouTube lofi play" real window me VERIFIED_COMPLETE | VERIFY | done (2dee063) |
 | 2 | Desktop release build (`npm run desktop:build`) + installed app me voice auto-on check | FRONTEND + VERIFY | done (4017163) |
 | 3 | Morning briefing live: real failed/paused tasks briefing me bole | BRAIN + VERIFY | in-progress (Codex/root, 11:34) |
-| 4 | Paper-trade ek real setup end-to-end (data → thesis → risk PASS → paper order) | SUBSYSTEMS | open |
+| 4 | Paper-trade ek real setup end-to-end (data → thesis → risk PASS → paper order) | SUBSYSTEMS | in-progress (Codex/root, 13:06) |
 | 5 | WS replay live test: task chalate time disconnect karke events wapas aaye | VERIFY | open |
 | 6 | /api/quota budget chip real app me dikhe (15% pe amber) | FRONTEND | open |
 | 7 | Meta-learning / multi-agent orchestrator ke liye live smoke test | SUBSYSTEMS | open |
 | 8 | Exact owner media command routes to `play_media`, not generic Chrome launch | BRAIN | done (2dee063) |
 | 9 | Isolate external-capability tests from tracked production config | BRAIN + VERIFY | done (ecf47e2) |
 | 10 | Telegram gateway fail-closed owner auth, scoped files, remote provenance | BRAIN + VERIFY | done (f91c8b6) |
+| 11 | Add weather/currency/crypto/trivia builtin tools (no-key free APIs) | BRAIN | done (PENDING_COMMIT) |
 
 ## Maya-transcript backlog (28-Aug analysis; priority order)
 

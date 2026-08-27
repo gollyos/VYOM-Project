@@ -20,6 +20,18 @@ tools:
   system:
     enabled: true
     risk: medium
+  weather:
+    enabled: true
+    risk: low
+  currency:
+    enabled: true
+    risk: low
+  crypto:
+    enabled: true
+    risk: low
+  facts:
+    enabled: true
+    risk: low
 mcp_servers:
   # Real MCP servers VYOM connects to automatically on boot. Every entry
   # below is CREDENTIAL-FREE and was live-verified connected (2026-08-25):
