@@ -32,7 +32,14 @@ class BrowserActions:
     async def _perform(self, action: str, inputs: dict[str, Any]) -> dict[str, Any]:
         page = await self.session.ensure_page()
         if action in {"open", "navigate"}:
-            response = await page.goto(str(inputs["url"]), wait_until="domcontentloaded", timeout=int(inputs.get("timeout_ms", 15_000)))
+            raw_url = str(inputs["url"]).strip()
+            import urllib.parse
+            parsed = urllib.parse.urlparse(raw_url)
+            if parsed.scheme not in {"http", "https"}:
+                raise ValueError(f"URL guardrail: forbidden scheme '{parsed.scheme}'. Only http and https allowed.")
+            if parsed.hostname in {"169.254.169.254", "metadata.google.internal"}:
+                raise ValueError("URL guardrail: cloud metadata endpoints are blocked.")
+            response = await page.goto(raw_url, wait_until="domcontentloaded", timeout=int(inputs.get("timeout_ms", 15_000)))
             return {"url": page.url, "title": await page.title(), "status": response.status if response else None}
         selector = str(inputs.get("selector", ""))
         if action == "read":
@@ -136,6 +143,33 @@ class BrowserActions:
                 "screenshot": str(screenshot_path),
                 "stuck_analysis": stuck_info,
                 "recommendation": recommendation,
+            }
+        elif action == "wait_for_user_otp":
+            import asyncio
+            timeout_ms = int(inputs.get("timeout_ms", 60_000))
+            poll_interval_s = float(inputs.get("poll_interval_s", 2.0))
+            start_url = page.url
+            deadline = asyncio.get_event_loop().time() + (timeout_ms / 1000.0)
+            
+            otp_status = "waiting"
+            while asyncio.get_event_loop().time() < deadline:
+                current_info = await page.evaluate("""() => {
+                    const bodyText = document.body ? document.body.innerText : '';
+                    const hasOtp = /enter code|verification code|one-time password|enter otp|2-step|sms code|authenticator/i.test(bodyText);
+                    const otpInputs = document.querySelectorAll('input[type="tel"], input[name*="otp"], input[id*="otp"], input[autocomplete="one-time-code"]');
+                    return { hasOtp: hasOtp || otpInputs.length > 0 };
+                }""")
+                if page.url != start_url or not current_info.get("hasOtp"):
+                    otp_status = "completed"
+                    break
+                await asyncio.sleep(poll_interval_s)
+                
+            return {
+                "url": page.url,
+                "title": await page.title(),
+                "action": "wait_for_user_otp",
+                "status": otp_status,
+                "message": "OTP verification completed." if otp_status == "completed" else "OTP wait timed out."
             }
         else:
             raise ValueError(f"Unsupported browser action: {action}")
