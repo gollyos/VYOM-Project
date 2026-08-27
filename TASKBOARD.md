@@ -31,6 +31,7 @@
 | 23 | TaskClassifier Intent Rules for Translation & Remote Voice Routing | BRAIN | done (9692f8a) |
 | 24 | Mobile Android Companion Remote Brain URL Support in Frontend | FRONTEND | done (95b715e) |
 | 25 | Reliability & Crash Resistance: multi-model Gemini fallbacks, React error boundary, safe PCM decoding & optional chaining in WS stream | FRONTEND + BRAIN | done (0b51236) |
+| 26 | JARVIS 2050: Holographic Infinite Memory, Autonomous Agency Pipeline, Cognitive Scaffolder (free-model supercharger), Dynamic Tool Synthesizer, agency+synthesize_tool intent routing | BRAIN + SUBSYSTEMS | done (9b487d5) |
 
 ## Maya-transcript backlog (28-Aug analysis; priority order)
 
