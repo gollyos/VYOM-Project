@@ -13,7 +13,9 @@
 | 4 | Paper-trade ek real setup end-to-end (data → thesis → risk PASS → paper order) | SUBSYSTEMS | in-progress (Codex/root, 13:06) |
 | 5 | WS replay live test: task chalate time disconnect karke events wapas aaye | VERIFY | open |
 | 6 | /api/quota budget chip real app me dikhe (15% pe amber) | FRONTEND | open |
-| 7 | Meta-learning / multi-agent orchestrator ke liye live smoke test | SUBSYSTEMS | open |
+| 7 | Meta-learning / multi-agent orchestrator ke liye live smoke test | SUBSYSTEMS | in-progress (Claude, 13:05) |
+| 12 | Hallucination fix: non-actionable Q&A reasoning-path pe jaaye (tool-mission planner ka title/sediment leak band); degenerate-answer verifier gate | BRAIN | in-progress (Claude, 12:55) |
+| 13 | Multi-agent wiring: 10 role agents + CEO/SEO/security registry me, scoped tools, orchestrator ko command path se call | SUBSYSTEMS + BRAIN | in-progress (Claude, 13:05) |
 | 8 | Exact owner media command routes to `play_media`, not generic Chrome launch | BRAIN | done (2dee063) |
 | 9 | Isolate external-capability tests from tracked production config | BRAIN + VERIFY | done (ecf47e2) |
 | 10 | Telegram gateway fail-closed owner auth, scoped files, remote provenance | BRAIN + VERIFY | done (f91c8b6) |

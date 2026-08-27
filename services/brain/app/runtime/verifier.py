@@ -14,11 +14,65 @@ _STOPWORDS = frozenset({
 })
 
 
+#: Trailing tokens that mean a sentence was cut off before its point -
+#: "India is a", "Python was the", "created by". A response ending on one
+#: of these is a fragment, not an answer.
+_DANGLING_TAIL = frozenset({
+    "is", "was", "are", "were", "the", "a", "an", "and", "or", "of", "to",
+    "by", "is a", "is an", "was a", "was an", "are the", "known as",
+    "such as", "called", "made", "created", "developed",
+})
+
+
+def _degenerate_answer(response: str) -> str | None:
+    """Return a short reason string when `response` is structurally a
+    non-answer, or None when it looks like a real reply. Deliberately
+    narrow: a genuine terse answer ("New Delhi.", "Yes.", "42") must pass.
+    """
+    text = response.strip()
+    low = text.lower()
+
+    if low[:2] in ("[{", "{'") or low[:2] == '{"':
+        return "raw tool payload"
+
+    # A pile of "Completed: <goal>" log rows - sediment, never an answer.
+    segments = [s.strip() for s in text.split(";") if s.strip()]
+    if segments and all(s.lower().startswith("completed:") for s in segments):
+        return "task-log sediment"
+
+    # A short response whose last word(s) dangle on a connective. Check the
+    # last one and last two tokens; only trip when the whole reply is short
+    # enough that the tail really is the end of the thought (a long
+    # paragraph that happens to end mid-word is handled elsewhere).
+    words = _re.sub(r"[.!?…\-–—:]+$", "", low).split()
+    if 0 < len(words) <= 12:
+        if words[-1] in _DANGLING_TAIL or " ".join(words[-2:]) in _DANGLING_TAIL:
+            return "cut-off fragment"
+
+    return None
+
+
 class Verifier:
     async def verify(self, task: Task, result: ExecutionResult) -> VerificationResult:
         evidence: list[str] = []
         if not result.response.strip():
             return VerificationResult(passed=False, score=0, summary="Response was empty")
+
+        # A non-empty response can still be a non-answer. These three
+        # shapes were all being reported COMPLETE with score 1.0:
+        #   - a cut-off label: "India — is a", "Python is a"  (a fact's
+        #     "{subject} {predicate}" leaked out with no value)
+        #   - operational sediment: "Completed: ...; Completed: ..."  (a
+        #     list of task-log rows stitched together as prose)
+        #   - a raw tool payload: "[{'title': ...}]"
+        # None of them answer anything; the task should fail honestly.
+        degenerate = _degenerate_answer(result.response)
+        if degenerate is not None:
+            return VerificationResult(
+                passed=False, score=0.15,
+                summary=f"Response is not a real answer ({degenerate})",
+                evidence=[f"rejected response: {result.response.strip()[:160]}"],
+            )
         evidence.append("Non-empty response")
 
         tool_verification = result.structured_data.get("verification")

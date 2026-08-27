@@ -349,6 +349,16 @@ Developer focus remains a deliberate local composition and `Close everything` do
 
 ## Verification record
 
+### 2026-08-27 (later) - Hallucination fix: non-actionable Q&A no longer routed through the tool-mission planner
+
+- **Root cause (found by live probe, not code reading):** a `general`-intent turn that LLM triage classified `actionable: false` was still forced into `_run_general_mission` whenever `is_conversational()` returned false. That planner path answered "India ki capital kya hai?" with `"India — is a"` (a knowledge fact's `"{subject} — {predicate}"` label — `humanise_observation` reads `title` first) and answered "bore ho raha hoon" with `"Completed: …; Completed: …"` (episodic task-log rows stitched as prose). The structural `Verifier` then reported both COMPLETE, score 1.0 ("Non-empty response").
+- **Fixes (BRAIN lane, `app/runtime/`):**
+  1. `task_runtime.py` routing gate: when triage ran, trust its action-vs-answer verdict over the word-count heuristic — a non-actionable turn falls through to the grounded reasoning/LLM path. A freshness-dependent question (`needs_fresh_evidence`) still keeps the mission/research path regardless of triage.
+  2. `task_runtime._answer_memory_query._found_from_facts`: the rendered observation is now the fact SENTENCE (`fact.as_sentence()`), never the `"{subject} — {predicate}"` label (kept separately as `label`).
+  3. `task_runtime._answer_memory_query` raw-memory branch: drops `"Completed: …"` sediment rows from what a memory lookup reports.
+  4. `verifier.py`: new `_degenerate_answer()` gate — a response that is a cut-off fragment ("… is a"), task-log sediment ("Completed: …; Completed: …"), or a raw tool payload (`[{'…`) now FAILS verification (score 0.15) instead of passing. Genuine terse answers ("New Delhi.", "Yes.", "42") still pass.
+- **Verification actually run:** new focused suite `tests/test_degenerate_answer_gate.py` — `16 passed`. Targeted subset (`-k "verifier or task_runtime or mission or triage or conversational or general_mission or knowledge"`) — `118 passed`. Full Brain suite from `services/brain` (`--basetemp="C:/Users/GunjanAdmin/.vyom-pytest-tmp/full"`) — **1247 passed, 2 skipped, 5 warnings in 247s**. Live re-probe against a booted Brain (`POST /api/tasks`): "India ki capital kya hai?" → `"New Delhi hai, Boss."` (model `gemini-3.1-flash-lite`, was `"India — is a"`); "bore ho raha hoon, kuch baat karo" → real empathetic Hinglish reply with topics (was `"Completed: …"` sediment); "meri favourite chai?" → unchanged good recall; "Screen pe abhi kya hai?" → unchanged real window list (no regression); arithmetic still mis-routes to `ui_interact` (pre-existing, unrelated).
+
 ### 2026-08-27 (later) - Weather/currency/crypto/trivia builtin tools (no-key free APIs)
 
 - Added four new BRAIN-lane builtin tools so VYOM can answer natural conversational queries without any external API key: `WeatherTool` (`app/tools_builtin/weather_tool.py`, Open-Meteo geocoding + forecast), `CurrencyTool` (`app/tools_builtin/currency_tool.py`, Frankfurter/ECB convert + rates), `CryptoTool` (`app/tools_builtin/crypto_tool.py`, CoinGecko simple/price + search/trending, with explicit 429 handling), and `TriviaFactsTool` (`app/tools_builtin/facts_tool.py`, Advice Slip + Useless Facts + Official Joke API). All four are L0/low-risk, registered in `app/tools_builtin/__init__.py`, instantiated directly in `app/main.py` next to `SystemTool()`, and enabled in `config/tools.yaml`.
@@ -1103,6 +1113,14 @@ Do not start a new capability merely because it appears in the future vision. Im
 Recommended next phase when approved: **Phase 17 - Production Integration Activation** (carried): Brain-as-Tauri-sidecar lifecycle, one real Google OAuth E2E, one real web-search/booking/delivery/market-data provider E2E, `pywinauto` accessibility, proactive engine on real triggers, a real second device hardware-verifying the distributed runtime, home-server Docker deployment, code-signing keys + signed updates, and the Expo app on hardware. Phase 16 follow-ups to fold in: register a real planner contract for mission planning (model-assisted planning for genuinely novel multi-step goals, still bounded), route Defuddle/Playwright selection through LearnedRouter.preferred_tool at the research fetch site, and stream mission-loop events into the desktop Core states live.
 
 ## Change log
+
+### 2026-08-27 (later) - Non-actionable Q&A takes the grounded reasoning path, not the tool-mission planner
+
+- Trust LLM triage's action-vs-answer verdict over the `is_conversational` word-count heuristic; freshness-dependent questions still force the mission/research path.
+- Knowledge-fact observations render the fact sentence, never the `"{subject} — {predicate}"` label.
+- `"Completed: …"` operational sediment is dropped from memory-lookup results.
+- New `Verifier._degenerate_answer()` gate fails cut-off fragments, task-log sediment, and raw tool payloads instead of reporting them COMPLETE.
+- Full Brain suite 1247 passed / 2 skipped; live re-probe confirmed "India ki capital kya hai?" and "bore ho raha hoon" now answer correctly.
 
 ### 2026-08-27 - Grounded media command, permanent music preference, Telegram hardening, and boot truth
 

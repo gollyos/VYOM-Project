@@ -735,10 +735,26 @@ class TaskRuntime:
                 # you?" through the planner made VYOM run a system-status
                 # call and answer with a CPU card. Pure conversation takes
                 # the plain reasoning path: one cheap call, zero tools.
-                if triage is not None and triage.get("actionable"):
-                    await self._run_general_mission(task, profile, started, retries, fallback_used)
-                    return
-                if not is_conversational(task.user_request):
+                #
+                # When LLM triage ran, it already decided action-vs-answer
+                # with the Hinglish meaning in view - trust that over the
+                # crude word-count heuristic. A non-actionable turn that
+                # was forced into the tool-mission planner came back
+                # answered from a raw memory/knowledge lookup: the fact's
+                # TITLE ("India - is a") or a stack of "Completed: ..."
+                # episodic rows, never an actual answer. Non-actionable ->
+                # reasoning path (grounded by knowledge/memory, one call).
+                from app.runtime.planner import needs_fresh_evidence
+
+                # A freshness-dependent question ("what's new in n8n",
+                # today's price) can never be answered from model memory -
+                # it keeps the mission/research path regardless of triage.
+                fresh_needed = needs_fresh_evidence(task.user_request)
+                if triage is not None:
+                    if triage.get("actionable") or fresh_needed:
+                        await self._run_general_mission(task, profile, started, retries, fallback_used)
+                        return
+                elif fresh_needed or not is_conversational(task.user_request):
                     await self._run_general_mission(task, profile, started, retries, fallback_used)
                     return
 
@@ -1799,8 +1815,15 @@ class TaskRuntime:
             general_knowledge = self._is_general_knowledge_query(query)
 
         def _found_from_facts(facts) -> list[dict]:
+            # The rendered answer is the fact SENTENCE, never the
+            # "{subject} - {predicate}" label. That label leaked out as a
+            # user answer once ("India - is a") because the observation
+            # humaniser reads `title` first; the sentence carries the
+            # actual information, so it is the title here and the label is
+            # kept separately for callers that want it.
             return [{
-                "title": f"{fact.subject} — {fact.predicate}",
+                "title": fact.as_sentence(),
+                "label": f"{fact.subject} — {fact.predicate}",
                 "summary": fact.as_sentence(),
                 "source_url": fact.source_url,
                 "confidence": fact.confidence,
@@ -1850,6 +1873,15 @@ class TaskRuntime:
             hits = await self.memory_retriever.search(MemoryQuery(text=query, limit=8))
         except Exception as error:
             return {"ok": False, "error": f"memory search failed: {error}"[:300]}
+        # "Completed: <goal>" rows are operational sediment - a log that a
+        # task ran, not knowledge. They were being stitched into answers
+        # ("Completed: ...; Completed: ...") because they match on shared
+        # words. They never answer a user question, so they are dropped
+        # from what a memory lookup reports.
+        hits = [
+            hit for hit in hits
+            if not (hit.memory.title or "").strip().lower().startswith("completed:")
+        ]
         found = [{
             "title": hit.memory.title,
             "summary": hit.memory.summary or hit.memory.content[:300],
