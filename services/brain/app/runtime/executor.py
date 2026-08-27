@@ -112,11 +112,32 @@ class Executor:
                 f"{facts}\n\nUser request: {task.user_request}"
             )
 
+        # Check if the user is asking to switch persona directly in conversational mode
+        try:
+            from app.persona.manager import get_persona_manager
+            persona_mgr = get_persona_manager()
+            switch_to = persona_mgr.detect_switch_request(task.user_request)
+            if switch_to is not None:
+                new_p = persona_mgr.set_persona(switch_to)
+                if new_p.care_mode:
+                    msg = "Done! Ab se main aapki Maya (companion) hoon jaan. Aapka pura dhyan rakhungi aur aapke sare kaam bhi proactively complete karungi. Bolo, abhi kya karna hai?"
+                else:
+                    msg = "Understood Boss. JARVIS / Executive Chief of Staff mode activated. Standing by for your commands."
+                return ExecutionResult(
+                    response=msg,
+                    structured_data={"persona": new_p.model_dump(mode="json"), "switched": True},
+                    evidence=[f"Active persona set to {new_p.name}"],
+                    usage=UsageRecord(total_tokens=0, estimated_cost=0),
+                )
+            system_instruction = persona_mgr.active_persona.system_instruction
+        except Exception:
+            system_instruction = SYSTEM_INSTRUCTION
+
         provider_response = await provider.structured_output(
             ProviderRequest(
                 model=routing.primary_model,
                 user_request=user_request,
-                system_instruction=SYSTEM_INSTRUCTION,
+                system_instruction=system_instruction,
                 profile=profile,
                 context={"plan": [step.model_dump(mode="json") for step in task.plan]},
             )
