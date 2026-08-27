@@ -108,6 +108,10 @@ fn resolve_bundled_node(app: &AppHandle) -> Option<PathBuf> {
     candidate.is_file().then_some(candidate)
 }
 
+fn bundled_external_capabilities_config(project_root: &Path) -> PathBuf {
+    project_root.join("config").join("external_capabilities.yaml")
+}
+
 async fn is_listening(host: &str, port: u16) -> bool {
     tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect((host, port)))
         .await
@@ -157,6 +161,10 @@ fn try_spawn(python: &Path, brain_dir: &PathBuf, bundled_node: Option<&Path>, is
                 .env("VYOM_INTEGRATION_CONFIG", config_dir.join("integrations.yaml"))
                 .env("VYOM_AUTOMATION_CONFIG", config_dir.join("automations.yaml"))
                 .env("VYOM_RESEARCH_CONFIG", config_dir.join("research.yaml"))
+                .env(
+                    "VYOM_EXTERNAL_CAPABILITIES_CONFIG",
+                    bundled_external_capabilities_config(project_root),
+                )
                 .env("VYOM_ARTIFACTS_ROOT", data_root.join("artifacts"))
                 .env("VYOM_SKILLS_ROOT", data_root.join("skills"))
                 .env("VYOM_AGENTS_ROOT", data_root.join("agents"))
@@ -178,7 +186,9 @@ fn try_spawn(python: &Path, brain_dir: &PathBuf, bundled_node: Option<&Path>, is
 
 #[cfg(test)]
 mod tests {
-    use super::is_listening;
+    use std::path::Path;
+
+    use super::{bundled_external_capabilities_config, is_listening};
     use tokio::net::TcpListener;
 
     #[tokio::test]
@@ -203,5 +213,14 @@ mod tests {
         });
 
         assert!(is_listening("127.0.0.1", port).await);
+    }
+
+    #[test]
+    fn bundled_external_capabilities_path_stays_inside_installed_config() {
+        let root = Path::new("C:/Users/example/AppData/Local/VYOM");
+        assert_eq!(
+            bundled_external_capabilities_config(root),
+            root.join("config").join("external_capabilities.yaml"),
+        );
     }
 }
