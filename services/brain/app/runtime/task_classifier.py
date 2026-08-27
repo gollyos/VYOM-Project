@@ -1004,6 +1004,28 @@ class TaskClassifier:
                 intent="daily_status",
                 needs={"business"},
             )
+        if (
+            "morning briefing" in text
+            or "morning brief" in text
+            or "subah ka briefing" in text
+            or (
+                "briefing" in text
+                and any(
+                    marker in text
+                    for marker in (
+                        "pending", "failed", "unfinished", "carried over",
+                        "adhura", "adhoora", "baaki", "baki",
+                    )
+                )
+            )
+        ):
+            return TaskProfile(
+                domain=TaskDomain.PLANNING,
+                complexity=3,
+                deterministic=True,
+                intent="plan_today",
+                needs={"phase11"},
+            )
         if "plan my work" in text or "plan my day" in text or "what's the plan today" in text or "whats the plan today" in text or "what should i do today" in text:
             return TaskProfile(domain=TaskDomain.PLANNING, complexity=3, deterministic=True, intent="plan_today", needs={"phase11"})
         if "what should i work on" in text or "what should i do now" in text or "what should i do right now" in text:

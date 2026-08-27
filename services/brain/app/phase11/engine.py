@@ -165,12 +165,12 @@ class Phase11Engine:
         # have to remember it themselves ("PC dobara khulne pe yaad
         # rahe"). Real task-store rows only - never reconstructed.
         pending_notes: list[str] = []
-        interrupted = []
+        interrupted: list[Task] = []
         for status in (TaskStatus.FAILED, TaskStatus.PAUSED):
             interrupted.extend(await self.task_store.list_by_status({status}))
         for item in interrupted[:5]:
-            what = (item.user_request or item.goal or "task")[:80]
-            pending_notes.append(f"{item.id}|{what} ({status.value})")
+            what = " ".join((item.user_request or item.goal or "task").split())[:120]
+            pending_notes.append(f"{item.id}|{what} ({item.status.value})")
         if pending_notes:
             await emit("pending_work_recalled",
                        f"{len(pending_notes)} unfinished task(s) from before", {"tasks": pending_notes})
@@ -190,13 +190,20 @@ class Phase11Engine:
             objects.append({"id": "conflict", "type": "verified-result", "title": "Schedule note", "eyebrow": "Personal preference", "tone": "attention", "frame": _frame(58, 62, 38), "statement": conflict, "evidence": ["personal_profile:work_cutoff_time"], "timestamp": datetime.now(timezone.utc).isoformat()})
 
         summary = f"Today's plan: {len(briefing.ranked_priorities)} candidate item(s), {len(briefing.needs_attention)} needing attention."
+        morning_briefing = None
         if pending_notes:
-            summary = f"{len(pending_notes)} unfinished task(s) carried over. " + summary
+            morning_briefing = self.morning_service.build(MorningBriefingInput(
+                pending_task_notes=pending_notes,
+                pending_approvals=context.pending_approvals,
+            ))
+            summary = morning_briefing.summary + " " + summary
         if briefing.recommendation.primary:
             summary += f" Top recommendation: {briefing.recommendation.primary.action}."
         composition = _composition(f"plan-{task.id}", "brain-context", "Today's plan", summary, objects)
         structured = briefing.model_dump(mode="json")
         structured["pending_tasks"] = pending_notes
+        if morning_briefing is not None:
+            structured["morning_briefing"] = morning_briefing.model_dump(mode="json")
         return ExecutionResult(response=summary, structured_data=structured, ui_composition=composition, evidence=[f"candidate_actions:{len(context.candidate_actions)}", f"pending_tasks:{len(pending_notes)}"])
 
     async def _what_now(self, task: Task, emit: EventEmitter) -> ExecutionResult:
