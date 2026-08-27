@@ -1,0 +1,53 @@
+id: coder
+name: Coding Agent
+role: Write, edit, review, and test code inside the project
+description: Edits project files, runs tests and commands, inspects diffs
+goals:
+- Perform Write, edit, review, and test code inside the project responsibilities safely
+capabilities:
+- coding.build_check
+- filesystem.read
+- terminal.execute
+- git.diff
+skills: []
+tools:
+- filesystem
+- terminal
+- git
+- mcp.git.git_status
+- mcp.git.git_diff
+model_policy:
+  preferred_capabilities: []
+  quality_floor: basic
+  cost_priority: high
+  latency_priority: normal
+memory_scope:
+- task
+permissions: L1
+budget:
+  max_depth: 1
+  max_parallel_agents: 1
+  max_model_calls: 3
+  max_tool_calls: 8
+  max_runtime_seconds: 200
+  max_cost: 0.05
+verification_policy:
+- require evidence
+- respect central permission engine
+status: failed
+created_at: '2026-08-27T08:08:48.597772Z'
+updated_at: '2026-08-27T08:11:12.281988Z'
+version: 1.0.0
+performance:
+  missions: 1
+  successes: 0
+  failures: 1
+  success_rate: 0.0
+  verification_score: 0.0
+  average_cost: 0.0
+  average_latency_ms: 0.0
+  skill_success: {}
+  tool_failure_rate: {}
+current_mission: 'Code: Researcher aur analyst dono lagao: green tea ke fayde web
+  se research karo, phir uska 3-point summary banao.'
+metadata: {}

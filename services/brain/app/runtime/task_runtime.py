@@ -112,6 +112,7 @@ class TaskRuntime:
         self.mission_loop = mission_loop
         self.general_planner = None  # attached post-construction in main.py, like cognitive_runtime/mission_loop
         self.multi_agent_orchestrator = None  # attached post-construction; splits a multi-domain goal across role agents
+        self.progress_tracker = None  # attached post-construction; live per-task "which agent/step" board
         self.llm_triage = None  # attached post-construction; optional LLM intent gate for unrecognised text
         self.memory_retriever = None  # attached post-construction in main.py, same pattern
         self.memory_store = None  # attached post-construction in main.py, same pattern
@@ -1094,7 +1095,14 @@ class TaskRuntime:
             for item in active[:5]:
                 elapsed = int((now - (item.started_at or item.created_at)).total_seconds())
                 stage = item.status.value.replace("_", " ")
-                lines.append(f"{item.user_request[:60]} - {stage}, {elapsed}s elapsed")
+                # If this task fanned out to role agents, say WHICH agent
+                # is on it and at what step - the answer to "kaam kaha
+                # pahuncha?" for a multi-agent run.
+                detail = ""
+                board = self.progress_tracker.get(item.id) if self.progress_tracker is not None else None
+                if board is not None and board.agents:
+                    detail = " — " + board.describe()
+                lines.append(f"{item.user_request[:60]} - {stage}, {elapsed}s elapsed{detail}")
                 rows.append([item.user_request[:50], stage, f"{elapsed}s"])
             summary = "I am working on: " + "; ".join(lines)
             if degraded:

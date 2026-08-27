@@ -1,0 +1,48 @@
+id: monitor
+name: Monitor Agent
+role: System monitoring and health - CPU, memory, processes, windows
+description: Reports machine and runtime health from real measurements
+goals:
+- Perform System monitoring and health - CPU, memory, processes, windows responsibilities
+  safely
+capabilities:
+- system.query
+- screen.observe
+skills: []
+tools:
+- system
+- screen_observe
+model_policy:
+  preferred_capabilities: []
+  quality_floor: basic
+  cost_priority: high
+  latency_priority: normal
+memory_scope:
+- task
+permissions: L1
+budget:
+  max_depth: 1
+  max_parallel_agents: 1
+  max_model_calls: 3
+  max_tool_calls: 8
+  max_runtime_seconds: 200
+  max_cost: 0.05
+verification_policy:
+- require evidence
+- respect central permission engine
+status: ready
+created_at: '2026-08-27T08:08:48.669817Z'
+updated_at: '2026-08-27T08:08:48.669817Z'
+version: 1.0.0
+performance:
+  missions: 0
+  successes: 0
+  failures: 0
+  success_rate: 0.5
+  verification_score: 0.0
+  average_cost: 0.0
+  average_latency_ms: 0.0
+  skill_success: {}
+  tool_failure_rate: {}
+current_mission: null
+metadata: {}

@@ -1,0 +1,45 @@
+id: planner
+name: Planning Agent
+role: Break a goal into an ordered, dependency-aware plan
+description: Produces a step plan with no side effects
+goals:
+- Perform Break a goal into an ordered, dependency-aware plan responsibilities safely
+capabilities:
+- task.plan
+skills: []
+tools:
+- mcp.seq-thinking.sequentialthinking
+model_policy:
+  preferred_capabilities: []
+  quality_floor: basic
+  cost_priority: high
+  latency_priority: normal
+memory_scope:
+- task
+permissions: L1
+budget:
+  max_depth: 1
+  max_parallel_agents: 1
+  max_model_calls: 3
+  max_tool_calls: 8
+  max_runtime_seconds: 200
+  max_cost: 0.05
+verification_policy:
+- require evidence
+- respect central permission engine
+status: ready
+created_at: '2026-08-27T08:08:48.677770Z'
+updated_at: '2026-08-27T08:08:48.677770Z'
+version: 1.0.0
+performance:
+  missions: 0
+  successes: 0
+  failures: 0
+  success_rate: 0.5
+  verification_score: 0.0
+  average_cost: 0.0
+  average_latency_ms: 0.0
+  skill_success: {}
+  tool_failure_rate: {}
+current_mission: null
+metadata: {}

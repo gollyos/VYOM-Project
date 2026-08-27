@@ -1,0 +1,50 @@
+id: seo
+name: SEO Agent
+role: SEO analysis - keyword research, on-page and content review, competitor and
+  SERP checks
+description: Researches search demand and audits pages for search visibility
+goals:
+- Perform SEO analysis - keyword research, on-page and content review, competitor
+  and SERP checks responsibilities safely
+capabilities:
+- research
+- browser.read
+skills: []
+tools:
+- browser
+- mcp.duckduckgo.duckduckgo_web_search
+- mcp.web-fetch.fetch
+model_policy:
+  preferred_capabilities: []
+  quality_floor: basic
+  cost_priority: high
+  latency_priority: normal
+memory_scope:
+- task
+permissions: L1
+budget:
+  max_depth: 1
+  max_parallel_agents: 1
+  max_model_calls: 3
+  max_tool_calls: 8
+  max_runtime_seconds: 200
+  max_cost: 0.05
+verification_policy:
+- require evidence
+- respect central permission engine
+status: ready
+created_at: '2026-08-27T08:08:48.701636Z'
+updated_at: '2026-08-27T08:08:48.703653Z'
+version: 1.0.0
+performance:
+  missions: 0
+  successes: 0
+  failures: 0
+  success_rate: 0.5
+  verification_score: 0.0
+  average_cost: 0.0
+  average_latency_ms: 0.0
+  skill_success: {}
+  tool_failure_rate: {}
+current_mission: null
+metadata: {}

@@ -23,6 +23,7 @@ from app.market_data.registry import ProviderRegistry
 from app.market_data.schemas import Candle, DataFreshness, MarketState, MarketStatus, MarketType, ProviderCapabilityInfo, ProviderStatus, Quote
 from app.market_intelligence.technical_analysis import TechnicalAnalysisEngine, atr, ema, macd, rsi, sma
 from app.persistence.database import Database
+from app.phase10.extraction import extract_percentage, extract_symbol
 from app.risk.engine import RiskDecisionType, RiskEngine
 from app.risk.kill_switch import PaperKillSwitch, RiskKillSwitch
 from app.risk.rules import RiskRules
@@ -60,6 +61,13 @@ RISK_CONFIG = {
 
 def risk_rules() -> RiskRules:
     return RiskRules.from_config(RISK_CONFIG)
+
+
+def test_voice_style_paper_trade_command_ignores_vyom_wake_word() -> None:
+    command = "VYOM, create a paper trade setup for AAPL risking 0.5 percent."
+
+    assert extract_symbol(command) == "AAPL"
+    assert extract_percentage(command, default=1.0) == pytest.approx(0.5)
 
 
 class FakeQuoteProvider(MarketDataProvider):

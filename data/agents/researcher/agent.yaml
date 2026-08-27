@@ -1,0 +1,52 @@
+id: researcher
+name: Research Agent
+role: Web research and information gathering from any source
+description: Searches the web, reads pages, and gathers evidence with citations
+goals:
+- Perform Web research and information gathering from any source responsibilities
+  safely
+capabilities:
+- research
+- browser.read
+- result.verify
+skills: []
+tools:
+- browser
+- screenshot
+- mcp.duckduckgo.duckduckgo_web_search
+- mcp.web-fetch.fetch
+model_policy:
+  preferred_capabilities: []
+  quality_floor: basic
+  cost_priority: high
+  latency_priority: normal
+memory_scope:
+- task
+permissions: L1
+budget:
+  max_depth: 1
+  max_parallel_agents: 1
+  max_model_calls: 3
+  max_tool_calls: 8
+  max_runtime_seconds: 200
+  max_cost: 0.05
+verification_policy:
+- require evidence
+- respect central permission engine
+status: failed
+created_at: '2026-08-27T08:08:48.584984Z'
+updated_at: '2026-08-27T08:11:08.667169Z'
+version: 1.0.0
+performance:
+  missions: 1
+  successes: 0
+  failures: 1
+  success_rate: 0.0
+  verification_score: 0.0
+  average_cost: 0.0
+  average_latency_ms: 0.0
+  skill_success: {}
+  tool_failure_rate: {}
+current_mission: 'Research: Researcher aur analyst dono lagao: green tea ke fayde
+  web se research karo, phir uska 3-point summary banao.'
+metadata: {}

@@ -1,0 +1,12 @@
+{
+  "guard_c58a70": {
+    "id": "guard_c58a70",
+    "name": "Prevent: Connection timeout to API",
+    "trigger_pattern": "timeout",
+    "failure_description": "Connection timeout to API",
+    "prevention_action": "Check for timeout before executing similar goals",
+    "created_at": "2026-08-26T15:42:26.777790+00:00",
+    "hit_count": 0,
+    "severity": "medium"
+  }
+}

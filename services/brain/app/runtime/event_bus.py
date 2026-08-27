@@ -24,6 +24,11 @@ class EventBus:
     def __init__(self, history_size: int = 500):
         self.history: deque[BrainEvent] = deque(maxlen=history_size)
         self.subscribers: set[asyncio.Queue[BrainEvent]] = set()
+        #: Synchronous, in-process observers (e.g. the ProgressTracker that
+        #: maintains a live "which agent is working now" board). Called
+        #: inline in publish() for every non-duplicate event. An observer
+        #: that raises is logged and skipped - it can never break the bus.
+        self._observers: list = []
         #: task_id -> terminal type already delivered. Bounded so a
         #: long-lived Brain cannot grow it without limit.
         self._terminalized: OrderedDict[str, EventType] = OrderedDict()
@@ -49,10 +54,20 @@ class EventBus:
         )
         return True
 
+    def add_observer(self, callback) -> None:
+        """Register a synchronous `callback(BrainEvent) -> None` invoked
+        inline for every published event."""
+        self._observers.append(callback)
+
     async def publish(self, event: BrainEvent) -> None:
         if self._is_duplicate_terminal(event):
             return
         self.history.append(event)
+        for observer in self._observers:
+            try:
+                observer(event)
+            except Exception:  # pragma: no cover - an observer bug must not break the bus
+                logging.getLogger("vyom.runtime").exception("event observer failed")
         for queue in tuple(self.subscribers):
             if queue.full():
                 try:
