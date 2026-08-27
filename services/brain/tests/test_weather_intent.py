@@ -7,6 +7,8 @@ answer at all (the owner's "weather pucha, bahut sare task, koi jawab
 nahi" experience on 2026-08-27).
 """
 
+import pytest
+
 from app.execution.action_engine import ActionEngine
 from app.runtime.task_classifier import TaskClassifier
 
@@ -60,3 +62,45 @@ def test_location_extraction_returns_none_for_bare_requests():
     extract = ActionEngine._extract_weather_location
     assert extract("aaj mausam kaisa hai") is None
     assert extract("weather batao") is None
+
+
+@pytest.mark.asyncio
+async def test_approximate_location_uses_fresh_cache(monkeypatch, tmp_path, chdir_tmp_path=None):
+    """A fresh cache entry is served without hitting the network; a stale
+    one re-resolves; when the network is unreachable a stale cache still
+    beats a wrong hardcoded default (the travel-with-laptop case)."""
+    import json as _json
+
+    from app.execution import action_engine as ae
+
+    cache_file = tmp_path / "weather-location.json"
+    monkeypatch.setattr(
+        ActionEngine, "_LOCATION_CACHE_PATH", cache_file)
+    cache_file.write_text(_json.dumps(
+        {"city": "Ahmedabad", "at": __import__("time").time()}), encoding="utf-8")
+
+    async def fail_get(*args, **kwargs):
+        raise AssertionError("network must not be touched while cache is fresh")
+
+    class FailClient:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, *a, **k): return await fail_get(*a, **k)
+
+    monkeypatch.setattr(ae.httpx, "AsyncClient", FailClient)
+    engine = ActionEngine.__new__(ActionEngine)
+    assert await engine._approximate_location() == "Ahmedabad"
+
+    # Stale cache + network down -> last known city, never a wrong default.
+    cache_file.write_text(_json.dumps(
+        {"city": "Jaipur", "at": 0.0}), encoding="utf-8")
+    async def unreachable(self, *a, **k):
+        raise ae.httpx.HTTPError("offline")
+
+    class DownClient(FailClient):
+        async def get(self, *a, **k):
+            return await unreachable(self, *a, **k)
+
+    monkeypatch.setattr(ae.httpx, "AsyncClient", DownClient)
+    assert await engine._approximate_location() == "Jaipur"

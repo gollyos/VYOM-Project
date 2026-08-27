@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -1593,7 +1595,15 @@ class ActionEngine:
         return location if len(location.replace(" ", "")) >= 3 else None
 
     async def _approximate_location(self) -> str:
-        """City from the machine's public IP; free keyless ip-api lookup."""
+        """City from the machine's public IP - travels with the laptop: a
+        new network in a new city resolves to that city, which is exactly
+        the "travel karu to waha ka mausam" behaviour. Cached to disk for
+        a short window so a temporarily unreachable ip-api falls back to
+        the LAST KNOWN city instead of a wrong hardcoded default."""
+        cached = self._read_location_cache()
+        now = time.time()
+        if cached and now - float(cached.get("at", 0)) < self._LOCATION_CACHE_TTL_SECONDS:
+            return str(cached["city"])
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(
@@ -1602,10 +1612,39 @@ class ActionEngine:
                 )
                 data = response.json()
                 if data.get("status") == "success" and data.get("city"):
-                    return str(data["city"])
+                    city = str(data["city"])
+                    self._write_location_cache({"city": city, "at": now})
+                    return city
         except Exception:
             pass
+        if cached:
+            return str(cached["city"])
         return "Delhi"
+
+    # Last-known-location cache next to the Brain's database (cwd is the
+    # brain dir in both dev and installed layouts, so a relative "data/"
+    # path lands in the same place vyom-brain.db lives).
+    _LOCATION_CACHE_PATH = Path("data") / "weather-location.json"
+    _LOCATION_CACHE_TTL_SECONDS = 15 * 60
+
+    @classmethod
+    def _read_location_cache(cls) -> dict[str, Any] | None:
+        try:
+            payload = json.loads(cls._LOCATION_CACHE_PATH.read_text(encoding="utf-8"))
+            if isinstance(payload, dict) and payload.get("city"):
+                return payload
+        except Exception:
+            pass
+        return None
+
+    @classmethod
+    def _write_location_cache(cls, payload: dict[str, Any]) -> None:
+        try:
+            cls._LOCATION_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            cls._LOCATION_CACHE_PATH.write_text(
+                json.dumps(payload), encoding="utf-8")
+        except Exception:
+            pass
 
     async def _weather_lookup(self, task: Task, context, *, action: str) -> ExecutionResult:
         """One free Open-Meteo call, spoken as a Hinglish-friendly answer."""
