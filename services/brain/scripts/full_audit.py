@@ -383,7 +383,7 @@ else:
 # ─────────────────────────────────────────────────────────────────────────────
 # 20. PERSONAL OS & AUTOMATION ENGINE
 # ─────────────────────────────────────────────────────────────────────────────
-p8_ok, p8_loc = probe_module("app.phase8.engine")
+p8_ok, p8_loc = probe_module("app.automation.personal_os_engine")
 if p8_ok and p8_loc > 100:
     score("Personal OS & Automation Engine", 10, 10,
           f"LIVE: PersonalOSEngine ({p8_loc} LOC). Workflow routing, booking comparator, delivery packages & reminders present.")
@@ -393,7 +393,7 @@ else:
 # ─────────────────────────────────────────────────────────────────────────────
 # 21. CHIEF OF STAFF & LIFE OPERATIONS ENGINE
 # ─────────────────────────────────────────────────────────────────────────────
-p11_ok, p11_loc = probe_module("app.phase11.engine")
+p11_ok, p11_loc = probe_module("app.productivity.chief_of_staff_engine")
 if p11_ok and p11_loc > 100:
     score("Chief of Staff & Life Operations Engine", 10, 10,
           f"LIVE: ChiefOfStaffEngine ({p11_loc} LOC). Goal manager, habit streak tracker, focus sessions, evening/weekly review services active.")

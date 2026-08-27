@@ -1,16 +1,16 @@
 """
 VYOM Unified Operating System Runtime
 =====================================
-The single, coherent entry-point that unifies all subsystem engines into one
-real personal JARVIS Operating System.
+The single, coherent entry-point that coordinates all real domain engines into
+ONE unified personal operator runtime.
 
-Engines Unified:
+Domain Engines:
 - PersonalOSEngine: Automation, deep research, tool discovery, client packages
 - DesktopExecutionEngine: Windows desktop controller, screen awareness, native apps
 - FinancialIntelligenceEngine: Live market data quotes, risk metrics, paper trading
 - ChiefOfStaffEngine: Life goals, habit tracking, focus sessions, daily briefings
 - DiagnosticsObservabilityEngine: System doctor, security audit, cost tracking
-- PersonaManager: Switchable personas (Maya Girlfriend & JARVIS Chief of Staff)
+- PersonaManager: Configurable operator profiles (Companion & Executive modes)
 - DynamicToolMatcher: 335+ built-in and external tools
 """
 
@@ -23,11 +23,11 @@ from typing import Any, Optional
 from app.persistence.database import Database
 from app.persona.manager import PersonaManager, get_persona_manager
 from app.tools.dynamic_matcher import DynamicToolMatcher, get_tool_matcher
-from app.phase8.engine import PersonalOSEngine
-from app.phase9.engine import DesktopExecutionEngine
-from app.phase10.engine import FinancialIntelligenceEngine
-from app.phase11.engine import ChiefOfStaffEngine
-from app.phase13.engine import DiagnosticsObservabilityEngine
+from app.automation.personal_os_engine import PersonalOSEngine
+from app.desktop.execution_engine import DesktopExecutionEngine
+from app.finance.intelligence_engine import FinancialIntelligenceEngine
+from app.productivity.chief_of_staff_engine import ChiefOfStaffEngine
+from app.diagnostics.observability_engine import DiagnosticsObservabilityEngine
 
 
 @dataclass
