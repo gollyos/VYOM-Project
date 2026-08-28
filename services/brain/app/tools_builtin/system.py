@@ -80,9 +80,24 @@ class SystemTool(BaseTool):
             pyautogui.FAILSAFE = False
 
             direction = str(inputs.get("direction", "up")).strip().lower()
+            level = inputs.get("level")
             if direction in {"mute", "toggle_mute"}:
                 pyautogui.press("volumemute")
                 output = {"volume_action": "toggled_mute"}
+            elif direction in {"set", "set_level", "absolute"} and level is not None:
+                # Windows steps 2% per keypress and exposes no read API to
+                # pyautogui, so an absolute target is reached deterministically:
+                # drive to 0, then tap up to the requested level.
+                import time as _time
+
+                target = max(0, min(int(level), 100))
+                for _ in range(50):
+                    pyautogui.press("volumedown")
+                    _time.sleep(0.01)
+                for _ in range(target // 2):
+                    pyautogui.press("volumeup")
+                    _time.sleep(0.01)
+                output = {"volume_action": "set", "level_percent": target}
             elif direction in {"down", "decrease", "lower"}:
                 steps = int(inputs.get("steps", 5))
                 for _ in range(steps):
@@ -93,6 +108,31 @@ class SystemTool(BaseTool):
                 for _ in range(steps):
                     pyautogui.press("volumeup")
                 output = {"volume_action": "increased", "steps": steps}
+        elif action == "brightness":
+            # WmiSetBrightness is a laptop-panel API; desktop monitors
+            # honestly report unsupported instead of pretending.
+            level = inputs.get("level")
+            if level is None:
+                raise ToolValidationError("brightness needs a level (0-100)")
+            target = max(0, min(int(level), 100))
+            read_ps = (
+                "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods)"
+                f".WmiSetBrightness(1, {target})"
+            )
+            import subprocess
+
+            CREATE_NO_WINDOW = 0x08000000
+            completed = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", read_ps],
+                capture_output=True, text=True, timeout=15,
+                creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            if completed.returncode != 0 or completed.stderr.strip():
+                raise ToolValidationError(
+                    "This display does not support software brightness control "
+                    f"({(completed.stderr or '').strip()[:120] or 'WMI method unavailable'})"
+                )
+            output = {"brightness_action": "set", "level_percent": target}
         elif action == "lock":
             if os.name == "nt":
                 import ctypes

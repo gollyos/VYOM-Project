@@ -5,6 +5,7 @@ import json
 import re
 import time
 from datetime import datetime
+from types import SimpleNamespace
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote_plus, urlparse
@@ -50,6 +51,9 @@ TOOL_INTENTS = {
     # Free, keyless Open-Meteo lookups - one deterministic call instead
     # of a multi-step model mission for "aaj mausam kaisa hai".
     "weather_current", "weather_forecast",
+    # Hardware controls: media-key volume (incl. absolute %) and WMI
+    # brightness - "audio 100% kar do" must never become a model call.
+    "volume_control", "brightness_control",
 }
 
 # Spoken/typed application names -> app_id in the Application Registry.
@@ -80,6 +84,7 @@ INTENT_CAPABILITY = {
     "browser_first_result": "desktop.execute", "browser_page_type": "desktop.execute",
     "browser_page_scroll": "desktop.execute", "play_media": "desktop.execute",
     "weather_current": "weather.execute", "weather_forecast": "weather.execute",
+    "volume_control": "system.execute", "brightness_control": "system.execute",
     "browser_profile_open": "desktop.execute", "recover_visibility": "desktop.execute",
     "shop_compare": "browser.execute",
     "run_command": "terminal.execute", "run_tests": "terminal.execute",
@@ -278,6 +283,10 @@ class ActionEngine:
                 return await self._weather_lookup(task, context, action="current")
             if profile.intent == "weather_forecast":
                 return await self._weather_lookup(task, context, action="forecast")
+            if profile.intent == "volume_control":
+                return await self._hardware_level(task, context, target="volume")
+            if profile.intent == "brightness_control":
+                return await self._hardware_level(task, context, target="brightness")
             if profile.intent == "capability_query":
                 return await self._capability_query(task, context)
             if profile.intent == "ui_interact":
@@ -1362,6 +1371,15 @@ class ActionEngine:
         # extraction — task_runtime sets this when the Boss asked for
         # "favourite" and memory had the answer.
         query = task.metadata.get("media_query_override") or self._extract_media_query(task.user_request)
+        # "X ka song" means X is an ARTIST/ACTOR, not a track title. A bare
+        # name searched on YouTube surfaces interviews and shorts; the same
+        # name + " songs" surfaces their music (live 2026-08-28: "imran
+        # hashmi ka song" clicked random talk clips instead of his songs).
+        if re.search(
+            r"\b(?:ka|ki|ke)\s+(?:song|gaana|gana|songs)\b|का\s+सॉन्ग|के\s+गाने|की\s+गाने",
+            f"{task.user_request}".lower(),
+        ) and not re.search(r"\b(?:songs?|playlist|mix)\s*$", query, re.I):
+            query = f"{query} songs"
         search_url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
         observations: list[dict[str, Any]] = []
 
@@ -1380,13 +1398,34 @@ class ActionEngine:
         # registered application launcher can hand Chrome a URL directly;
         # Chrome then opens it visibly in its existing session (or starts
         # a window when none exists).
-        opened_result = await self.executor.invoke(
-            "desktop", {"action": "app_open", "app_id": "chrome", "url": search_url},
-            context)
-        opened = opened_result.structured_output or {}
+        # EXCEPTION - SONG SWITCHING: when audio is already playing,
+        # app_open starts a SECOND tab and the old song keeps playing
+        # under the new one (the user's "kannu malik / imran hashmi"
+        # night). Instead the AUDIBLE tab is activated and navigated to
+        # the new search, so the requested song replaces whatever was
+        # playing - the audible tab is not always the active one.
+        if before.get("playing") is True:
+            activate_result = await self.executor.invoke(
+                "desktop", {"action": "browser_activate_audio_tab"}, context)
+            activated = activate_result.structured_output or {}
+            observations.append({
+                "call": "browser_activate_audio_tab", "inputs": {},
+                "ok": activate_result.success and bool(activated.get("success")),
+                "output": activated, "error": activate_result.error,
+            })
+            opened_result = SimpleNamespace(success=True, error=None, structured_output={
+                "url": search_url, "switched_in": "audio-tab",
+            })
+            opened = opened_result.structured_output
+        else:
+            opened_result = await self.executor.invoke(
+                "desktop", {"action": "app_open", "app_id": "chrome", "url": search_url},
+                context)
+            opened = opened_result.structured_output or {}
         observations.append({
             "call": "desktop_launch",
-            "inputs": {"app_id": "chrome", "url": search_url},
+            "inputs": {"app_id": "chrome", "url": search_url,
+                        "mode": "switch" if before.get("playing") is True else "open"},
             "ok": opened_result.success, "output": opened,
             "error": opened_result.error,
         })
@@ -1399,6 +1438,20 @@ class ActionEngine:
                 "value": search_url, "enter": True,
             }, context)
         navigated = navigated_result.structured_output or {}
+        # Cold Chrome start races UIA: right after app_open the toolbar is
+        # often not exposed yet and the address Edit cannot be found
+        # ('NoneType' set_focus). One bounded retry, and if typing stays
+        # impossible, app_open already handed Chrome the search URL - the
+        # page is very possibly loaded and the first-result click below
+        # will prove it either way.
+        if not navigated_result.success or not navigated.get("success"):
+            await asyncio.sleep(3)
+            navigated_result = await self.executor.invoke(
+                "desktop", {
+                    "action": "browser_page_type", "field": "address",
+                    "value": search_url, "enter": True,
+                }, context)
+            navigated = navigated_result.structured_output or {}
         observations.append({
             "call": "browser_page_type",
             "inputs": {"field": "address", "value": search_url, "url": search_url},
@@ -1406,9 +1459,10 @@ class ActionEngine:
             "output": navigated, "error": navigated_result.error,
         })
         if not navigated_result.success or not navigated.get("success"):
-            raise RuntimeError(
-                navigated.get("summary") or navigated_result.error
-                or "The visible browser could not navigate to the YouTube search")
+            if not (opened.get("url") or "").startswith("http"):
+                raise RuntimeError(
+                    navigated.get("summary") or navigated_result.error
+                    or "The visible browser could not navigate to the YouTube search")
 
         clicked_result = await self.executor.invoke(
             "desktop", {"action": "browser_first_result"}, context)
@@ -1462,6 +1516,33 @@ class ActionEngine:
                 observations.append({
                     "call": "browser_media_state",
                     "inputs": {"phase": "recovery", "attempt": attempt},
+                    "ok": state_result.success, "output": after,
+                    "error": state_result.error,
+                })
+                if after.get("playing") is True:
+                    break
+
+        # Last resort: YouTube's own play/pause keyboard shortcut. When
+        # Chrome blocks autoplay AND the player exposes no UIA Play control
+        # (source "unobservable"), the video is loaded but paused - "k"
+        # starts it. The browser window still holds focus from the click.
+        if after.get("playing") is not True:
+            for attempt in range(1, 3):
+                key_result = await self.executor.invoke(
+                    "input_control", {"action": "keyboard_press", "key": "k"}, context)
+                observations.append({
+                    "call": "input_control.keyboard_press",
+                    "inputs": {"key": "k", "attempt": attempt, "phase": "autoplay-recovery"},
+                    "ok": key_result.success, "output": key_result.structured_output,
+                    "error": key_result.error,
+                })
+                await asyncio.sleep(1.5)
+                state_result = await self.executor.invoke(
+                    "desktop", {"action": "browser_media_state"}, context)
+                after = state_result.structured_output or {}
+                observations.append({
+                    "call": "browser_media_state",
+                    "inputs": {"phase": "keyboard-recovery", "attempt": attempt},
                     "ok": state_result.success, "output": after,
                     "error": state_result.error,
                 })
@@ -1646,6 +1727,70 @@ class ActionEngine:
                 json.dumps(payload), encoding="utf-8")
         except Exception:
             pass
+
+    async def _hardware_level(self, task: Task, context, *, target: str) -> ExecutionResult:
+        """Volume/brightness: parse level or direction from Hinglish and
+        drive the real hardware control - never a model call."""
+        request = task.user_request or ""
+        lowered = request.lower()
+        level = None
+        level_match = re.search(r"(\d{1,3})\s*(?:%|percent|प्रतिशत)", lowered)
+        if level_match:
+            level = max(0, min(int(level_match.group(1)), 100))
+        elif re.search(r"\b(?:full|max|maximum|poora|hundred)\b|पूरा|फुल|मैक्स", lowered):
+            level = 100
+        elif re.search(r"\b(?:zero|off|band)\b", lowered):
+            level = 0
+
+        muted = bool(re.search(r"\b(?:mute|silence)\b", lowered))
+        increase = bool(re.search(
+            r"\b(?:badhao|badha|tez|loud|high|up|increase)\b|बढ़ाओ|बढ़ा|तेज", lowered))
+        decrease = bool(re.search(
+            r"\b(?:kam|km|thoda|dheere|low|down|decrease|dim)\b|कम|धीमी", lowered))
+
+        observations: list[dict[str, Any]] = []
+        if target == "volume":
+            if muted:
+                inputs = {"direction": "mute"}
+            elif level is not None:
+                inputs = {"direction": "set", "level": level}
+            elif increase:
+                inputs = {"direction": "up", "steps": 10}
+            elif decrease:
+                inputs = {"direction": "down", "steps": 10}
+            else:
+                inputs = {"direction": "up", "steps": 10}
+        else:
+            if level is None:
+                level = 70 if increase else (30 if decrease else 50)
+            inputs = {"level": level}
+
+        result = await self.executor.invoke("system", {"action": target, **inputs}, context)
+        data = result.structured_output or {}
+        observations.append({
+            "call": f"system.{target}", "inputs": inputs,
+            "ok": result.success, "output": data, "error": result.error,
+        })
+        if not result.success:
+            raise RuntimeError(result.error or f"{target} control failed")
+        if target == "volume":
+            if inputs.get("direction") == "mute":
+                summary = "Volume muted."
+            elif "level_percent" in data:
+                summary = f"Volume set to {data['level_percent']}%."
+            elif inputs.get("direction") == "down":
+                summary = "Volume kam kar diya."
+            else:
+                summary = "Volume badha diya."
+        else:
+            summary = f"Brightness set to {data.get('level_percent', level)}%."
+        return self._page_result(
+            task, summary, {**data, "target": target},
+            evidence=[
+                f"{target} control: {json.dumps(inputs)}",
+                str(result.summary or ""),
+            ],
+        )
 
     async def _weather_lookup(self, task: Task, context, *, action: str) -> ExecutionResult:
         """One free Open-Meteo call, spoken as a Hinglish-friendly answer."""

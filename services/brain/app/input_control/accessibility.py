@@ -869,6 +869,36 @@ class NativeAccessibilityController:
                     continue
         return tabs
 
+    def activate_audio_tab(self) -> AccessibilityResult:
+        """Click the tab that is currently producing audio.
+
+        Song switching needs the NEW search to load in the tab the old
+        song is playing in; typing in the address bar only reaches the
+        ACTIVE tab, which is not necessarily the audible one (2026-08-28
+        live: the switch navigated a silent tab while lofi kept playing).
+        Activating the audible tab first makes the navigation land there.
+        """
+        for window in self.browser_windows():
+            try:
+                window.set_focus()
+                items = self._tab_strip_items(window)
+            except Exception:
+                continue
+            for item in items:
+                try:
+                    title = str(item.window_text() or "")
+                except Exception:
+                    continue
+                if "audio playing" in title.lower():
+                    try:
+                        item.click_input()
+                        return AccessibilityResult(
+                            True, f"Activated the playing tab '{title[:60]}'")
+                    except Exception as error:
+                        return AccessibilityResult(
+                            False, f"Clicking the playing tab failed: {error}"[:160])
+        return AccessibilityResult(False, "No audio-playing tab was found")
+
     @staticmethod
     def _tab_score(title: str, target: str) -> int:
         """How well a tab title answers what the user named.

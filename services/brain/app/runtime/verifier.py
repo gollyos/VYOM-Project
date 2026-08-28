@@ -866,13 +866,28 @@ class GoalVerifier:
             return {"launched_new_window": launched}
 
         if kind == "media_playing":
-            for output in outputs_of("browser_media_state", "browser_read", "browser_evaluate"):
+            # The engine's OWN final state is the primary evidence; the
+            # observation stream is the fallback. It used to scan ALL
+            # browser_media_state observations - including the "before"
+            # one taken BEFORE playback started (playing=False/None) -
+            # so a song that demonstrably played was marked "autoplay
+            # blocked" by the stale pre-playback reading.
+            if "playing" in data:
+                return {"playing": data.get("playing"), "title": data.get("title")}
+            for item in observations:
+                if not item.get("ok") or item.get("call") not in (
+                    "browser_media_state", "browser_read", "browser_evaluate"
+                ):
+                    continue
+                if (item.get("inputs") or {}).get("phase") == "before":
+                    continue
+                output = item.get("output")
+                if not isinstance(output, dict):
+                    continue
                 if "playing" in output:
                     return {"playing": bool(output.get("playing")), "title": output.get("title")}
                 if "paused" in output:
                     return {"playing": not output.get("paused"), "title": output.get("title")}
-            if "playing" in data:
-                return {"playing": data.get("playing"), "title": data.get("title")}
             return {}
 
         if kind == "tool_evidence":

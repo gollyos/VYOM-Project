@@ -1258,6 +1258,40 @@ class TaskClassifier:
                 deterministic=True, intent="capability_query", needs={"tools"},
             )
 
+        # -- hardware volume / brightness controls -------------------------
+        #
+        # "audio ko 100% kar do", "volume badhao", "awaaz kam karo",
+        # "brightness thodi kam kar" - one keyboard/WMI action each, zero
+        # model calls. These used to fall to the general path (a paid model
+        # round-trip that answered nothing) or die on a 404 model.
+        hardware_text = f"{text} {getattr(self, '_original', '')}"
+        volume_named = re.search(
+            r"\b(?:volume|sound|audio|awaaz|awaz|awaj|voz)\b|वॉल्यूम|आवाज|आवाज़",
+            hardware_text, re.I,
+        )
+        brightness_named = re.search(
+            r"\b(?:brightness|screen\s*light|display\s*light|backlight|roshni|roshini|chamak)\b"
+            r"|रोशनी|चमक|स्क्रीन\s*लाइट",
+            hardware_text, re.I,
+        )
+        hardware_order = re.search(
+            r"\b(?:kar|karo|kar\s*do|set|set\s*karo|badhao|badha\s*do|badha|tez|loud|full|max|maximum|"
+            r"kam|kam\s*karo|km|thoda\s*kam|dheere|low|down|up|mute|band|zero|percent|%|"
+            r"\d{1,3})\b"
+            r"|बढ़ाओ|बढ़ा|कम|धीमी|तेज|पूरा|फुल|मैक्स|बंद",
+            hardware_text, re.I,
+        )
+        if volume_named and hardware_order:
+            return TaskProfile(
+                domain=TaskDomain.SYSTEM, complexity=1, latency_priority="high",
+                deterministic=True, intent="volume_control", needs={"tools"},
+            )
+        if brightness_named and hardware_order:
+            return TaskProfile(
+                domain=TaskDomain.SYSTEM, complexity=1, latency_priority="high",
+                deterministic=True, intent="brightness_control", needs={"tools"},
+            )
+
         # -- play media in the user's visible browser ---------------------
         #
         # These requests previously fell into the general planner, which

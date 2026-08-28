@@ -24,7 +24,7 @@ models:
     priority: 85
 
   - provider: google
-    model_id: gemini-2.5-flash
+    model_id: gemini-3.6-flash
     enabled: true
     capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
     quality_tier: high
@@ -37,33 +37,11 @@ models:
     privacy_policy: cloud_standard
     priority: 80
 
-  - provider: google
-    model_id: gemini-2.0-flash
-    enabled: true
-    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
-    quality_tier: balanced
-    speed_tier: fast
-    cost_tier: low
-    context_tier: large
-    supports_streaming: true
-    supports_tools: true
-    supports_vision: true
-    privacy_policy: cloud_standard
-    priority: 78
-
-  - provider: google
-    model_id: gemini-1.5-flash
-    enabled: true
-    capabilities: [reasoning, coding, vision, research, structured_output, tool_use, general, planning]
-    quality_tier: balanced
-    speed_tier: fast
-    cost_tier: low
-    context_tier: large
-    supports_streaming: true
-    supports_tools: true
-    supports_vision: true
-    privacy_policy: cloud_standard
-    priority: 76
+  # RETIRED 2026-08-28: gemini-2.5-flash / 2.0-flash / 1.5-flash all return
+  # HTTP 404 "no longer available to new users" - Google's own error message
+  # recommends models/gemini-3.6-flash, which replaces all three above. The
+  # live symptom was every general-path task failing instantly with a raw
+  # 404 while the primary (3.1-flash-lite) was quota-pacing.
 
   - provider: google
     model_id: gemini-flash-lite-latest

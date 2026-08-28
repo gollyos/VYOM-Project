@@ -330,6 +330,13 @@ class DesktopController:
         """Playback state from the visible browser's accessibility tree."""
         return self._require_accessibility().browser_media_state()
 
+    def browser_activate_audio_tab(self) -> dict[str, Any]:
+        result = self._require_accessibility().activate_audio_tab()
+        return {
+            "success": bool(getattr(result, "success", True)),
+            "summary": getattr(result, "summary", str(result)),
+        }
+
     #: Well-known site names the user says conversationally, mapped to the
     #: URL a new tab should actually load.
     _SITE_URLS = {

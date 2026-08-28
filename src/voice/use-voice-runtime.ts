@@ -52,10 +52,11 @@ const CONVERSATIONAL_ONLY = /^(hi|hey|hello|yo|thanks|thank you|thankyou|ok|okay
 
 // How long the transcript must stop changing before it counts as a
 // finished utterance. 700ms was shorter than an ordinary mid-sentence
-// pause, so long sentences were chopped into several commands. This is
-// comfortably longer than a breath and still well under the point where
-// the user would perceive VYOM as slow to react.
-const DISPATCH_SETTLE_MS = 1400;
+// pause, so long sentences were chopped into several commands. 1400ms
+// still chopped Hinglish commands at natural breath points (2026-08-28
+// trace: only "karne ka try karo" / "pe kar do" tails dispatched, the
+// heads were lost), so the settle window now spans a deliberate pause.
+const DISPATCH_SETTLE_MS = 2000;
 
 // STOP is a kernel interrupt, so it must not pay the normal long-sentence
 // settle cost.  This is intentionally only a debounce hint in the voice

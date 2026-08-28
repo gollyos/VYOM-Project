@@ -36,7 +36,7 @@ L1_ACTIONS = {
     # on the visible page, fully observable.
     "browser_close_tab", "browser_open_profile", "browser_open_tab",
     "browser_page_click", "browser_first_result", "browser_page_type",
-    "browser_page_scroll",
+    "browser_page_scroll", "browser_activate_audio_tab",
 }
 # Closing an application the user explicitly named is an ordinary,
 # reversible desktop action; killing an arbitrary process or changing what
@@ -206,6 +206,8 @@ class DesktopTool(BaseTool):
             return self.controller.browser_page_read()
         if action == "browser_media_state":
             return self.controller.browser_media_state()
+        if action == "browser_activate_audio_tab":
+            return self.controller.browser_activate_audio_tab()
         if action == "browser_page_click":
             return self.controller.browser_page_click(str(inputs["target"]))
         if action == "browser_first_result":

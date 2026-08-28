@@ -49,6 +49,12 @@ class InputControlTool(BaseTool):
         action = str(inputs.get("action", ""))
         if action in ACCESSIBILITY_ACTIONS:
             return PermissionLevel.L1
+        # Pressing ONE named key on the focused page (media shortcuts like
+        # "k" for YouTube play) is the same bounded, visible, reversible
+        # class as a page click - L1. Typing arbitrary strings and mouse
+        # paths stay L2.
+        if action == "keyboard_press" and len(str(inputs.get("key", ""))) == 1:
+            return PermissionLevel.L1
         if action in MOUSE_ACTIONS | KEYBOARD_ACTIONS:
             return PermissionLevel.L2
         return PermissionLevel.L2
