@@ -345,3 +345,47 @@ async def test_agent_runtime_still_runs_bound_skill_unchanged(tmp_path: Path):
     parent = Task(goal="build", user_request="build")
     result, mission = await runtime.delegate(parent, "bound-agent", "build", emit)
     assert result.response == "Build passed." and mission.status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_failed_agent_status_is_reset_on_next_delegation(tmp_path: Path):
+    """One failed mission must not permanently brick the agent.
+
+    delegate() used to reject any agent whose status was not READY/TESTING
+    while the failure path SET status=FAILED - so after a single failure
+    every later delegation died instantly on "Agent cannot start from
+    status failed". The owner's repeated Amazon retries all hit this:
+    "dubara try karti hu" could never work again. FAILED/WORKING/CREATED
+    are now reset to READY; deliberate states (DISABLED/PAUSED/WAITING)
+    are still refused."""
+    from app.agents.schemas import AgentSpec
+    from app.skills.registry import SkillRegistry
+    from app.skills.executor import SkillExecutor
+
+    skills = SkillRegistry(tmp_path / "skills")
+    agents = AgentRegistry(tmp_path / "agents")
+    agents.register(AgentSpec(
+        id="poisoned-agent", name="Poisoned Agent", role="Researcher",
+        description="test", goals=["g"], capabilities=["result.verify"],
+        skills=[], tools=[], status=AgentStatus.FAILED,
+    ))
+    # No autonomous worker: a skill-less agent fails with a DISTINCT error,
+    # which lets the test prove the status gate was passed.
+    runtime = AgentRuntime(agents, AgentLifecycle(agents), SkillExecutor(skills, action_engine=None), None)
+
+    events: list[str] = []
+
+    async def emit(kind, message, payload):
+        events.append(kind)
+
+    parent = Task(goal="g", user_request="g")
+    with pytest.raises(RuntimeError) as excinfo:
+        await runtime.delegate(parent, "poisoned-agent", "try again", emit)
+    assert "cannot start from status" not in str(excinfo.value), (
+        "a previously FAILED agent must be reset to READY and allowed to run"
+    )
+
+    # Deliberate operator states stay authoritative.
+    agents.get("poisoned-agent").status = AgentStatus.DISABLED
+    with pytest.raises(RuntimeError, match="cannot start from status disabled"):
+        await runtime.delegate(parent, "poisoned-agent", "again", emit)

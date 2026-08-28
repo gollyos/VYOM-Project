@@ -29,6 +29,15 @@ class AgentRuntime:
             raise KeyError(agent_id)
         if depth > agent.budget.max_depth:
             raise RuntimeError("Agent delegation depth limit exceeded")
+        # An agent is a worker, not a one-shot object: a previous mission's
+        # failure (or a crash mid-mission that left WORKING behind) must
+        # never permanently brick the agent. Before this reset, EVERY
+        # delegation after one failure died instantly on the check below -
+        # the owner's repeated Amazon retries all saw "kuch nahi ho raha
+        # hai screen pe" while the researcher agent sat in FAILED forever.
+        # Deliberate states (PAUSED/DISABLED/WAITING) are still respected.
+        if agent.status in {AgentStatus.FAILED, AgentStatus.WORKING, AgentStatus.CREATED}:
+            agent.status = AgentStatus.READY
         if agent.status not in {AgentStatus.READY, AgentStatus.TESTING}:
             raise RuntimeError(f"Agent cannot start from status {agent.status.value}")
         mission = AgentMission(id=f"mission_{uuid4().hex}", parent_task_id=parent.id, agent_id=agent_id, goal=goal, depth=depth, status="working")

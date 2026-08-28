@@ -54,3 +54,27 @@ def test_possessive_song_request_searches_entity_songs():
     # The suffix is applied in _play_media; extraction itself must have
     # kept the entity name clean.
     assert "chalao" not in query and "song" not in query.lower()
+
+
+def test_retailer_requests_route_to_visible_search():
+    """'Amazon pe mac mini chahiye' must be ONE visible browser action,
+    never a multi-agent mission (the word 'search' used to decompose it
+    into researcher+analyst and nothing appeared on screen)."""
+    for phrase in (
+        "Amazon pe mere ko mac mini chahiye to tum search karke batao",
+        "flipkart pe running shoes ka price batao",
+        "myntra pe jacket dhundo",
+    ):
+        profile = _classify(phrase)
+        assert profile.deterministic, phrase
+        assert profile.intent == "retailer_search", f"{phrase} -> {profile.intent}"
+
+
+def test_retailer_query_extraction_drops_fillers_keeps_product():
+    from app.execution.action_engine import ActionEngine
+
+    parts = ActionEngine._retailer_search_parts(
+        "Amazon pe mere ko mac mini chahiye to tum search karke batao")
+    assert parts[0] == "amazon"
+    assert parts[1] == "mac mini", parts
+    assert parts[2] == "https://www.amazon.in/s?k=mac+mini"

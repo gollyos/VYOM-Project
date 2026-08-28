@@ -1354,6 +1354,31 @@ class TaskClassifier:
                 needs={"tools"},
             )
 
+        # -- retailer product search (visible browser, no multi-agent) ----
+        #
+        # "Amazon pe mac mini chahiye, search karke batao" used to fall
+        # into the multi-agent orchestrator (the word "search" decomposed
+        # it into researcher+analyst), where the owner watched nothing
+        # happen on screen while sub-agents raced the free-tier quota. A
+        # retailer-named product request is ONE bounded, visible action:
+        # open that retailer's search results in the real browser.
+        retailer_text = f"{text} {getattr(self, '_original', '')}".lower()
+        retailer_named = re.search(
+            r"\b(?:amazon|flipkart|myntra|meesho|ajio|ebay|messenger amazon)\b|अमेज़न|अमेजन|फ्लिपकार्ट",
+            retailer_text, re.I,
+        )
+        retailer_order = re.search(
+            r"\b(?:chahiye|search|khojo|khoj|dhundo|dhoondo|dhoondo|dhoondho|dhundo|dekh|dekho|batao|bata|"
+            r"find|look\s*for|show\s*me|price|kimat|daam|kitna|order|kharid|buy|lene|hai)\b"
+            r"|चाहिए|देखो|बताओ|खोजो|ढूंढो|कितना",
+            retailer_text, re.I,
+        )
+        if retailer_named and retailer_order:
+            return TaskProfile(
+                domain=TaskDomain.SYSTEM, complexity=1, latency_priority="high",
+                deterministic=True, intent="retailer_search", needs={"tools"},
+            )
+
         # -- shopping across retailers -------------------------------------
         # Checked before generic web browsing: "find me the best black
         # running shoes on Amazon and Flipkart" is a product comparison

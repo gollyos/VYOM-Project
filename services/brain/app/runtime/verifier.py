@@ -534,6 +534,7 @@ GOAL_POSTCONDITIONS: dict[str, str] = {
     "play_media": "media_playing",
     "weather_current": "tool_evidence",
     "weather_forecast": "tool_evidence",
+    "retailer_search": "tool_evidence",
     "browser_page_read": "observation",
     "recover_visibility": "window_visible",
     "web_browse": "requested_target",
@@ -665,6 +666,18 @@ def derive_goal_frame(request: str) -> GoalFrame:
         query = (search_match.group("target") or search_match.group("target2") or "").strip(" .,!?।")
         query = _re.sub(r"\b(karo|kar do|kijiye|please|now|करो|कर दो)\b\s*$", "", query,
                         flags=_re.IGNORECASE).strip(" .,!?।")
+        # Hinglish follow-up tails: "search karke BATAO" names an
+        # instruction, not the subject. The captured target was literally
+        # "karke batao", and a real Amazon results page then failed
+        # verification for not containing it (2026-08-28 live run).
+        for _ in range(3):
+            stripped = _re.sub(
+                r"\s*\b(?:karke|kar\s*ke|batao|bata|bataiye|bataen|dikhao|dikhado|"
+                r"tell\s+me|show\s+me|report|and|or|then)\b\s*$",
+                "", query, flags=_re.IGNORECASE).strip(" .,!?।")
+            if stripped == query:
+                break
+            query = stripped
         # "find" is ambiguous: "find restaurants" is a web search, but
         # "find all python files" is a LOCAL filesystem find served by the
         # filesystem tool (which reports "found N matches") - never the
@@ -933,7 +946,10 @@ class GoalVerifier:
         if kind == "tool_evidence":
             facts = {
                 key: data.get(key)
-                for key in ("location", "temperature_c", "condition", "days")
+                for key in (
+                    "location", "temperature_c", "condition", "days",
+                    "retailer", "query", "url", "window_title",
+                )
                 if data.get(key) is not None
             }
             if not facts:

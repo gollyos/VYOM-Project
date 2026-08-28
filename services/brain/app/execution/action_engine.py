@@ -54,6 +54,9 @@ TOOL_INTENTS = {
     # Hardware controls: media-key volume (incl. absolute %) and WMI
     # brightness - "audio 100% kar do" must never become a model call.
     "volume_control", "brightness_control",
+    # "Amazon pe X chahiye" - one visible browser action, never a
+    # multi-agent mission or headless scrape.
+    "retailer_search",
 }
 
 # Spoken/typed application names -> app_id in the Application Registry.
@@ -85,6 +88,7 @@ INTENT_CAPABILITY = {
     "browser_page_scroll": "desktop.execute", "play_media": "desktop.execute",
     "weather_current": "weather.execute", "weather_forecast": "weather.execute",
     "volume_control": "system.execute", "brightness_control": "system.execute",
+    "retailer_search": "browser.execute",
     "browser_profile_open": "desktop.execute", "recover_visibility": "desktop.execute",
     "shop_compare": "browser.execute",
     "run_command": "terminal.execute", "run_tests": "terminal.execute",
@@ -287,6 +291,8 @@ class ActionEngine:
                 return await self._hardware_level(task, context, target="volume")
             if profile.intent == "brightness_control":
                 return await self._hardware_level(task, context, target="brightness")
+            if profile.intent == "retailer_search":
+                return await self._retailer_search(task, context)
             if profile.intent == "capability_query":
                 return await self._capability_query(task, context)
             if profile.intent == "ui_interact":
@@ -1727,6 +1733,80 @@ class ActionEngine:
                 json.dumps(payload), encoding="utf-8")
         except Exception:
             pass
+
+    #: Retailer name (as the user says it) -> that retailer's on-site
+    #: SEARCH URL template. The goal is the visible, real browser page the
+    #: owner asked for - not a headless scrape or a model summary.
+    _RETAILER_URLS = {
+        "amazon": "https://www.amazon.in/s?k={query}",
+        "flipkart": "https://www.flipkart.com/search?q={query}",
+        "myntra": "https://www.myntra.com/{query}",
+        "meesho": "https://www.meesho.com/search?q={query}",
+        "ajio": "https://www.ajio.com/search/?text={query}",
+        "ebay": "https://www.ebay.com/sch/i.html?_nkw={query}",
+    }
+
+    _RETAILER_FILLER = re.compile(
+        r"(?i)^(?:amazon|flipkart|myntra|meesho|ajio|ebay|pe|par|me|mein|pehle|mera|meri|mere|mujhe|"
+        r"chahiye|chahta|chahti|search|khojo|dhundo|dhoondo|karke|karo|kar|batao|bata|dekh|dekho|"
+        r"tum|tumne|to|toh|hai|hoga|hogi|price|kimat|daam|kitna|kitne|ka|ki|ke|ko|koi|se|bhi|"
+        r"order|kharid|buy|lene|please|plz|vyom|ek|achcha|accha|sa|si|wala|vala|"
+        r"अमेज़न|अमेजन|फ्लिपकार्ट|मेरे|मुझे|को|का|की|के|चाहिए|करके|करो|बताओ|देखो|खोजो|ढूंढो|एक|है)$"
+    )
+
+    @classmethod
+    def _retailer_search_parts(cls, request: str) -> tuple[str, str, str]:
+        """(retailer, query, search_url) from a Hinglish shopping request."""
+        lowered = (request or "").lower()
+        retailer = next(
+            (name for name in cls._RETAILER_URLS if re.search(rf"\b{name}\b", lowered)),
+            "amazon",
+        )
+        kept = [
+            token.strip(" .,!?:;।'\"") for token in lowered.split()
+            if token.strip(" .,!?:;।'\"") and not cls._RETAILER_FILLER.match(token)
+        ]
+        query = " ".join(kept).strip(" .,!?:;।")
+        query = re.sub(r"\s+(?:ka|ki|ke)$", "", query, flags=re.I)
+        if len(query.replace(" ", "")) < 2:
+            query = "bestsellers"
+        url = cls._RETAILER_URLS[retailer].replace("{query}", quote_plus(query))
+        return retailer, query, url
+
+    async def _retailer_search(self, task: Task, context) -> ExecutionResult:
+        """Open the retailer's search results for the product in the real,
+        visible browser - exactly what "Amazon pe X chahiye, search karke
+        batao" asks for on screen."""
+        retailer, query_text, url = self._retailer_search_parts(task.user_request)
+
+        opened_result = await self.executor.invoke(
+            "desktop", {"action": "app_open", "app_id": "chrome", "url": url},
+            context)
+        opened = opened_result.structured_output or {}
+        if not opened_result.success:
+            raise RuntimeError(opened_result.error or f"{retailer.title()} could not be opened")
+        # Give the results page a moment, then read the REAL window title -
+        # the visible proof the page actually loaded.
+        await asyncio.sleep(3)
+        state_result = await self.executor.invoke(
+            "desktop", {"action": "browser_media_state"}, context)
+        state = state_result.structured_output or {}
+        window_title = str(state.get("title") or "")
+        summary = (
+            f"{retailer.title()} khola hai - '{query_text}' ke search results "
+            "aapke screen pe browser me khule hain."
+        )
+        return self._page_result(
+            task, summary,
+            {
+                "retailer": retailer, "query": query_text, "url": url,
+                "window_title": window_title, "opened": opened,
+            },
+            evidence=[
+                f"opened {url} in the visible browser",
+                f"window title observed: {window_title[:80] or '(pending)'}",
+            ],
+        )
 
     async def _hardware_level(self, task: Task, context, *, target: str) -> ExecutionResult:
         """Volume/brightness: parse level or direction from Hinglish and
