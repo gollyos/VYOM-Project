@@ -40,6 +40,10 @@
 | 32 | Deterministic weather path (classifier intent + Open-Meteo + tool_evidence verification) | BRAIN | done (live E2E: Delhi 28.2°C answered) |
 | 33 | Media correctness: relevance gate + active-tab preference + shorts-safe first result + autoplay recovery | BRAIN | done (live E2E: lofi VERIFIED playing) |
 | 34 | Voice honesty rules + STT noise gate + Boss/SHARE-FEELINGS persona + learned-router bias no-op fix + pending-work 3-day cap | BRAIN + FRONTEND | done (1337 tests) |
+| 35 | Dead-model 404 fix: gemini-2.5/2.0/1.5-flash → gemini-3.6-flash (sab general tasks fail ho rahe the) | BRAIN | done (2c3b605, live verified) |
+| 36 | Volume/Brightness hardware control (deterministic intents, absolute %, WMI brightness) | BRAIN | done (2c3b605, live: 100% + 30%→70%) |
+| 37 | Media intelligence: 'X ka song'→'X songs' search, audible-tab switching, keyboard-k autoplay recovery, verifier before-state fix | BRAIN | done (2c3b605, live: lofi→Emraan switch) |
+| 38 | Voice command truncation fix: settle 1400→2000ms | FRONTEND | done (2c3b605) |
 
 ## Maya-transcript backlog (28-Aug analysis; priority order)
 
