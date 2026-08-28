@@ -44,6 +44,7 @@
 | 36 | Volume/Brightness hardware control (deterministic intents, absolute %, WMI brightness) | BRAIN | done (2c3b605, live: 100% + 30%→70%) |
 | 37 | Media intelligence: 'X ka song'→'X songs' search, audible-tab switching, keyboard-k autoplay recovery, verifier before-state fix | BRAIN | done (2c3b605, live: lofi→Emraan switch) |
 | 38 | Voice command truncation fix: settle 1400→2000ms | FRONTEND | done (2c3b605) |
+| 39 | Amazon/retailer visible search (deterministic intent, real Chrome) + agent FAILED-status poisoning fix + 'karke batao' verifier tail fix | BRAIN | done (53cd58b, live: mac mini Amazon.in completed+verified) |
 
 ## Maya-transcript backlog (28-Aug analysis; priority order)
 
