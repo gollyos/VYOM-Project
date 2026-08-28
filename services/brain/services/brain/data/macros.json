@@ -1,0 +1,45 @@
+{
+  "macros": [
+    {
+      "id": "email_compose_workflow",
+      "name": "Email Compose Workflow",
+      "trigger_type": "phrase",
+      "trigger_pattern": "mail bhej do",
+      "actions": [
+        {
+          "action_type": "open_app",
+          "params": {
+            "app_id": "chrome",
+            "profile": "Gunjan Shah"
+          },
+          "description": "Open Chrome"
+        },
+        {
+          "action_type": "open_app",
+          "params": {
+            "app_id": "chrome",
+            "url": "https://mail.google.com/mail/u/0/#inbox?compose=new"
+          },
+          "description": "Open Gmail Compose"
+        },
+        {
+          "action_type": "type_text",
+          "params": {
+            "target": "email_compose"
+          },
+          "description": "Fill recipient & subject"
+        },
+        {
+          "action_type": "speak",
+          "params": {
+            "message": "Email sent successfully"
+          },
+          "description": "Confirm delivery"
+        }
+      ],
+      "enabled": true,
+      "created_at": "2026-08-28T11:49:50.859000+00:00",
+      "execution_count": 0
+    }
+  ]
+}

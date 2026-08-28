@@ -239,6 +239,54 @@ class Database:
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS connectors (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                auth_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                config_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_connectors_category ON connectors(category);
+
+            CREATE TABLE IF NOT EXISTS mcp_servers (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                transport TEXT NOT NULL,
+                status TEXT NOT NULL,
+                config_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS step_runs (
+                id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                step_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                tool_name TEXT,
+                input_json TEXT NOT NULL,
+                output_json TEXT,
+                duration_ms REAL NOT NULL,
+                error TEXT,
+                retry_count INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_step_runs_parent ON step_runs(run_id);
+
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id TEXT PRIMARY KEY,
+                trace_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                target TEXT NOT NULL,
+                risk_level TEXT NOT NULL,
+                status TEXT NOT NULL,
+                details_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_audit_trace ON audit_logs(trace_id);
+            CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
+
             CREATE TABLE IF NOT EXISTS booking_requests (
                 id TEXT PRIMARY KEY,
                 category TEXT NOT NULL,

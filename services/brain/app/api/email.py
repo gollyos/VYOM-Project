@@ -22,7 +22,12 @@ async def connect_app_password(payload: AppPasswordConnectRequest, request: Requ
     2-Step Verification -> App Passwords) — works immediately, no Cloud
     Console project, no OAuth consent screen. Verifies the credentials by
     actually logging into IMAP before reporting success, so a typo'd
-    password is caught here, not on the first real send."""
+    password is caught here, not on the first real send.
+
+    MULTI-ACCOUNT: attaching another address UPSERTS it (existing ones
+    stay attached) and makes the new one the active sender; a failed
+    connect only removes the account that failed, never the previously
+    attached ones."""
     provider = request.app.state.gmail_app_password_provider
     try:
         provider.store_credentials(payload.address, payload.app_password)
@@ -30,13 +35,44 @@ async def connect_app_password(payload: AppPasswordConnectRequest, request: Requ
         raise HTTPException(status_code=422, detail=str(error)) from error
     healthy, error = await provider.health()
     if not healthy:
-        # Store the bad credentials removed — a failed connect attempt
-        # must not leave a broken credential silently sitting in the
-        # vault, where a later unrelated action could pick it up and fail
-        # confusingly far from where the user typed the typo.
-        await provider.disconnect()
+        provider.remove_account(payload.address)
         raise HTTPException(status_code=401, detail=error or "Gmail app-password login failed")
-    return {"status": "connected", "address": payload.address, "provider": "gmail-app-password"}
+    return {
+        "status": "connected",
+        "address": payload.address,
+        "provider": "gmail-app-password",
+        "accounts": provider.list_accounts(),
+    }
+
+
+class AccountSelector(BaseModel):
+    address: str
+
+
+@router.get("/app-password/accounts")
+async def list_app_password_accounts(request: Request) -> dict:
+    provider = request.app.state.gmail_app_password_provider
+    return {"accounts": provider.list_accounts()}
+
+
+@router.post("/app-password/switch")
+async def switch_app_password_account(payload: AccountSelector, request: Request) -> dict:
+    provider = request.app.state.gmail_app_password_provider
+    try:
+        provider.switch_active(payload.address)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    healthy, error = await provider.health()
+    return {"status": "switched", "address": payload.address, "healthy": healthy,
+            "detail": error, "accounts": provider.list_accounts()}
+
+
+@router.post("/app-password/remove")
+async def remove_app_password_account(payload: AccountSelector, request: Request) -> dict:
+    provider = request.app.state.gmail_app_password_provider
+    provider.remove_account(payload.address)
+    return {"status": "removed", "address": payload.address,
+            "accounts": provider.list_accounts()}
 
 
 @router.post("/app-password/disconnect")

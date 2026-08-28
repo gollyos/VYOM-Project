@@ -1,0 +1,76 @@
+id: auto-play-media-desktop-desktop-desktop-desktop-desktop
+name: 'Auto-learned: play_media via desktop, desktop, desktop, desktop, desktop'
+version: 1.0.0
+description: Automatically taught after 3 verified successful runs of the same tool
+  sequence (desktop, desktop, desktop, desktop, desktop) for play_media tasks in the
+  system domain.
+category: auto-taught
+inputs: {}
+input_slots: []
+outputs:
+  step_results: verified tool outputs
+required_capabilities:
+- desktop.execute
+required_tools:
+- desktop
+required_permissions: L1
+steps:
+- id: step_0
+  action: repeat_desktop
+  capability: desktop.execute
+  tool: desktop
+  inputs: {}
+  depends_on: []
+- id: step_1
+  action: repeat_desktop
+  capability: desktop.execute
+  tool: desktop
+  inputs: {}
+  depends_on: []
+- id: step_2
+  action: repeat_desktop
+  capability: desktop.execute
+  tool: desktop
+  inputs: {}
+  depends_on: []
+- id: step_3
+  action: repeat_desktop
+  capability: desktop.execute
+  tool: desktop
+  inputs: {}
+  depends_on: []
+- id: step_4
+  action: repeat_desktop
+  capability: desktop.execute
+  tool: desktop
+  inputs: {}
+  depends_on: []
+verification:
+  checks:
+  - all_steps_succeeded
+  minimum_score: 1.0
+  require_evidence: true
+failure_policy:
+  max_retries: 1
+  stop_on_permission_error: true
+  stop_on_verification_failure: true
+budget:
+  max_model_calls: 0
+  max_tool_calls: 8
+  max_runtime_seconds: 180
+  max_cost: 0.0
+created_by: self-improvement-loop
+created_at: '2026-08-27T19:21:34.018998Z'
+updated_at: '2026-08-27T19:21:34.020996Z'
+last_used: null
+success_rate: 0.5
+status: testing
+previous_version: null
+metrics:
+  executions: 0
+  successes: 0
+  failures: 0
+  verification_score: 0.0
+  average_runtime_ms: 0.0
+  average_cost: 0.0
+  common_failure_reason: null

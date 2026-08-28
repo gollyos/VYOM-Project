@@ -7,6 +7,7 @@
 
 | # | Task | Lane | Status |
 |---|---|---|---|
+| 40 | Universal Connectors + Dynamic MCP + Plugin SDK + Workflow Automation Engine + Marketplace UI | BRAIN + FRONTEND + SUBSYSTEMS + VERIFY | done (verified) |
 | 1 | LIVE E2E: "Chrome kholo + YouTube lofi play" real window me VERIFIED_COMPLETE | VERIFY | done (2dee063) |
 | 2 | Desktop release build (`npm run desktop:build`) + installed app me voice auto-on check | FRONTEND + VERIFY | done (4017163) |
 | 3 | Morning briefing live: real failed/paused tasks briefing me bole | BRAIN + VERIFY | in-progress (Codex/root, 11:34) |

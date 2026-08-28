@@ -38,6 +38,36 @@ async def reconnect_server(server_id: str, request: Request) -> dict:
     return result
 
 
+@router.post("/servers/{server_id}/test")
+async def test_server(server_id: str, request: Request) -> dict:
+    """Test connection and discover tools for an active MCP server."""
+    client = request.app.state.mcp_registry.get_client(server_id)
+    if not client:
+        raise HTTPException(status_code=404, detail=f"MCP server '{server_id}' not found")
+    try:
+        health = await client.health()
+        tools = await client.list_tools() if health.get("healthy") else []
+        return {"status": "ok", "healthy": True, "server_id": server_id, "tool_count": len(tools), "tools": tools}
+    except Exception as ex:
+        return {"status": "error", "healthy": False, "server_id": server_id, "error": str(ex)}
+
+
+@router.post("/test-config")
+async def test_config(config: MCPServerConfig, request: Request) -> dict:
+    """Dry-run test of an MCP server configuration before saving."""
+    manager = request.app.state.mcp_manager
+    try:
+        transport = manager._build_transport(config)
+        from app.mcp.client import MCPClient
+        client = MCPClient(transport)
+        await client.connect()
+        tools = await client.list_tools()
+        await client.disconnect()
+        return {"status": "ok", "healthy": True, "tool_count": len(tools), "tools": [t.get("name") for t in tools]}
+    except Exception as ex:
+        return {"status": "error", "healthy": False, "error": str(ex)}
+
+
 @router.delete("/servers/{server_id}")
 async def remove_server(server_id: str, request: Request) -> dict:
     removed = await request.app.state.mcp_manager.disconnect(server_id)

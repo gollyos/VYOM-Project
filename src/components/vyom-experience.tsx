@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowUp, Mic, MicOff, RotateCw, Share2 } from "lucide-react";
+import { AlertCircle, ArrowUp, Mic, MicOff, Plug, RotateCw, Share2 } from "lucide-react";
 import { BrandMark } from "./brand-mark";
 import { NeuralBiome } from "./neural-biome";
 import { OnboardingOverlay } from "./onboarding-overlay";
@@ -7,6 +7,7 @@ import { UIComposer } from "@/composer/ui-composer";
 import { AgentStackPanel } from "./agent-stack-panel";
 import { ConnectionsPanel } from "./connections-panel";
 import { BrainGraphView } from "./brain-graph-view";
+import { ConnectorsHub } from "./connectors-hub";
 import { WindowControls } from "./window-controls";
 import { ErrorBoundary } from "./error-boundary";
 import { newCorrelationId, trace } from "@/core/trace";
@@ -29,6 +30,7 @@ export function VyomExperience() {
   const [time, setTime] = useState("");
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [showBrainGraph, setShowBrainGraph] = useState(false);
+  const [showConnectorsHub, setShowConnectorsHub] = useState(false);
   const {
     state: composerState,
     response,
@@ -451,6 +453,22 @@ export function VyomExperience() {
       {showBrainGraph && (
         <ErrorBoundary>
           <BrainGraphView onClose={() => setShowBrainGraph(false)} />
+        </ErrorBoundary>
+      )}
+
+      <button
+        type="button"
+        className={`brain-graph-toggle ${showConnectorsHub ? "brain-graph-toggle-active" : ""}`}
+        style={{ right: "135px" }}
+        onClick={() => setShowConnectorsHub(true)}
+        aria-label="Open VYOM Connectors & MCP Marketplace"
+      >
+        <Plug size={13} />
+        <span>Connectors & MCP</span>
+      </button>
+      {showConnectorsHub && (
+        <ErrorBoundary>
+          <ConnectorsHub onClose={() => setShowConnectorsHub(false)} />
         </ErrorBoundary>
       )}
 

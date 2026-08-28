@@ -1,0 +1,198 @@
+{
+  "nodes": [
+    {
+      "id": "node_vyom_ceo",
+      "label": "VYOM Master CEO",
+      "node_type": "SKILL",
+      "category": "Core",
+      "description": "Central Orchestration Authority",
+      "properties": {},
+      "created_at": "2026-08-27T13:24:13.767770+00:00"
+    },
+    {
+      "id": "node_hermes_react",
+      "label": "Hermes Autonomous ReAct Loop",
+      "node_type": "SKILL",
+      "category": "Reasoning",
+      "description": "Scratchpad tool execution & error reflection",
+      "properties": {},
+      "created_at": "2026-08-27T13:24:13.767770+00:00"
+    },
+    {
+      "id": "node_grok_intelligence",
+      "label": "Grok Live Intelligence",
+      "node_type": "SKILL",
+      "category": "Research",
+      "description": "Real-time web stream & market grounding",
+      "properties": {},
+      "created_at": "2026-08-27T13:24:13.769785+00:00"
+    },
+    {
+      "id": "node_openclaw_scraper",
+      "label": "OpenClaw Browser & Screen Bot",
+      "node_type": "SKILL",
+      "category": "Automation",
+      "description": "Playwright crawler & coordinate clicker",
+      "properties": {},
+      "created_at": "2026-08-27T13:24:13.769785+00:00"
+    },
+    {
+      "id": "node_prime_director",
+      "label": "Prime Video Director",
+      "node_type": "SKILL",
+      "category": "Media",
+      "description": "Multi-modal video pacing & 0-3s retention hooks",
+      "properties": {},
+      "created_at": "2026-08-27T13:24:13.769785+00:00"
+    },
+    {
+      "id": "acc_gunjan_ai",
+      "label": "@gunjan.ai_automation",
+      "node_type": "CLIENT_ACCOUNT",
+      "category": "Instagram",
+      "description": "Niche: AI Agents & Automation",
+      "properties": {
+        "upload_time": "19:00 IST"
+      },
+      "created_at": "2026-08-27T13:24:13.772413+00:00"
+    },
+    {
+      "id": "acc_gunjan_fit",
+      "label": "@gunjan.fitmatrix",
+      "node_type": "CLIENT_ACCOUNT",
+      "category": "Instagram",
+      "description": "Niche: Fitness & Calisthenics",
+      "properties": {
+        "upload_time": "07:30 IST"
+      },
+      "created_at": "2026-08-27T13:24:13.773431+00:00"
+    },
+    {
+      "id": "acc_gunjan_fin",
+      "label": "@gunjan.alphatrader",
+      "node_type": "CLIENT_ACCOUNT",
+      "category": "Instagram",
+      "description": "Niche: Finance & Stock Market",
+      "properties": {
+        "upload_time": "08:45 IST"
+      },
+      "created_at": "2026-08-27T13:24:13.774723+00:00"
+    },
+    {
+      "id": "acc_client_acme",
+      "label": "Client Acme Health",
+      "node_type": "CLIENT_ACCOUNT",
+      "category": "Client Deliverables",
+      "description": "Niche: Organic Wellness",
+      "properties": {
+        "state": "Active"
+      },
+      "created_at": "2026-08-27T13:24:13.774723+00:00"
+    },
+    {
+      "id": "exam_upsc_gs1",
+      "label": "UPSC GS-1: History & Geography",
+      "node_type": "EXAM_TOPIC",
+      "category": "Education",
+      "description": "Core syllabus module with PYQ mapping",
+      "properties": {},
+      "created_at": "2026-08-27T13:24:13.774723+00:00"
+    },
+    {
+      "id": "exam_upsc_gs2",
+      "label": "UPSC GS-2: Polity & Governance",
+      "node_type": "EXAM_TOPIC",
+      "category": "Education",
+      "description": "Constitution, acts and current bills",
+      "properties": {},
+      "created_at": "2026-08-27T13:24:13.776732+00:00"
+    },
+    {
+      "id": "exam_upsc_gs3",
+      "label": "UPSC GS-3: Economy, Tech & Environment",
+      "node_type": "EXAM_TOPIC",
+      "category": "Education",
+      "description": "Economy models, AI technology, climate policies",
+      "properties": {},
+      "created_at": "2026-08-27T13:24:13.776732+00:00"
+    },
+    {
+      "id": "exam_cs_dsa",
+      "label": "Computer Science: DSA & Systems",
+      "node_type": "EXAM_TOPIC",
+      "category": "Career",
+      "description": "Algorithms, operating systems & system design",
+      "properties": {},
+      "created_at": "2026-08-27T13:24:13.776732+00:00"
+    },
+    {
+      "id": "asset_aapl",
+      "label": "AAPL (Apple Inc.)",
+      "node_type": "TRADING_ASSET",
+      "category": "Equity",
+      "description": "Tech stock tracking in Paper Portfolio",
+      "properties": {},
+      "created_at": "2026-08-27T13:24:13.779039+00:00"
+    },
+    {
+      "id": "asset_btc",
+      "label": "BTC (Bitcoin)",
+      "node_type": "TRADING_ASSET",
+      "category": "Crypto",
+      "description": "Live crypto spot market feed",
+      "properties": {},
+      "created_at": "2026-08-27T13:24:13.779039+00:00"
+    }
+  ],
+  "edges": [
+    {
+      "source": "node_vyom_ceo",
+      "target": "node_hermes_react",
+      "relation": "EXECUTES_FOR",
+      "weight": 1.0
+    },
+    {
+      "source": "node_vyom_ceo",
+      "target": "node_grok_intelligence",
+      "relation": "EXECUTES_FOR",
+      "weight": 1.0
+    },
+    {
+      "source": "node_vyom_ceo",
+      "target": "node_openclaw_scraper",
+      "relation": "EXECUTES_FOR",
+      "weight": 1.0
+    },
+    {
+      "source": "node_prime_director",
+      "target": "acc_gunjan_ai",
+      "relation": "BELONGS_TO_NICHE",
+      "weight": 1.0
+    },
+    {
+      "source": "node_prime_director",
+      "target": "acc_gunjan_fit",
+      "relation": "BELONGS_TO_NICHE",
+      "weight": 1.0
+    },
+    {
+      "source": "node_grok_intelligence",
+      "target": "asset_aapl",
+      "relation": "USES_TOOL",
+      "weight": 1.0
+    },
+    {
+      "source": "node_grok_intelligence",
+      "target": "exam_upsc_gs3",
+      "relation": "SYLLABUS_PREREQUISITE",
+      "weight": 1.0
+    },
+    {
+      "source": "node_hermes_react",
+      "target": "exam_cs_dsa",
+      "relation": "USES_TOOL",
+      "weight": 1.0
+    }
+  ],
+  "updated_at": "2026-08-27T13:24:13.784862+00:00"
+}

@@ -859,16 +859,21 @@ class TaskClassifier:
                     intent="mcp_connect", needs={"tools"},
                 )
 
-        # "learn how to X" / "learn to do X" / "learn this workflow: ..." -
-        # a plain-language request to author a reusable skill from a
-        # described workflow, resolved deterministically through
-        # app/skills/learn.py's LearnService.from_description - see
-        # ActionEngine._learn_skill. No model call: numbered/bulleted
-        # step parsing, same as /api/learn/from-description.
-        if re.search(r"\blearn\s+(?:how\s+to|to\s+do|this\s+workflow|the\s+following)\b", original):
+        # "learn how to X" / "learn this workflow" / "mai tumhe sikha raha hu" / "sikho ki" / "guide by guide seekhte rehna"
+        # Plain-language or Hinglish request to teach a skill/macro to VYOM.
+        _TEACH_PATTERNS = (
+            "sikha raha hu", "sikha raha hoon", "seekha raha hu", "seekha raha hoon",
+            "sikho ki", "seekho ki", "sikh lo ki", "seekh lo ki", "sikhaye", "sikhau",
+            "guide by guide", "aise karte hain", "aise karna", "aise kaam karna",
+            "dekho first of all", "first of all hume", "jab mai bolu",
+            "सिखा रहा", "सिखाऊं", "सीखते रहना", "गाइड बाय गाइड", "सीखो कि", "ऐसे करते हैं", "ऐसे करना", "जब मैं बोलूं",
+            "learn how to", "learn to do", "learn this workflow", "teach me to", "teach how to", "teach this",
+            "i am teaching you", "let me teach you",
+        )
+        if any(p in original.lower() for p in _TEACH_PATTERNS) or re.search(r"\b(?:learn|teach)\s+(?:how\s+to|to\s+do|this\s+workflow|the\s+following|skill)\b", original, re.I):
             return TaskProfile(
                 domain=TaskDomain.SYSTEM, complexity=1, deterministic=True,
-                intent="learn_skill", needs={"tools"},
+                intent="teach_workflow", needs={"tools"},
             )
 
         if any(phrase in original for phrase in (
@@ -904,17 +909,20 @@ class TaskClassifier:
             return TaskProfile(domain=TaskDomain.AGENCY, complexity=1, deterministic=True, intent="crm_summary", needs={"business"})
         if "show inbox" in text or "show me my inbox" in text or "search my email" in text:
             return TaskProfile(domain=TaskDomain.COMMUNICATION, complexity=1, deterministic=True, intent="email_inbox", needs={"business"})
-        # A generic "send an email to X..." request — the L2/L3 permission
-        # gate is already set by PermissionEngine.classify() elsewhere;
-        # this only has to route the intent to a real tool workflow once
-        # approved, instead of falling through to "general" and hitting
-        # "No registered consequential workflow exists for this approved
-        # request" after the user already approved sending it.
-        if ("send" in text or "bhej" in text or "bhejo" in text or "भेज" in text or "mail" in text) and "email" in text and "approved outreach" not in text and "the approved email" not in text:
-            return TaskProfile(
-                domain=TaskDomain.COMMUNICATION, complexity=2, deterministic=True,
-                intent="send_email", needs={"tools"}, privacy="highly_sensitive",
-            )
+        # Email compose / send: "mail bhej do", "email bhej do", "gunjan@... pe mail", "compose email", "draft a mail"
+        # Handles both English & Hinglish/Hindi ("मेल भेज दो", "ईमेल भेज दो", "mail send karo")
+        _EMAIL_SEND_VERBS = ("bhej", "bhejo", "send", "karo", "kar do", "karna", "draft", "compose", "भेज", "करो", "कर दो", "ड्राफ्ट")
+        _EMAIL_NOUNS = ("mail", "email", "मेल", "ईमेल", "gmail")
+        has_email_verb = any(v in text for v in _EMAIL_SEND_VERBS)
+        has_email_noun = any(n in text for n in _EMAIL_NOUNS)
+        has_email_addr = bool(re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", original) or re.search(r"\b\w+\s*(?:\{at\}|@|\bat\b)\s*\w+", original, re.I))
+
+        if (has_email_noun and has_email_verb) or (has_email_addr and (has_email_verb or "to" in text or "pe" in text or "par" in text or "पे" in text)):
+            if "approved outreach" not in text and "the approved email" not in text and "inbox" not in text:
+                return TaskProfile(
+                    domain=TaskDomain.COMMUNICATION, complexity=2, deterministic=True,
+                    intent="send_email", needs={"tools"}, privacy="highly_sensitive",
+                )
         if "schedule" in text and ("meeting" in text or "calendar" in text):
             return TaskProfile(domain=TaskDomain.COMMUNICATION, complexity=2, deterministic=True, intent="schedule_meeting", needs={"business"})
         if "prepare me for" in text and "meeting" in text and "market briefing" not in text:
@@ -1290,6 +1298,22 @@ class TaskClassifier:
             return TaskProfile(
                 domain=TaskDomain.SYSTEM, complexity=1, latency_priority="high",
                 deterministic=True, intent="brightness_control", needs={"tools"},
+            )
+
+        # -- list Chrome profiles (real, from Chrome's own Local State) ----
+        #
+        # "chrome profiles kaunsi hain" is a read, not an open - it must
+        # answer with the machine's REAL profile list (name + signed-in
+        # account), never fall to a model answer. Open/switch commands
+        # stay on their own path.
+        profile_text = f"{text} {getattr(self, '_original', '')}"
+        if re.search(r"\bprofiles?\b|प्रोफाइल", profile_text, re.I) and re.search(
+            r"\b(?:kaunsi|kaunse|kaun?a|list|dikhao|dikhado|show|batao|names?|kitni|kitne|all|sab|milegi|miledi)\b",
+            profile_text, re.I,
+        ) and not re.search(r"\b(?:kholo|khol|open|switch|chalao|jao)\b|खोलो", profile_text, re.I):
+            return TaskProfile(
+                domain=TaskDomain.SYSTEM, complexity=1, latency_priority="high",
+                deterministic=True, intent="browser_profile_list", needs={"tools"},
             )
 
         # -- play media in the user's visible browser ---------------------

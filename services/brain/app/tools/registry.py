@@ -48,6 +48,43 @@ class ToolRegistry:
     def list(self) -> list[BaseTool]:
         return list(self._tools.values())
 
+    def find_relevant_tools(self, query: str, limit: int = 8, category: str | None = None) -> list[dict[str, Any]]:
+        """Intelligent semantic and keyword tool search returning top-matching active tools."""
+        q = (query or "").lower().strip()
+        scored: list[tuple[float, BaseTool]] = []
+        words = [w for w in q.replace(".", " ").replace("_", " ").replace("-", " ").split() if len(w) > 2]
+
+        for tool in self._tools.values():
+            meta = tool.metadata
+            if category and meta.category.lower() != category.lower():
+                continue
+            
+            score = 0.0
+            name_norm = meta.name.lower().replace(".", " ").replace("_", " ")
+            desc_norm = meta.description.lower()
+
+            # Exact or prefix match
+            if q in meta.name.lower() or meta.name.lower() in q:
+                score += 15.0
+            
+            for word in words:
+                if word in name_norm:
+                    score += 5.0
+                elif word in desc_norm:
+                    score += 2.0
+                elif word in meta.category.lower():
+                    score += 3.0
+
+            if not q or score > 0:
+                scored.append((score, tool))
+
+        # Sort descending by score
+        scored.sort(key=lambda x: x[0], reverse=True)
+        results = []
+        for _, tool in scored[:limit]:
+            results.append(tool.metadata.model_dump(mode="json"))
+        return results
+
     async def describe(self) -> list[dict[str, Any]]:
         descriptions = []
         for tool in self.list():

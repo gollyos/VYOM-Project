@@ -326,20 +326,87 @@ class GmailAppPasswordProvider(DisconnectedEmailProvider):
                 "Generate one at https://myaccount.google.com/apppasswords "
                 "(requires 2-Step Verification to be enabled first)."
             )
-        payload = json.dumps({"address": address, "app_password": normalized}).encode("utf-8")
-        self.vault.set("app_password:gmail", payload)
+        # UPSERT, never overwrite: attaching a second Gmail keeps the first
+        # one; the most recently attached account becomes the active sender.
+        state = self._load_state() or {"active": address, "accounts": {}}
+        state["accounts"][address] = normalized
+        state["active"] = address
+        self.vault.set(self._ACCOUNTS_KEY, json.dumps(state).encode("utf-8"))
+
+    #: NEW multi-account layout: {"active": addr, "accounts": {addr: pwd}}.
+    #: The OLD single-account key is migrated on first read so an existing
+    #: connected account keeps working without being re-attached.
+    _ACCOUNTS_KEY = "app_password:gmail:accounts"
+    _LEGACY_KEY = "app_password:gmail"
+
+    def _load_state(self) -> dict | None:
+        raw = self.vault.get(self._ACCOUNTS_KEY)
+        if raw is not None:
+            try:
+                state = json.loads(raw.decode("utf-8"))
+                if isinstance(state, dict) and isinstance(state.get("accounts"), dict) and state["accounts"]:
+                    return state
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                pass
+        legacy = self.vault.get(self._LEGACY_KEY)
+        if legacy is not None:
+            try:
+                creds = json.loads(legacy.decode("utf-8"))
+                if creds.get("address") and creds.get("app_password"):
+                    state = {"active": creds["address"],
+                             "accounts": {creds["address"]: creds["app_password"]}}
+                    self.vault.set(self._ACCOUNTS_KEY, json.dumps(state).encode("utf-8"))
+                    self.vault.delete(self._LEGACY_KEY)
+                    return state
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                pass
+        return None
+
+    def list_accounts(self) -> list[dict]:
+        """Every attached Gmail with its active flag — the multi-account
+        answer to 'kaunse accounts jude hain'."""
+        state = self._load_state()
+        if state is None:
+            return []
+        return [
+            {"address": address, "active": address == state.get("active")}
+            for address in sorted(state["accounts"])
+        ]
+
+    def switch_active(self, address: str) -> None:
+        state = self._load_state()
+        if state is None or address not in state["accounts"]:
+            raise ValueError(
+                f"'{address}' is not an attached Gmail account. Attached: "
+                f"{', '.join(state['accounts']) if state else 'none'}")
+        state["active"] = address
+        self.vault.set(self._ACCOUNTS_KEY, json.dumps(state).encode("utf-8"))
+
+    def remove_account(self, address: str) -> None:
+        state = self._load_state()
+        if state is None or address not in state["accounts"]:
+            return
+        del state["accounts"][address]
+        if not state["accounts"]:
+            self.vault.delete(self._ACCOUNTS_KEY)
+            return
+        if state.get("active") == address:
+            state["active"] = next(iter(state["accounts"]))
+        self.vault.set(self._ACCOUNTS_KEY, json.dumps(state).encode("utf-8"))
 
     def _load_credentials(self) -> dict[str, str] | None:
-        raw = self.vault.get("app_password:gmail")
-        if raw is None:
+        state = self._load_state()
+        if state is None:
             return None
-        try:
-            return json.loads(raw.decode("utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError):
+        address = state.get("active") or next(iter(state["accounts"]))
+        password = state["accounts"].get(address)
+        if not password:
             return None
+        return {"address": address, "app_password": password}
 
     async def disconnect(self) -> None:
-        self.vault.delete("app_password:gmail")
+        self.vault.delete(self._ACCOUNTS_KEY)
+        self.vault.delete(self._LEGACY_KEY)
 
     # -- health --------------------------------------------------------------
 

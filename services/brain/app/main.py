@@ -11,7 +11,10 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, conversation as conversation_api, crm, curator as curator_api, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discord as discord_api, discovery as discovery_api, email as email_api, extension as extension_api, facebook as facebook_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, kanban as kanban_api, knowledge as knowledge_api, learn as learn_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, plugins as plugins_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api, twitter as twitter_api, linkedin as linkedin_api, meta_ads as meta_ads_api, whatsapp as whatsapp_api, search as search_api
+from app.api import agency, agents, alerts as alerts_api, adaptive as adaptive_api, approvals, artifacts as artifacts_api, automations, backtesting as backtesting_api, backup_api, booking as booking_api, brain_graph as brain_graph_api, calendar as calendar_api, capabilities, contacts, conversation as conversation_api, crm, curator as curator_api, delivery as delivery_api, desktop as desktop_api, devices as devices_api, diagnostics_api, discord as discord_api, discovery as discovery_api, email as email_api, extension as extension_api, facebook as facebook_api, finance as finance_api, goals as goals_api, habits as habits_api, health_api, integrations, kanban as kanban_api, knowledge as knowledge_api, learn as learn_api, markets as markets_api, mcp as mcp_api, meetings, memory, models, nodes as nodes_api, observability_api, paper_trading as paper_trading_api, personal as personal_api, plugins as plugins_api, production_api, quota, remote as remote_api, research as research_api, reviews as reviews_api, routines as routines_api, screen as screen_api, setup_api, sheets as sheets_api, skills, sync_api, tasks, telegram as telegram_api, tools, video as video_api, websocket, youtube as youtube_api, instagram as instagram_api, twitter as twitter_api, linkedin as linkedin_api, meta_ads as meta_ads_api, whatsapp as whatsapp_api, search as search_api, connectors_api, webhooks_api
+from app.connectors import ConnectorRegistry, GitHubConnector, GmailConnector, CalendarConnector, CustomRestConnector
+from app.automation.workflow_engine import WorkflowEngine
+from app.automation.webhook_engine import WebhookEngine
 from app.agency.service import AgencyService, DisconnectedLeadResearchProvider
 from app.agents.evaluator import AgentEvaluator
 from app.agents.factory import AgentFactory
@@ -1973,6 +1976,25 @@ def create_app(
         runtime.plugin_registry = plugin_registry
         runtime.learn_service = learn_service
 
+        # Universal Connectors, Plugins & Workflow Automation Engine
+        connector_registry = ConnectorRegistry(secret_vault=secret_vault, tool_registry=tool_registry)
+        connector_registry.register_connector(GitHubConnector(token=os.getenv("GITHUB_TOKEN")))
+        connector_registry.register_connector(GmailConnector())
+        connector_registry.register_connector(CalendarConnector())
+        connector_registry.register_connector(
+            CustomRestConnector(
+                id="rest_api",
+                name="Custom REST API",
+                base_url=os.getenv("VYOM_CUSTOM_API_URL", "https://api.example.com"),
+            )
+        )
+        workflow_engine = WorkflowEngine(tool_registry=tool_registry, runtime=runtime, task_store=task_store)
+        webhook_engine = WebhookEngine()
+
+        application.state.connector_registry = connector_registry
+        application.state.workflow_engine = workflow_engine
+        application.state.webhook_engine = webhook_engine
+
         async def _mcp_connector(service_name: str) -> dict:
             """Wires the classifier's chat-native 'connect to X mcp'
             intent to the SAME lookup POST /api/mcp/connect already
@@ -2134,6 +2156,8 @@ def create_app(
     application.include_router(models.router)
     application.include_router(tools.router)
     application.include_router(mcp_api.router)
+    application.include_router(connectors_api.router)
+    application.include_router(webhooks_api.router)
     application.include_router(knowledge_api.router)
     application.include_router(adaptive_api.router)
     application.include_router(sheets_api.router)
